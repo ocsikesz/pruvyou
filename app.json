@@ -24,6 +24,6 @@
       },
       "package": "com.ocsikesz.pruvyou"
     },
-    "plugins": ["expo-router", "expo-font"]
+    "plugins": ["expo-router", "expo-font", "expo-image-picker"]
   }
 }

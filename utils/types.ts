@@ -7,6 +7,7 @@ export interface Habit {
   targetMinutes: number;
   weeklyTarget: number;
   color: string;
+  categoryId: string;
 }
 
 export interface LogEntry {
