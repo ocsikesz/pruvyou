@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "PruvYou",
+    "slug": "pruvyou",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "pruvyou",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1714"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ocsikesz.pruvyou"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1714"
+      },
+      "package": "com.ocsikesz.pruvyou"
+    },
+    "plugins": ["expo-router", "expo-font"]
+  }
+}
