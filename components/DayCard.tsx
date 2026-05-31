@@ -17,9 +17,11 @@ export default function DayCard({ date, dayIndex, habits, log, onPress }: DayCar
   const isToday = dateStr === fmt(today());
   const isFuture = date > today();
 
-  const dailyHabits = habits.filter(h => h.frequency === 'daily');
-  const totalHabits = dailyHabits.length;
-  const doneCount = dailyHabits.filter(h => log[dateStr]?.[h.id]?.done).length;
+  const activeHabits = habits.filter(h =>
+    h.frequency === 'daily' || (h.frequency === 'weekly' && (h.selectedDays || []).includes(dayIndex))
+  );
+  const totalHabits = activeHabits.length;
+  const doneCount = activeHabits.filter(h => log[dateStr]?.[h.id]?.done).length;
   const ratio = totalHabits > 0 ? doneCount / totalHabits : 0;
   const pct = Math.round(ratio * 100);
   const fillColor = getCompletionColor(ratio);

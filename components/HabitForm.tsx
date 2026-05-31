@@ -18,7 +18,7 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
   const [type, setType] = useState<'check' | 'timer'>(habit?.type || 'check');
   const [freq, setFreq] = useState<'daily' | 'weekly'>(habit?.frequency || 'daily');
   const [mins, setMins] = useState(String(habit?.targetMinutes || 15));
-  const [weeklyTarget, setWeeklyTarget] = useState(String(habit?.weeklyTarget || 3));
+  const [selectedDays, setSelectedDays] = useState<number[]>(habit?.selectedDays || []);
   const [categoryId, setCategoryId] = useState(habit?.categoryId || 'sport');
 
   // New category form
@@ -72,7 +72,8 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
       type,
       frequency: freq,
       targetMinutes: parseInt(mins) || 15,
-      weeklyTarget: parseInt(weeklyTarget) || 3,
+      weeklyTarget: freq === 'weekly' ? selectedDays.length : 7,
+            selectedDays: freq === 'weekly' ? selectedDays : [],
       icon: cat?.icon === 'custom' ? '📌' : (cat?.icon || '🎯'),
       color: cat?.color || PALETTE[0],
       categoryId,
@@ -215,8 +216,24 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
 
       {freq === 'weekly' && (
         <>
-          <Text style={styles.label}>HOW MANY TIMES PER WEEK?</Text>
-          <TextInput value={weeklyTarget} onChangeText={setWeeklyTarget} keyboardType="number-pad" style={styles.input} />
+          <Text style={styles.label}>SELECT DAYS</Text>
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
+            {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((day, i) => {
+              const sel = selectedDays.includes(i);
+              return (
+                <TouchableOpacity key={i} onPress={() => toggleDaySelection(i)}
+                  style={[styles.toggle, { flex: 0, width: 42, padding: 8 },
+                    sel && { backgroundColor: cat.color, borderColor: cat.color }]}>
+                  <Text style={[styles.toggleText, sel && { color: '#0D1219' }]}>{day}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={{ fontSize: 10, color: '#4D5E74', marginBottom: 12 }}>
+            {selectedDays.length > 0
+              ? selectedDays.length + 'x per week: ' + selectedDays.map(d => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d]).join(', ')
+              : 'Tap the days you want to do this habit'}
+          </Text>
         </>
       )}
 

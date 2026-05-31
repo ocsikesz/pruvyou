@@ -6,6 +6,7 @@ export interface Habit {
   frequency: 'daily' | 'weekly';
   targetMinutes: number;
   weeklyTarget: number;
+  selectedDays: number[];  // 0=Mon, 1=Tue, ..., 6=Sun
   color: string;
   categoryId: string;
 }

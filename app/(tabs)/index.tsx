@@ -22,6 +22,12 @@ export default function HomeScreen() {
     );
   }
 
+  // Today's day index (0=Mon .. 6=Sun)
+  const todayDayIdx = today().getDay() === 0 ? 6 : today().getDay() - 1;
+  const todayHabits = habits.filter(h =>
+    h.frequency === 'daily' || (h.frequency === 'weekly' && (h.selectedDays || []).includes(todayDayIdx))
+  );
+
   if (habits.length === 0) {
     return (
       <View style={styles.empty}>
