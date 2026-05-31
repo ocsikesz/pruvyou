@@ -1,56 +1,55 @@
-import { colors } from './theme';
+import { brand } from './theme';
 
 export interface Category {
   id: string;
   name: string;
-  icon: string;          // emoji for standard, or 'custom'
-  customIconUri?: string; // local URI for custom uploaded icon
+  icon: string;
+  customIconUri?: string;
   color: string;
   isCustom: boolean;
 }
 
-// ─── Standard Categories ───────────────────────────────────────────
 export const STANDARD_CATEGORIES: Category[] = [
   {
     id: 'sport',
     name: 'Sport & Fitness',
     icon: '🏃',
-    color: '#E8956B',
+    color: brand.blue,
     isCustom: false,
   },
   {
     id: 'mindfulness',
     name: 'Mindfulness',
     icon: '🧘',
-    color: '#C9A8E0',
+    color: '#9B7ED4',
     isCustom: false,
   },
   {
     id: 'health',
     name: 'Sănătate',
     icon: '💪',
-    color: '#7BC9A0',
+    color: brand.green,
     isCustom: false,
   },
   {
     id: 'learning',
     name: 'Învățare',
     icon: '📖',
-    color: '#A8C5E0',
+    color: '#5CB8D6',
     isCustom: false,
   },
   {
     id: 'nutrition',
     name: 'Nutriție',
     icon: '🍎',
-    color: '#E8C96B',
+    color: brand.gold,
     isCustom: false,
   },
   {
     id: 'sleep',
     name: 'Somn & Recuperare',
     icon: '😴',
-    color: '#8BC9E8',
+    color: '#6B8EBF',
     isCustom: false,
   },
   {
@@ -64,7 +63,7 @@ export const STANDARD_CATEGORIES: Category[] = [
     id: 'productivity',
     name: 'Productivitate',
     icon: '🎯',
-    color: '#D4A574',
+    color: '#E8956B',
     isCustom: false,
   },
 ];

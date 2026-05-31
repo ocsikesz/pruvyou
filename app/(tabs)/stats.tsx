@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: colors.gold, marginBottom: 14 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: colors.accent, marginBottom: 14 },
   chart: {
     flexDirection: 'row',
     alignItems: 'flex-end',

@@ -147,7 +147,7 @@ function HabitCard({ habit, category, onEdit, onDelete }: {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 12 },
   addBtn: {
-    padding: 16, borderRadius: 12, backgroundColor: colors.gold,
+    padding: 16, borderRadius: 12, backgroundColor: colors.accent,
     alignItems: 'center', marginBottom: 16,
   },
   addBtnText: { fontSize: 15, fontWeight: '700', color: colors.bg },

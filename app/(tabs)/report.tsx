@@ -219,9 +219,9 @@ export default function ReportScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 12 },
   yearNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 14 },
-  yearText: { fontSize: 20, fontWeight: '800', color: colors.gold },
+  yearText: { fontSize: 20, fontWeight: '800', color: colors.accent },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  monthText: { fontSize: 16, fontWeight: '700', color: colors.gold },
+  monthText: { fontSize: 16, fontWeight: '700', color: colors.accent },
   navBtn: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border,
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   exportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    padding: 16, borderRadius: 12, backgroundColor: colors.gold, marginBottom: 6,
+    padding: 16, borderRadius: 12, backgroundColor: colors.accent, marginBottom: 6,
   },
   exportBtnText: { fontSize: 14, fontWeight: '700', color: colors.bg },
   exportHint: { fontSize: 11, color: colors.textDark, textAlign: 'center', marginBottom: 16, lineHeight: 17 },
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgCard, borderRadius: 14, padding: 16,
     marginTop: 12, marginBottom: 12, borderWidth: 1, borderColor: colors.border,
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: colors.gold, marginBottom: 14 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: colors.accent, marginBottom: 14 },
   heatLabel: { fontSize: 11, color: colors.textDim, marginBottom: 4 },
   heatRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 3 },
   heatCell: { width: 14, height: 14, borderRadius: 3 },

@@ -1,13 +1,13 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/constants/theme';
+import { colors, brand } from '@/constants/theme';
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.gold,
+        headerTintColor: colors.accent,
         headerTitleStyle: { fontWeight: '700', fontSize: 18 },
         tabBarStyle: {
           backgroundColor: colors.bg,
@@ -16,7 +16,7 @@ export default function TabsLayout() {
           paddingTop: 6,
           height: 60,
         },
-        tabBarActiveTintColor: colors.gold,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textDark,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: -2 },
       }}

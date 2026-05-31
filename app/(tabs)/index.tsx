@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, DAYS_RO, getCompletionColor } from '@/constants/theme';
+import { colors, DAYS_RO, getCompletionColor } from "@/constants/theme";
 import { useHabits } from '@/hooks/useHabits';
 import { getWeekDates, fmt, today, clamp } from '@/utils/dates';
 import DayCard from '@/components/DayCard';
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: { fontSize: 16, color: colors.gold },
+  loadingText: { fontSize: 16, color: colors.accent },
   empty: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  timerBtnText: { fontSize: 12, fontWeight: '700', color: colors.gold },
+  timerBtnText: { fontSize: 12, fontWeight: '700', color: colors.accent },
   weeklyCard: {
     backgroundColor: colors.bgCard,
     borderRadius: 12,

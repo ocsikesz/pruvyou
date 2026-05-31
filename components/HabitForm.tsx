@@ -225,7 +225,7 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
         <TouchableOpacity onPress={onCancel} style={styles.cancelBtn}>
           <Text style={styles.cancelText}>Anulează</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleSave} style={[styles.saveBtn, { backgroundColor: selectedCat?.color || colors.gold }]}>
+        <TouchableOpacity onPress={handleSave} style={[styles.saveBtn, { backgroundColor: selectedCat?.color || colors.accent }]}>
           <Text style={styles.saveText}>Salvează</Text>
         </TouchableOpacity>
       </View>
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
     maxHeight: 600,
   },
-  title: { fontSize: 18, fontWeight: '700', color: colors.gold, marginBottom: 16 },
+  title: { fontSize: 18, fontWeight: '700', color: colors.accent, marginBottom: 16 },
   label: { fontSize: 11, fontWeight: '600', color: colors.textDim, letterSpacing: 1, marginBottom: 6, marginTop: 4 },
   input: {
     backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg, borderRadius: 12, padding: 16,
     marginBottom: 16, borderWidth: 1, borderColor: colors.borderLight,
   },
-  newCatTitle: { fontSize: 14, fontWeight: '700', color: colors.gold, marginBottom: 12 },
+  newCatTitle: { fontSize: 14, fontWeight: '700', color: colors.accent, marginBottom: 12 },
   iconUpload: {
     width: 80, height: 80, borderRadius: 12,
     backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border,
@@ -297,9 +297,9 @@ const styles = StyleSheet.create({
     flex: 1, padding: 12, borderRadius: 10,
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, alignItems: 'center',
   },
-  toggleActive: { borderWidth: 2, borderColor: colors.gold, backgroundColor: colors.gold + '15' },
+  toggleActive: { borderWidth: 2, borderColor: colors.accent, backgroundColor: colors.accent + '15' },
   toggleText: { fontSize: 13, fontWeight: '600', color: colors.textDark },
-  toggleTextActive: { color: colors.gold },
+  toggleTextActive: { color: colors.accent },
 
   // Actions
   actions: { flexDirection: 'row', gap: 10, marginTop: 8 },
