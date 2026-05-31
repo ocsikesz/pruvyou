@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, DAYS_RO, getCompletionColor } from "@/constants/theme";
+import { colors, DAYS_SHORT, getCompletionColor } from "@/constants/theme";
 import { useHabits } from '@/hooks/useHabits';
 import { getWeekDates, fmt, today, clamp } from '@/utils/dates';
 import DayCard from '@/components/DayCard';
@@ -17,7 +17,7 @@ export default function HomeScreen() {
     return (
       <View style={styles.loading}>
         <Text style={{ fontSize: 40, marginBottom: 12 }}>⏳</Text>
-        <Text style={styles.loadingText}>Se încarcă...</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
@@ -26,9 +26,9 @@ export default function HomeScreen() {
     return (
       <View style={styles.empty}>
         <Text style={{ fontSize: 48, marginBottom: 16 }}>🌱</Text>
-        <Text style={styles.emptyTitle}>Niciun obicei încă</Text>
+        <Text style={styles.emptyTitle}>No habits yet</Text>
         <Text style={styles.emptySubtitle}>
-          Mergi la tab-ul „Obiceiuri" pentru a adăuga primul tău obicei
+          Go to the Habits tab to add your first habit
         </Text>
       </View>
     );
@@ -57,11 +57,11 @@ export default function HomeScreen() {
         </TouchableOpacity>
         <View style={styles.weekInfo}>
           <Text style={styles.weekLabel}>
-            {weekOff === 0 ? 'Săptămâna curentă' :
-              `${weekDates[0].toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })} – ${weekDates[6].toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}`}
+            {weekOff === 0 ? 'This week' :
+              `${weekDates[0].toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} – ${weekDates[6].toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}`}
           </Text>
           <Text style={[styles.weekScore, { color: getCompletionColor(weekPct / 100) }]}>
-            {weekPct}% completat
+            {weekPct}% completed
           </Text>
         </View>
         <TouchableOpacity
@@ -96,7 +96,7 @@ export default function HomeScreen() {
 
       {/* ── Today's habits checklist ── */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Azi — {today().toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+        <Text style={styles.sectionTitle}>Today — {today().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
         {dailyHabits.map(habit => {
           const entry = log[todayStr]?.[habit.id];
           const done = !!entry?.done;
@@ -147,7 +147,7 @@ export default function HomeScreen() {
       {/* ── Weekly habits ── */}
       {weeklyHabits.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Săptămânal</Text>
+          <Text style={styles.sectionTitle}>Weekly</Text>
           {weeklyHabits.map(habit => {
             const weekTotal = weekDates.reduce((sum, d) => {
               const ds = fmt(d);

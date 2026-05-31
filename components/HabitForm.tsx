@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Image, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, PALETTE } from '@/constants/theme';
-import { STANDARD_CATEGORIES, getAllCategories, type Category } from '@/constants/categories';
+import { STANDARD_CATEGORYS, getAllCategories, type Category } from '@/constants/categories';
 import type { Habit } from '@/utils/types';
 
 interface HabitFormProps {
@@ -45,7 +45,7 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
 
   const saveNewCategory = () => {
     if (!newCatName.trim()) {
-      Alert.alert('Eroare', 'Introdu un nume pentru categorie');
+      Alert.alert('Error', 'Enter a category name');
       return;
     }
     const cat: Category = {
@@ -81,10 +81,10 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>{habit ? 'Editează obiceiul' : 'Obicei nou'}</Text>
+      <Text style={styles.title}>{habit ? 'Edit habit' : 'New habit'}</Text>
 
       {/* ── Category Selection ── */}
-      <Text style={styles.label}>CATEGORIE</Text>
+      <Text style={styles.label}>CATEGORY</Text>
       <View style={styles.catGrid}>
         {allCategories.map(cat => (
           <TouchableOpacity
@@ -116,37 +116,37 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
           style={[styles.catBtn, styles.catBtnAdd]}
         >
           <Text style={styles.catAddIcon}>＋</Text>
-          <Text style={styles.catAddLabel}>Adaugă</Text>
+          <Text style={styles.catAddLabel}>Add</Text>
         </TouchableOpacity>
       </View>
 
       {/* ── New Category Form ── */}
       {showNewCat && (
         <View style={styles.newCatBox}>
-          <Text style={styles.newCatTitle}>Categorie nouă</Text>
+          <Text style={styles.newCatTitle}>New category</Text>
 
-          <Text style={styles.label}>NUME CATEGORIE</Text>
+          <Text style={styles.label}>NUME CATEGORY</Text>
           <TextInput
             value={newCatName}
             onChangeText={setNewCatName}
-            placeholder="ex: Meditație"
+            placeholder="e.g. Meditation"
             placeholderTextColor={colors.textDark}
             style={styles.input}
           />
 
-          <Text style={styles.label}>ICONIȚĂ</Text>
+          <Text style={styles.label}>ICON</Text>
           <TouchableOpacity onPress={pickImage} style={styles.iconUpload}>
             {newCatIcon ? (
               <Image source={{ uri: newCatIcon }} style={styles.iconPreview} />
             ) : (
               <View style={styles.iconPlaceholder}>
                 <Text style={{ fontSize: 24, color: colors.textDark }}>📷</Text>
-                <Text style={{ fontSize: 10, color: colors.textDark, marginTop: 4 }}>Upload imagine</Text>
+                <Text style={{ fontSize: 10, color: colors.textDark, marginTop: 4 }}>Upload image</Text>
               </View>
             )}
           </TouchableOpacity>
 
-          <Text style={styles.label}>CULOARE</Text>
+          <Text style={styles.label}>COLOR</Text>
           <View style={styles.colorRow}>
             {PALETTE.map(c => (
               <TouchableOpacity
@@ -159,27 +159,27 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
 
           <View style={styles.newCatActions}>
             <TouchableOpacity onPress={() => setShowNewCat(false)} style={styles.cancelSmall}>
-              <Text style={styles.cancelSmallText}>Anulează</Text>
+              <Text style={styles.cancelSmallText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={saveNewCategory} style={[styles.saveSmall, { backgroundColor: newCatColor }]}>
-              <Text style={styles.saveSmallText}>Salvează categoria</Text>
+              <Text style={styles.saveSmallText}>Save category</Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
 
       {/* ── Habit Name ── */}
-      <Text style={styles.label}>NUME OBICEI</Text>
+      <Text style={styles.label}>HABIT NAME</Text>
       <TextInput
         value={name}
         onChangeText={setName}
-        placeholder="ex: Abdomene 15 min"
+        placeholder="e.g. Morning abs 15 min"
         placeholderTextColor={colors.textDark}
         style={styles.input}
       />
 
       {/* ── Type ── */}
-      <Text style={styles.label}>TIP</Text>
+      <Text style={styles.label}>TYPE</Text>
       <View style={styles.toggleRow}>
         {([['check', '✓ Checkbox'], ['timer', '⏱ Timer']] as const).map(([v, l]) => (
           <TouchableOpacity
@@ -194,15 +194,15 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
 
       {type === 'timer' && (
         <>
-          <Text style={styles.label}>TARGET (MINUTE/ZI)</Text>
+          <Text style={styles.label}>TARGET (MINUTES/DAY)</Text>
           <TextInput value={mins} onChangeText={setMins} keyboardType="number-pad" style={styles.input} />
         </>
       )}
 
       {/* ── Frequency ── */}
-      <Text style={styles.label}>FRECVENȚĂ</Text>
+      <Text style={styles.label}>FREQUENCY</Text>
       <View style={styles.toggleRow}>
-        {([['daily', 'Zilnic'], ['weekly', 'Săptămânal']] as const).map(([v, l]) => (
+        {([['daily', 'Daily'], ['weekly', 'Weekly']] as const).map(([v, l]) => (
           <TouchableOpacity
             key={v}
             onPress={() => setFreq(v)}
@@ -215,7 +215,7 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
 
       {freq === 'weekly' && (
         <>
-          <Text style={styles.label}>CÂTE ORI PE SĂPTĂMÂNĂ?</Text>
+          <Text style={styles.label}>HOW MANY TIMES PER WEEK?</Text>
           <TextInput value={weeklyTarget} onChangeText={setWeeklyTarget} keyboardType="number-pad" style={styles.input} />
         </>
       )}
@@ -223,10 +223,10 @@ export default function HabitForm({ habit, customCategories, onSave, onCancel, o
       {/* ── Actions ── */}
       <View style={styles.actions}>
         <TouchableOpacity onPress={onCancel} style={styles.cancelBtn}>
-          <Text style={styles.cancelText}>Anulează</Text>
+          <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleSave} style={[styles.saveBtn, { backgroundColor: selectedCat?.color || colors.accent }]}>
-          <Text style={styles.saveText}>Salvează</Text>
+          <Text style={styles.saveText}>Save</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

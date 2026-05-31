@@ -31,7 +31,7 @@ export default function HabitsScreen() {
         onPress={() => { setShowAdd(true); setEditHabit(null); }}
         style={styles.addBtn}
       >
-        <Text style={styles.addBtnText}>＋ Adaugă obicei nou</Text>
+        <Text style={styles.addBtnText}>＋ Add new habit</Text>
       </TouchableOpacity>
 
       {(showAdd || editHabit) && (
@@ -52,7 +52,7 @@ export default function HabitsScreen() {
       {habits.length === 0 && !showAdd && (
         <View style={styles.empty}>
           <Text style={{ fontSize: 36, marginBottom: 12 }}>📋</Text>
-          <Text style={styles.emptyText}>Apasă butonul de mai sus pentru a crea primul obicei</Text>
+          <Text style={styles.emptyText}>Tap the button above to create your first habit</Text>
         </View>
       )}
 
@@ -77,9 +77,9 @@ export default function HabitsScreen() {
               category={category}
               onEdit={() => setEditHabit(h)}
               onDelete={() => {
-                Alert.alert('Șterge', `Ștergi "${h.name}"?`, [
-                  { text: 'Anulează', style: 'cancel' },
-                  { text: 'Șterge', style: 'destructive', onPress: () => deleteHabit(h.id) },
+                Alert.alert('Delete', `Delete "${h.name}"?`, [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: () => deleteHabit(h.id) },
                 ]);
               }}
             />
@@ -92,7 +92,7 @@ export default function HabitsScreen() {
         <View style={styles.catSection}>
           <View style={styles.catHeader}>
             <Text style={{ fontSize: 18 }}>📌</Text>
-            <Text style={[styles.catName, { color: colors.textDim }]}>Fără categorie</Text>
+            <Text style={[styles.catName, { color: colors.textDim }]}>Uncategorized</Text>
           </View>
           {uncategorized.map(h => (
             <HabitCard
@@ -100,9 +100,9 @@ export default function HabitsScreen() {
               habit={h}
               onEdit={() => setEditHabit(h)}
               onDelete={() => {
-                Alert.alert('Șterge', `Ștergi "${h.name}"?`, [
-                  { text: 'Anulează', style: 'cancel' },
-                  { text: 'Șterge', style: 'destructive', onPress: () => deleteHabit(h.id) },
+                Alert.alert('Delete', `Delete "${h.name}"?`, [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: () => deleteHabit(h.id) },
                 ]);
               }}
             />
@@ -127,8 +127,8 @@ function HabitCard({ habit, category, onEdit, onDelete }: {
         <View style={{ marginLeft: 4, flex: 1 }}>
           <Text style={styles.cardName}>{habit.icon} {habit.name}</Text>
           <Text style={styles.cardMeta}>
-            {habit.type === 'timer' ? `${habit.targetMinutes} min` : 'Checkbox'} · {habit.frequency === 'daily' ? 'Zilnic' : 'Săptămânal'}
-            {habit.frequency === 'weekly' && habit.weeklyTarget ? ` · ${habit.weeklyTarget}x/săpt` : ''}
+            {habit.type === 'timer' ? `${habit.targetMinutes} min` : 'Checkbox'} · {habit.frequency === 'daily' ? 'Daily' : 'Weekly'}
+            {habit.frequency === 'weekly' && habit.weeklyTarget ? ` · ${habit.weeklyTarget}x/wk` : ''}
           </Text>
         </View>
       </View>

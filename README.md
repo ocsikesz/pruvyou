@@ -1,15 +1,16 @@
 # ✦ PruvYou
 
-**Prove yourself, every day.** Aplicație de tracking obiceiuri zilnice și săptămânale, construită cu **Expo** (React Native).
+**Prove yourself, every day.** A habit tracking app built with **Expo** (React Native).
 
 ## Features
 
-- ✅ **7 Day Cards** — vizualizare săptămânală cu progress bar vertical și procentaj
-- 📋 **Creare obiceiuri** — checkbox sau timer, zilnic/săptămânal, icon & culoare
-- 📊 **Statistici** — grafice pe 30 zile, rate per obicei, serii (streaks)
-- 📄 **Raport Excel** — export anual cu 13 sheet-uri (sumar + 12 luni)
-- 💾 **Persistență** — datele se salvează local cu AsyncStorage
-- 🌙 **Dark theme** — paletă caldă cu accente gold
+- ✅ **7 Day Cards** — weekly view with vertical progress bars and percentage
+- 📋 **Habit management** — checkbox or timer, daily/weekly, categories with custom icons
+- 📊 **Statistics** — 30-day charts, per-habit rates, current streaks
+- 📄 **Excel Report** — annual export with 13 sheets (summary + 12 months)
+- 🏷 **Categories** — 8 standard + custom categories with image upload
+- 💾 **Persistence** — local data with AsyncStorage
+- 🌙 **Dark theme** — brand colors #1A4F8A #34C79F #F7C602
 
 ## Setup
 
@@ -27,35 +28,10 @@ eas login
 eas build --platform android --profile preview
 ```
 
-## Project Structure
+## Brand Colors
 
-```
-pruvyou/
-├── app/
-│   ├── _layout.tsx
-│   └── (tabs)/
-│       ├── _layout.tsx      # Tab navigator
-│       ├── index.tsx        # Home — 7 day cards + daily checklist
-│       ├── habits.tsx       # Habit management (CRUD)
-│       ├── stats.tsx        # Statistics & charts
-│       └── report.tsx       # Report & Excel export
-├── components/
-│   ├── DayCard.tsx          # Vertical progress bar card
-│   └── HabitForm.tsx        # Create/edit habit form
-├── hooks/
-│   └── useHabits.ts         # State management hook
-├── utils/
-│   ├── storage.ts           # AsyncStorage wrapper
-│   ├── dates.ts             # Date helpers
-│   └── types.ts             # TypeScript types
-├── constants/
-│   └── theme.ts             # Colors, palette, icons
-└── assets/
-```
-
-## Design
-
-- **Background**: `#1a1714` (warm dark)
-- **Cards**: `#222018`
-- **Gold accent**: `#d4a574`
-- **Completion**: verde `#7BC9A0` | galben `#E8C96B` | portocaliu `#E8956B`
+| Role | Color | Hex |
+|------|-------|-----|
+| Primary | Deep Blue | `#1A4F8A` |
+| Success | Teal Green | `#34C79F` |
+| Accent | Vibrant Gold | `#F7C602` |

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, brand, DAYS_RO, getCompletionColor } from '@/constants/theme';
+import { colors, brand, DAYS_SHORT, getCompletionColor } from '@/constants/theme';
 import { fmt, today } from '@/utils/dates';
 import type { Habit, HabitLog } from '@/utils/types';
 
@@ -62,7 +62,7 @@ export default function DayCard({ date, dayIndex, habits, log, onPress }: DayCar
 
       <View style={[styles.dayLabel, isToday && { backgroundColor: brand.gold + '18' }]}>
         <Text style={[styles.dayName, isToday && { color: brand.gold }]}>
-          {DAYS_RO[dayIndex]}
+          {DAYS_SHORT[dayIndex]}
         </Text>
         <Text style={[styles.dayNumber, isToday && { color: brand.gold }]}>
           {date.getDate()}

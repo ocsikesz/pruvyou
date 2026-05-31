@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
-import { colors, MONTHS_RO, getCompletionColor } from '@/constants/theme';
+import { colors, MONTHS, getCompletionColor } from '@/constants/theme';
 import { useHabits } from '@/hooks/useHabits';
 import { getMonthDates, fmt } from '@/utils/dates';
 
@@ -35,9 +35,9 @@ export default function ReportScreen() {
   const buildMonthSheet = useCallback((y: number, m: number) => {
     const mDates = getMonthDates(y, m);
     const wsData: any[][] = [
-      ['Raport Obiceiuri — ' + MONTHS_RO[m] + ' ' + y],
+      ['Habit Report — ' + MONTHS[m] + ' ' + y],
       [],
-      ['Obicei', 'Tip', 'Frecvență', ...mDates.map(d => d.getDate()), 'Total', 'Rată %'],
+      ['Habit', 'Type', 'Frequency', ...mDates.map(d => d.getDate()), 'Total', 'Rate %'],
     ];
     habits.forEach(h => {
       const vals: any[] = [];
@@ -58,20 +58,20 @@ export default function ReportScreen() {
       wsData.push([
         h.name,
         h.type === 'timer' ? 'Timer' : 'Checkbox',
-        h.frequency === 'daily' ? 'Zilnic' : 'Săptămânal',
+        h.frequency === 'daily' ? 'Daily' : 'Weekly',
         ...vals,
         h.type === 'timer' ? `${totalMins} min` : `${doneCount}/${mDates.length}`,
         `${rate}%`,
       ]);
     });
     wsData.push([]);
-    wsData.push(['Generat:', new Date().toLocaleString('ro-RO')]);
+    wsData.push(['Generated:', new Date().toLocaleString('en-US')]);
     return XLSX.utils.aoa_to_sheet(wsData);
   }, [habits, log]);
 
   const exportFullYear = useCallback(async () => {
     if (habits.length === 0) {
-      Alert.alert('Info', 'Adaugă obiceiuri mai întâi');
+      Alert.alert('Info', 'Add habits first');
       return;
     }
     setExporting(true);
@@ -80,9 +80,9 @@ export default function ReportScreen() {
 
       // Summary sheet
       const summaryData: any[][] = [
-        [`Raport Anual Obiceiuri — ${year}`],
+        [`Annual Habit Report — ${year}`],
         [],
-        ['Obicei', 'Tip', ...MONTHS_RO.map(m => m.substring(0, 3)), 'Media Anuală'],
+        ['Habit', 'Type', ...MONTHS.map(m => m.substring(0, 3)), 'Annual Average'],
       ];
       habits.forEach(h => {
         const rates: number[] = [];
@@ -96,11 +96,11 @@ export default function ReportScreen() {
         summaryData.push([h.icon + ' ' + h.name, h.type === 'timer' ? 'Timer' : 'Checkbox', ...rates.map(r => `${r}%`), `${avg}%`]);
       });
       const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, summaryWs, 'Sumar Anual');
+      XLSX.utils.book_append_sheet(wb, summaryWs, 'Annual Summary');
 
       for (let m = 0; m < 12; m++) {
         const ws = buildMonthSheet(year, m);
-        XLSX.utils.book_append_sheet(wb, ws, MONTHS_RO[m].substring(0, 10));
+        XLSX.utils.book_append_sheet(wb, ws, MONTHS[m].substring(0, 10));
       }
 
       const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
@@ -111,14 +111,14 @@ export default function ReportScreen() {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(filePath, {
           mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          dialogTitle: 'Exportă raport anual',
+          dialogTitle: 'Export annual report',
         });
       } else {
-        Alert.alert('Succes', `Fișierul a fost salvat: ${fileName}`);
+        Alert.alert('Success', `File saved: ${fileName}`);
       }
     } catch (e) {
       console.error(e);
-      Alert.alert('Eroare', 'Nu s-a putut genera raportul');
+      Alert.alert('Eroare', 'Could not generate the report');
     }
     setExporting(false);
   }, [habits, log, year, buildMonthSheet]);
@@ -142,12 +142,12 @@ export default function ReportScreen() {
       <TouchableOpacity onPress={exportFullYear} disabled={exporting} style={[styles.exportBtn, exporting && { opacity: 0.5 }]}>
         <Ionicons name="download-outline" size={20} color={colors.bg} />
         <Text style={styles.exportBtnText}>
-          {exporting ? 'Se generează...' : `Export Excel Anual ${year} — 12 sheet-uri`}
+          {exporting ? 'Generating...' : `Annual Excel Export ${year} — 12 sheets`}
         </Text>
       </TouchableOpacity>
       <Text style={styles.exportHint}>
-        Generează un .xlsx cu sheet „Sumar Anual" + 12 sheet-uri lunare.{'\n'}
-        Partajează-l direct în Google Drive, WhatsApp, etc.
+        Generates an .xlsx with „Annual Summary" + 12 sheets lunare.{'\n'}
+        Share directly to Google Drive, WhatsApp, etc.
       </Text>
 
       {/* Divider */}
@@ -161,7 +161,7 @@ export default function ReportScreen() {
         }} style={styles.navBtn}>
           <Ionicons name="chevron-back" size={16} color={colors.textDim} />
         </TouchableOpacity>
-        <Text style={styles.monthText}>{MONTHS_RO[month]} {year}</Text>
+        <Text style={styles.monthText}>{MONTHS[month]} {year}</Text>
         <TouchableOpacity onPress={() => {
           if (month === 11) { setMonth(0); setYear(y => y + 1); }
           else setMonth(m => m + 1);
@@ -178,7 +178,7 @@ export default function ReportScreen() {
             <View style={{ marginLeft: 10 }}>
               <Text style={styles.summaryName}>{habit.name}</Text>
               <Text style={styles.summaryMeta}>
-                {habit.type === 'timer' ? `${totalMinutes} min total` : `${doneCount}/${dates.length} zile`}
+                {habit.type === 'timer' ? `${totalMinutes} min total` : `${doneCount}/${dates.length} days`}
               </Text>
             </View>
           </View>
@@ -191,7 +191,7 @@ export default function ReportScreen() {
       {/* Heatmap */}
       {habits.filter(h => h.frequency === 'daily').length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Heatmap — {MONTHS_RO[month]}</Text>
+          <Text style={styles.cardTitle}>Heatmap — {MONTHS[month]}</Text>
           {habits.filter(h => h.frequency === 'daily').slice(0, 5).map(h => (
             <View key={h.id} style={{ marginBottom: 12 }}>
               <Text style={styles.heatLabel}>{h.icon} {h.name}</Text>

@@ -54,7 +54,7 @@ export default function StatsScreen() {
     return (
       <View style={[styles.container, styles.empty]}>
         <Text style={{ fontSize: 48, marginBottom: 16 }}>📊</Text>
-        <Text style={styles.emptyText}>Adaugă obiceiuri pentru a vedea statisticile</Text>
+        <Text style={styles.emptyText}>Add habits to see your statistics</Text>
       </View>
     );
   }
@@ -65,7 +65,7 @@ export default function StatsScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* 30-day trend chart */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Rata de completare (30 zile)</Text>
+        <Text style={styles.cardTitle}>Completion rate (30 days)</Text>
         <View style={styles.chart}>
           {dailyData.map((d, i) => (
             <View key={i} style={styles.barCol}>
@@ -87,7 +87,7 @@ export default function StatsScreen() {
       {/* Per-habit bars */}
       {habitStats.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Per obicei (30 zile)</Text>
+          <Text style={styles.cardTitle}>Per habit (30 days)</Text>
           {habitStats.map((h, i) => (
             <View key={i} style={styles.hBarRow}>
               <Text style={styles.hBarLabel} numberOfLines={1}>{h.name}</Text>
@@ -106,14 +106,14 @@ export default function StatsScreen() {
       {/* Streaks */}
       {streaks.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>🔥 Serii curente</Text>
+          <Text style={styles.cardTitle}>🔥 Current streaks</Text>
           {streaks.map((s, i) => (
             <View key={i} style={[styles.streakRow, i < streaks.length - 1 && styles.streakBorder]}>
               <Text style={styles.streakName}>{s.name}</Text>
               <Text style={[styles.streakCount, {
                 color: s.streak > 7 ? colors.green : s.streak > 0 ? colors.yellow : colors.textDarkest,
               }]}>
-                {s.streak} {s.streak === 1 ? 'zi' : 'zile'}
+                {s.streak} {s.streak === 1 ? 'day' : 'days'}
               </Text>
             </View>
           ))}
