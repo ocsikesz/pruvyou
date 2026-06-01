@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
-import { colors, MONTHS, getCompletionColor } from '@/constants/theme';
+import { colors, brand, MONTHS, getCompletionColor } from '@/constants/theme';
 import { useHabits } from '@/hooks/useHabits';
 import { getMonthDates, fmt } from '@/utils/dates';
 
@@ -219,24 +219,24 @@ export default function ReportScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 12 },
   yearNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 14 },
-  yearText: { fontSize: 20, fontWeight: '800', color: colors.accent },
+  yearText: { fontSize: 20, fontWeight: '800', color: brand.blue },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  monthText: { fontSize: 16, fontWeight: '700', color: colors.accent },
+  monthText: { fontSize: 16, fontWeight: '700', color: brand.blue },
   navBtn: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
     justifyContent: 'center', alignItems: 'center',
   },
   exportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    padding: 16, borderRadius: 12, backgroundColor: colors.accent, marginBottom: 6,
+    padding: 16, borderRadius: 12, backgroundColor: brand.blue, marginBottom: 6,
   },
   exportBtnText: { fontSize: 14, fontWeight: '700', color: colors.bg },
   exportHint: { fontSize: 11, color: colors.textDark, textAlign: 'center', marginBottom: 16, lineHeight: 17 },
   divider: { height: 1, backgroundColor: colors.border, marginBottom: 16 },
   summaryCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: colors.bgCard, borderRadius: 12, padding: 14,
+    backgroundColor: colors.white, borderRadius: 12, padding: 14,
     marginBottom: 8, borderWidth: 1, borderColor: colors.border,
   },
   summaryLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
@@ -244,10 +244,10 @@ const styles = StyleSheet.create({
   summaryMeta: { fontSize: 11, color: colors.textDark, marginTop: 2 },
   summaryRate: { fontSize: 22, fontWeight: '800' },
   card: {
-    backgroundColor: colors.bgCard, borderRadius: 14, padding: 16,
+    backgroundColor: colors.white, borderRadius: 14, padding: 16,
     marginTop: 12, marginBottom: 12, borderWidth: 1, borderColor: colors.border,
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: colors.accent, marginBottom: 14 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: brand.blue, marginBottom: 14 },
   heatLabel: { fontSize: 11, color: colors.textDim, marginBottom: 4 },
   heatRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 3 },
   heatCell: { width: 14, height: 14, borderRadius: 3 },

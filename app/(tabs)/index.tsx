@@ -1,303 +1,199 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, DAYS_SHORT, getCompletionColor } from "@/constants/theme";
+import { colors, brand, DAYS_SHORT, getCompletionColor } from '@/constants/theme';
+import { STANDARD_CATEGORIES } from '@/constants/categories';
 import { useHabits } from '@/hooks/useHabits';
-import { getWeekDates, fmt, today, clamp } from '@/utils/dates';
-import DayCard from '@/components/DayCard';
+import { getWeekDates, fmt, today } from '@/utils/dates';
+import ProgressRing from '@/components/ProgressRing';
 
 export default function HomeScreen() {
   const { habits, log, loaded, toggleDay, addMinutes } = useHabits();
   const [weekOff, setWeekOff] = useState(0);
-
   const weekDates = useMemo(() => getWeekDates(weekOff), [weekOff]);
   const todayStr = fmt(today());
-
-  if (!loaded) {
-    return (
-      <View style={styles.loading}>
-        <Text style={{ fontSize: 40, marginBottom: 12 }}>⏳</Text>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
-  }
-
-  // Today's day index (0=Mon .. 6=Sun)
   const todayDayIdx = today().getDay() === 0 ? 6 : today().getDay() - 1;
+
+  if (!loaded) return <View style={st.container}><Text style={{ fontSize: 40, textAlign: 'center', marginTop: 100 }}>⏳</Text></View>;
+
   const todayHabits = habits.filter(h =>
     h.frequency === 'daily' || (h.frequency === 'weekly' && (h.selectedDays || []).includes(todayDayIdx))
   );
+  const doneToday = todayHabits.filter(h => log[todayStr]?.[h.id]?.done).length;
+  const todayRatio = todayHabits.length > 0 ? doneToday / todayHabits.length : 0;
 
-  if (habits.length === 0) {
-    return (
-      <View style={styles.empty}>
-        <Text style={{ fontSize: 48, marginBottom: 16 }}>🌱</Text>
-        <Text style={styles.emptyTitle}>No habits yet</Text>
-        <Text style={styles.emptySubtitle}>
-          Go to the Habits tab to add your first habit
-        </Text>
-      </View>
-    );
-  }
+  const weekDone = weekDates.reduce((sum, d, i) => {
+    const ds = fmt(d);
+    const active = habits.filter(h => h.frequency === 'daily' || (h.frequency === 'weekly' && (h.selectedDays || []).includes(i)));
+    return sum + active.filter(h => log[ds]?.[h.id]?.done).length;
+  }, 0);
+  const weekTotal = weekDates.reduce((sum, _, i) =>
+    sum + habits.filter(h => h.frequency === 'daily' || (h.frequency === 'weekly' && (h.selectedDays || []).includes(i))).length, 0);
+  const weekRatio = weekTotal > 0 ? weekDone / weekTotal : 0;
 
-  const dailyHabits = habits.filter(h => h.frequency === 'daily');
-  const weeklyHabits = habits.filter(h => h.frequency === 'weekly');
+  const bestStreak = habits.reduce((best, h) => {
+    let s = 0;
+    for (let i = 0; i < 365; i++) { const d = new Date(); d.setDate(d.getDate() - i); if (log[fmt(d)]?.[h.id]?.done) s++; else break; }
+    return Math.max(best, s);
+  }, 0);
+  const streakRatio = Math.min(1, bestStreak / 30);
 
-  // Overall week score
-  const weekScore = dailyHabits.length > 0
-    ? weekDates.reduce((sum, d) => {
-        const ds = fmt(d);
-        const done = dailyHabits.filter(h => log[ds]?.[h.id]?.done).length;
-        return sum + done;
-      }, 0)
-    : 0;
-  const weekTotal = dailyHabits.length * 7;
-  const weekPct = weekTotal > 0 ? Math.round((weekScore / weekTotal) * 100) : 0;
+  const grouped = STANDARD_CATEGORIES.map(cat => ({
+    cat, habits: habits.filter(h => h.categoryId === cat.id),
+  })).filter(g => g.habits.length > 0);
+
+  if (habits.length === 0) return (
+    <View style={[st.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <Text style={{ fontSize: 48, marginBottom: 16 }}>🌱</Text>
+      <Text style={{ fontSize: 18, fontWeight: '700', color: colors.textDim }}>No habits yet</Text>
+      <Text style={{ fontSize: 13, color: colors.textDark, marginTop: 8 }}>Go to the Habits tab to add your first habit</Text>
+    </View>
+  );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Week navigator */}
-      <View style={styles.weekNav}>
-        <TouchableOpacity onPress={() => setWeekOff(w => w - 1)} style={styles.navBtn}>
-          <Ionicons name="chevron-back" size={18} color={colors.textDim} />
-        </TouchableOpacity>
-        <View style={styles.weekInfo}>
-          <Text style={styles.weekLabel}>
-            {weekOff === 0 ? 'This week' :
-              `${weekDates[0].toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} – ${weekDates[6].toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}`}
-          </Text>
-          <Text style={[styles.weekScore, { color: getCompletionColor(weekPct / 100) }]}>
-            {weekPct}% completed
-          </Text>
+    <ScrollView style={st.container} showsVerticalScrollIndicator={false}>
+      {/* Tagline */}
+      <Text style={st.tagline}>
+        Track. <Text style={{ color: brand.green }}>Achieve.</Text> <Text style={{ color: brand.gold }}>Triumph.</Text>
+      </Text>
+
+      {/* Progress Rings */}
+      <View style={st.ringWrap}>
+        <View style={st.ringBox}>
+          <View style={{ position: 'absolute' }}><ProgressRing size={160} strokeWidth={10} progress={weekRatio} color={brand.green} /></View>
+          <View style={{ position: 'absolute', left: 15, top: 15 }}><ProgressRing size={130} strokeWidth={10} progress={todayRatio} color={brand.blue} /></View>
+          <View style={{ position: 'absolute', left: 30, top: 30 }}><ProgressRing size={100} strokeWidth={10} progress={streakRatio} color={brand.gold} /></View>
+          <View style={st.ringCenter}>
+            <Text style={st.ringPct}>{Math.round(weekRatio * 100)}%</Text>
+            <Text style={st.ringLabel}>weekly goal</Text>
+          </View>
         </View>
-        <TouchableOpacity
-          onPress={() => setWeekOff(w => Math.min(0, w + 1))}
-          style={[styles.navBtn, weekOff >= 0 && { opacity: 0.3 }]}
-          disabled={weekOff >= 0}
-        >
-          <Ionicons name="chevron-forward" size={18} color={colors.textDim} />
+      </View>
+      <View style={st.legendRow}>
+        <View style={st.legendItem}><View style={[st.legendDot, { backgroundColor: brand.green }]} /><Text style={st.legendText}>Week</Text></View>
+        <View style={st.legendItem}><View style={[st.legendDot, { backgroundColor: brand.blue }]} /><Text style={st.legendText}>Today</Text></View>
+        <View style={st.legendItem}><View style={[st.legendDot, { backgroundColor: brand.gold }]} /><Text style={st.legendText}>Streak</Text></View>
+      </View>
+
+      {/* Week nav */}
+      <View style={st.weekNav}>
+        <TouchableOpacity onPress={() => setWeekOff(w => w - 1)} style={st.navBtn}>
+          <Ionicons name="chevron-back" size={16} color={colors.textDim} />
+        </TouchableOpacity>
+        <Text style={st.weekLabel}>{weekOff === 0 ? 'This week' :
+          `${weekDates[0].toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} – ${weekDates[6].toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}`}</Text>
+        <TouchableOpacity onPress={() => setWeekOff(w => Math.min(0, w + 1))} style={[st.navBtn, weekOff >= 0 && { opacity: 0.3 }]} disabled={weekOff >= 0}>
+          <Ionicons name="chevron-forward" size={16} color={colors.textDim} />
         </TouchableOpacity>
       </View>
 
-      {/* ── 7 Day Cards ── */}
-      <View style={styles.cardsRow}>
-        {weekDates.map((d, i) => (
-          <DayCard
-            key={i}
-            date={d}
-            dayIndex={i}
-            habits={habits}
-            log={log}
-            onPress={(ds) => {
-              // Toggle all incomplete habits for the day or open detail
-              dailyHabits.forEach(h => {
-                if (h.type === 'check' && !log[ds]?.[h.id]?.done) {
-                  // don't auto-toggle, let them use the detail below
-                }
-              });
-            }}
-          />
-        ))}
-      </View>
+      {/* Category Cards */}
+      {grouped.map(({ cat, habits: ch }) => (
+        <View key={cat.id} style={[st.catCard, { backgroundColor: cat.bg, borderColor: cat.border }]}>
+          <View style={st.catHeader}>
+            <View style={[st.catIcon, { backgroundColor: cat.color + '20' }]}>
+              <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
+            </View>
+            <Text style={[st.catTitle, { color: cat.color }]}>{cat.name}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
+          </View>
 
-      {/* ── Today's habits checklist ── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Today — {today().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-        {dailyHabits.map(habit => {
-          const entry = log[todayStr]?.[habit.id];
-          const done = !!entry?.done;
-          return (
-            <TouchableOpacity
-              key={habit.id}
-              onPress={() => {
-                if (habit.type === 'check') {
-                  toggleDay(habit.id, todayStr);
-                }
-              }}
-              style={[styles.habitRow, done && { borderColor: habit.color + '40' }]}
-            >
-              <View style={[styles.checkCircle, done && { backgroundColor: habit.color, borderColor: habit.color }]}>
-                {done && <Ionicons name="checkmark" size={16} color={colors.bg} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.habitName, done && { textDecorationLine: 'line-through', color: colors.textDim }]}>
-                  {habit.icon} {habit.name}
-                </Text>
-                {habit.type === 'timer' && (
-                  <Text style={styles.habitMeta}>
-                    {entry?.minutes || 0} / {habit.targetMinutes} min
-                  </Text>
-                )}
-              </View>
-              {habit.type === 'timer' && (
-                <View style={styles.timerBtns}>
-                  <TouchableOpacity
-                    onPress={() => addMinutes(habit.id, todayStr, -5, habit.targetMinutes)}
-                    style={styles.timerBtn}
-                  >
-                    <Text style={styles.timerBtnText}>-5</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => addMinutes(habit.id, todayStr, 5, habit.targetMinutes)}
-                    style={styles.timerBtn}
-                  >
-                    <Text style={styles.timerBtnText}>+5</Text>
-                  </TouchableOpacity>
+          {ch.map(h => {
+            const entry = log[todayStr]?.[h.id];
+            const done = !!entry?.done;
+
+            if (h.type === 'timer') {
+              const mins = entry?.minutes || 0;
+              const ratio = h.targetMinutes > 0 ? mins / h.targetMinutes : 0;
+              return (
+                <View key={h.id} style={{ marginTop: 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: cat.color }}>{h.icon} {h.name}</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: cat.color }}>{mins}/{h.targetMinutes} min</Text>
+                  </View>
+                  <View style={[st.progressTrack, { backgroundColor: cat.border }]}>
+                    <View style={{ height: '100%', width: `${Math.min(100, ratio * 100)}%`, backgroundColor: cat.color, borderRadius: 3 }} />
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+                    <TouchableOpacity onPress={() => addMinutes(h.id, todayStr, -5, h.targetMinutes)} style={[st.miniBtn, { borderColor: cat.border }]}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: cat.color }}>-5</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => addMinutes(h.id, todayStr, 5, h.targetMinutes)} style={[st.miniBtn, { borderColor: cat.border }]}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: cat.color }}>+5</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              );
+            }
 
-      {/* ── Weekly habits ── */}
-      {weeklyHabits.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Weekly</Text>
-          {weeklyHabits.map(habit => {
-            const weekTotal = weekDates.reduce((sum, d) => {
-              const ds = fmt(d);
-              if (habit.type === 'timer') return sum + (log[ds]?.[habit.id]?.minutes || 0);
-              return sum + (log[ds]?.[habit.id]?.done ? 1 : 0);
-            }, 0);
-            const target = habit.type === 'timer'
-              ? habit.targetMinutes * (habit.weeklyTarget || 1)
-              : (habit.weeklyTarget || 3);
-            const ratio = target > 0 ? weekTotal / target : 0;
             return (
-              <View key={habit.id} style={styles.weeklyCard}>
-                <View style={styles.weeklyHeader}>
-                  <Text style={styles.habitName}>{habit.icon} {habit.name}</Text>
-                  <Text style={[styles.weeklyScore, { color: getCompletionColor(Math.min(1, ratio)) }]}>
-                    {weekTotal}{habit.type === 'timer' ? 'm' : ''} / {target}{habit.type === 'timer' ? 'm' : 'x'}
-                  </Text>
+              <View key={h.id} style={{ marginTop: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: cat.color }}>{h.icon} {h.name}</Text>
+                  {done && <Text style={{ fontSize: 10, fontWeight: '700', color: brand.green }}>✓</Text>}
                 </View>
-                <View style={styles.progressBarH}>
-                  <View style={[styles.progressFillH, {
-                    width: `${Math.min(100, ratio * 100)}%`,
-                    backgroundColor: habit.color,
-                  }]} />
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  {weekDates.map((d, i) => {
+                    const ds = fmt(d);
+                    const dayDone = log[ds]?.[h.id]?.done;
+                    const isToday = ds === todayStr;
+                    const scheduled = h.frequency === 'daily' || (h.selectedDays || []).includes(i);
+                    return (
+                      <TouchableOpacity key={i} onPress={() => { if (scheduled) toggleDay(h.id, ds); }}
+                        style={[st.dayPill,
+                          dayDone && { backgroundColor: cat.color, borderColor: cat.color },
+                          isToday && !dayDone && { borderColor: brand.gold, borderWidth: 2 },
+                          !scheduled && { opacity: 0.3 },
+                        ]}>
+                        <Text style={[st.dayPillDay, dayDone && { color: '#fff' }]}>{DAYS_SHORT[i].substring(0, 2)}</Text>
+                        <Text style={[st.dayPillNum, dayDone && { color: '#fff' }]}>{d.getDate()}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
             );
           })}
+
+          {(() => {
+            let streak = 0;
+            for (const h of ch) {
+              let s = 0;
+              for (let i = 0; i < 365; i++) { const d = new Date(); d.setDate(d.getDate() - i); if (log[fmt(d)]?.[h.id]?.done) s++; else break; }
+              streak = Math.max(streak, s);
+            }
+            return streak > 0 ? <Text style={{ fontSize: 11, fontWeight: '700', color: cat.color, marginTop: 10 }}>{streak} day streak 🔥</Text> : null;
+          })()}
         </View>
-      )}
+      ))}
 
       <View style={{ height: 30 }} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    paddingHorizontal: 16,
-  },
-  loading: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: { fontSize: 16, color: colors.accent },
-  empty: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyTitle: { fontSize: 20, color: colors.textDim, fontWeight: '700', marginBottom: 8 },
-  emptySubtitle: { fontSize: 13, color: colors.textDark, textAlign: 'center' },
-  weekNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: 12,
-  },
-  navBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  weekInfo: { alignItems: 'center' },
-  weekLabel: { fontSize: 13, color: colors.textDim, fontWeight: '500' },
-  weekScore: { fontSize: 16, fontWeight: '800', marginTop: 2 },
-  cardsRow: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  section: { marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textDark,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 10,
-  },
-  habitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgCard,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  checkCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 2,
-    borderColor: colors.textDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  habitName: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
-  habitMeta: { fontSize: 11, color: colors.textDark, marginTop: 2 },
-  timerBtns: { flexDirection: 'row', gap: 6 },
-  timerBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.bg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  timerBtnText: { fontSize: 12, fontWeight: '700', color: colors.accent },
-  weeklyCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  weeklyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  weeklyScore: { fontSize: 14, fontWeight: '700' },
-  progressBarH: {
-    height: 6,
-    backgroundColor: colors.bg,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFillH: {
-    height: '100%',
-    borderRadius: 3,
-  },
+const st = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16 },
+  tagline: { textAlign: 'center', fontSize: 14, fontWeight: '600', color: colors.textMuted, marginVertical: 12 },
+  ringWrap: { alignItems: 'center', marginBottom: 12 },
+  ringBox: { width: 160, height: 160, position: 'relative' },
+  ringCenter: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
+  ringPct: { fontSize: 28, fontWeight: '800', color: colors.text },
+  ringLabel: { fontSize: 10, fontWeight: '600', color: colors.textDim },
+  legendRow: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 16 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 10, fontWeight: '600', color: colors.textDim },
+  weekNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  navBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  weekLabel: { fontSize: 12, fontWeight: '600', color: colors.textDim },
+  catCard: { borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1 },
+  catHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  catIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  catTitle: { fontSize: 14, fontWeight: '700', flex: 1, marginLeft: 10 },
+  progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden', marginTop: 2 },
+  miniBtn: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 6, borderWidth: 1, backgroundColor: '#fff' },
+  dayPill: { flex: 1, height: 40, borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  dayPillDay: { fontSize: 8, fontWeight: '700', color: colors.textDim, letterSpacing: 0.3 },
+  dayPillNum: { fontSize: 12, fontWeight: '800', color: colors.textMuted },
 });

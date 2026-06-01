@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
-import { colors } from '@/constants/theme';
+import { colors, brand } from '@/constants/theme';
 import { getCategoryById, getAllCategories } from '@/constants/categories';
 import { useHabits } from '@/hooks/useHabits';
 import HabitForm from '@/components/HabitForm';
@@ -147,7 +147,7 @@ function HabitCard({ habit, category, onEdit, onDelete }: {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 12 },
   addBtn: {
-    padding: 16, borderRadius: 12, backgroundColor: colors.accent,
+    padding: 16, borderRadius: 12, backgroundColor: brand.blue,
     alignItems: 'center', marginBottom: 16,
   },
   addBtnText: { fontSize: 15, fontWeight: '700', color: colors.bg },
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   // Habit cards
   card: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.bgCard, borderRadius: 12, padding: 14,
+    backgroundColor: colors.white, borderRadius: 12, padding: 14,
     marginBottom: 6, borderWidth: 1, borderColor: colors.border,
   },
   cardLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },

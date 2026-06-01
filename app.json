@@ -5,14 +5,16 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "scheme": "pruvyou",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0D1219"
+      "backgroundColor": "#F5F7FA"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ocsikesz.pruvyou"
@@ -20,10 +22,14 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0D1219"
+        "backgroundColor": "#F5F7FA"
       },
       "package": "com.ocsikesz.pruvyou"
     },
-    "plugins": ["expo-router", "expo-font", "expo-image-picker"]
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-image-picker"
+    ]
   }
 }

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { colors, getCompletionColor } from '@/constants/theme';
+import { colors, brand, getCompletionColor } from '@/constants/theme';
 import { useHabits } from '@/hooks/useHabits';
 import { fmt } from '@/utils/dates';
 
@@ -126,18 +126,18 @@ export default function StatsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 12 },
+  container: { flex: 1, backgroundColor: colors.borderLight, paddingHorizontal: 16, paddingTop: 12 },
   empty: { justifyContent: 'center', alignItems: 'center' },
   emptyText: { fontSize: 13, color: colors.textDark },
   card: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: colors.white,
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: colors.accent, marginBottom: 14 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: brand.blue, marginBottom: 14 },
   chart: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   barTrack: {
     width: '100%',
     height: 120,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.borderLight,
     borderRadius: 3,
     justifyContent: 'flex-end',
     overflow: 'hidden',
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   hBarTrack: {
     flex: 1,
     height: 10,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.borderLight,
     borderRadius: 5,
     overflow: 'hidden',
   },
