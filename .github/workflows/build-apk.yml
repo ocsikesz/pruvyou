@@ -40,13 +40,14 @@ jobs:
       - name: Compute version
         id: version
         run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
           BUILD=$(git rev-list --count HEAD)
           SHORT_SHA=$(git rev-parse --short HEAD)
-          FULL="1.${BUILD}"
-          echo "full=${FULL}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Building PruvYou v${FULL}"
+          echo "apk_name=pruvyou_v${VERSION}.apk" >> "$GITHUB_OUTPUT"
+          echo "Building PruvYou v${VERSION} (build ${BUILD}, commit ${SHORT_SHA})"
 
       - name: Install dependencies
         run: npm install
@@ -68,7 +69,7 @@ jobs:
         run: |
           GRADLE=android/app/build.gradle
           sed -i -E "s/versionCode [0-9]+/versionCode ${{ steps.version.outputs.build }}/" "$GRADLE"
-          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${{ steps.version.outputs.full }}\"/" "$GRADLE"
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${{ steps.version.outputs.version }}\"/" "$GRADLE"
 
       - name: Bundle JavaScript
         run: |
@@ -100,10 +101,25 @@ jobs:
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Rename APK
+        run: |
+          APK=$(find android/app/build/outputs/apk -name "*.apk" | head -1)
+          cp "$APK" "${{ steps.version.outputs.apk_name }}"
+          echo "APK ready: ${{ steps.version.outputs.apk_name }}"
+          ls -lh "${{ steps.version.outputs.apk_name }}"
+
+      - name: Create Release with APK
+        uses: softprops/action-gh-release@v2
         with:
-          name: pruvyou-v${{ steps.version.outputs.full }}.apk
-          path: android/app/build/outputs/apk/release/*.apk
-          retention-days: 90
-          compression-level: 0
+          tag_name: v${{ steps.version.outputs.version }}
+          name: PruvYou v${{ steps.version.outputs.version }}
+          body: |
+            **PruvYou v${{ steps.version.outputs.version }}**
+            Build: ${{ steps.version.outputs.build }} | Commit: ${{ steps.version.outputs.short_sha }}
+            
+            Download the APK below and install on your phone.
+          files: ${{ steps.version.outputs.apk_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
