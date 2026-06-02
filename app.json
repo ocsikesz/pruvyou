@@ -6,15 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "scheme": "pruvyou",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#F5F7FA"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ocsikesz.pruvyou"
@@ -26,10 +22,6 @@
       },
       "package": "com.ocsikesz.pruvyou"
     },
-    "plugins": [
-      "expo-router",
-      "expo-font",
-      "expo-image-picker"
-    ]
+    "assetBundlePatterns": ["**/*"]
   }
 }

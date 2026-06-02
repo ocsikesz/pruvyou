@@ -1,47 +1,109 @@
 name: Build Android APK
-
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: 20
+          fetch-depth: 0
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+      - name: Show pre-installed tool versions
+        run: |
+          echo "Node: $(node -v)"
+          echo "npm:  $(npm -v)"
+          echo "Java: $(java -version 2>&1 | head -1)"
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Ensure Java 17 is selected
+        run: |
+          JAVA17=$(ls -d /usr/lib/jvm/temurin-17* /usr/lib/jvm/*17* 2>/dev/null | head -1)
+          if [ -z "$JAVA17" ]; then
+            sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+            JAVA17=$(ls -d /usr/lib/jvm/*17* | head -1)
+          fi
+          echo "JAVA_HOME=$JAVA17" >> "$GITHUB_ENV"
+          echo "$JAVA17/bin" >> "$GITHUB_PATH"
+
+      - name: Ensure Android SDK 35
+        run: |
+          SDKMGR=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
+          if [ -n "$SDKMGR" ]; then
+            yes | "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null 2>&1 || true
+          fi
+
+      - name: Compute version
+        id: version
+        run: |
+          BUILD=$(git rev-list --count HEAD)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          FULL="1.${BUILD}"
+          echo "full=${FULL}" >> "$GITHUB_OUTPUT"
+          echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Building PruvYou v${FULL}"
 
       - name: Install dependencies
         run: npm install
 
-      - name: Expo prebuild (generate Android project)
-        run: npx expo prebuild --platform android --clean
+      - name: Patch expo-modules-core for SDK 35
+        run: |
+          F=node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt
+          if [ -f "$F" ]; then
+            sed -i 's/return requestedPermissions\.contains(permission)/return requestedPermissions?.contains(permission) ?: false/' "$F"
+            echo "Patched PermissionsService.kt"
+          fi
 
-      - name: Build APK with Gradle
-        working-directory: android
-        run: ./gradlew assembleRelease || ./gradlew assembleDebug
+      - name: Prebuild Android
+        run: npx expo prebuild --platform android --clean --no-install
+        env:
+          CI: 1
 
-      - name: Find and upload APK
+      - name: Set versionCode and versionName
+        run: |
+          GRADLE=android/app/build.gradle
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ steps.version.outputs.build }}/" "$GRADLE"
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${{ steps.version.outputs.full }}\"/" "$GRADLE"
+
+      - name: Bundle JavaScript
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      - name: Configure debug signing for release
+        run: |
+          cat >> android/app/build.gradle << 'GRADLEOF'
+
+          android {
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          GRADLEOF
+
+      - name: Build APK
+        run: |
+          chmod +x android/gradlew
+          cd android && ./gradlew assembleRelease --no-daemon --stacktrace
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PruvYou-APK
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/apk/debug/*.apk
-          retention-days: 30
+          name: pruvyou-v${{ steps.version.outputs.full }}.apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 90
+          compression-level: 0
