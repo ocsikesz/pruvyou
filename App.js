@@ -276,20 +276,45 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
         </View>
       </View>
 
-      {/* ── Category Cards with today's habits ── */}
-      {todayGrouped.map(({cat,habits:ch})=>(
+      {/* ── Category Cards with today's habits + weekly cumulative ── */}
+      {todayGrouped.map(({cat,habits:ch})=>{
+        // Weekly cumulative for this category
+        const weeklyStats=ch.map(h=>{
+          const scheduledDays=h.frequency==='daily'?7:(h.selectedDays||[]).length;
+          if(h.type==='timer'){
+            const weekMins=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0);
+            const weekTarget=h.targetMinutes*scheduledDays;
+            return {h,weekMins,weekTarget,weekPct:weekTarget>0?Math.round((weekMins/weekTarget)*100):0};
+          } else {
+            const weekDone=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
+            return {h,weekDone,weekTarget:scheduledDays,weekPct:scheduledDays>0?Math.round((weekDone/scheduledDays)*100):0};
+          }
+        });
+        const catWeekPct=weeklyStats.length>0?Math.round(weeklyStats.reduce((s,ws)=>s+ws.weekPct,0)/weeklyStats.length):0;
+
+        return(
         <View key={cat.id} style={[s.catCard,{backgroundColor:cat.bg,borderColor:cat.border}]}>
           <View style={s.catHeader}>
             <View style={[s.catIcon,{backgroundColor:cat.color+'20'}]}><Text style={{fontSize:16}}>{cat.icon}</Text></View>
             <View style={{flex:1,marginLeft:10}}>
               <Text style={[s.catTitle,{color:cat.color}]}>{cat.name}</Text>
-              <Text style={{fontSize:10,color:cat.color+'90'}}>{ch.filter(h=>log[todayStr]?.[h.id]?.done).length}/{ch.length} done</Text>
+              <Text style={{fontSize:10,color:cat.color+'90'}}>{ch.filter(h=>log[todayStr]?.[h.id]?.done).length}/{ch.length} done today</Text>
+            </View>
+            {/* Weekly cumulative badge */}
+            <View style={{alignItems:'center'}}>
+              <Text style={{fontSize:16,fontWeight:'800',color:compColor(catWeekPct/100)}}>{catWeekPct}%</Text>
+              <Text style={{fontSize:8,color:C.textDim}}>week</Text>
             </View>
           </View>
+
+          {/* Weekly cumulative bar for category */}
+          <View style={{height:4,backgroundColor:cat.border,borderRadius:2,overflow:'hidden',marginTop:8,marginBottom:4}}>
+            <View style={{height:'100%',width:`${Math.min(100,catWeekPct)}%`,backgroundColor:cat.color,borderRadius:2}}/></View>
 
           {ch.map(h=>{
             const entry=log[todayStr]?.[h.id];
             const done=!!entry?.done;
+            const ws=weeklyStats.find(w=>w.h.id===h.id);
             return(
               <View key={h.id} style={{marginTop:8}}>
                 <TouchableOpacity onPress={()=>{if(h.type==='check')toggleDay(h.id,todayStr);}}
@@ -302,6 +327,8 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
                   <View style={{flex:1}}>
                     <Text style={[{fontSize:13,fontWeight:'600',color:C.text},
                       done&&{textDecorationLine:'line-through',color:C.textDim}]}>{h.icon} {h.name}</Text>
+
+                    {/* Timer: daily progress */}
                     {h.type==='timer'&&(
                       <View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:4}}>
                         <View style={{flex:1,height:4,backgroundColor:cat.border,borderRadius:2,overflow:'hidden'}}>
@@ -311,13 +338,29 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
                           {entry?.minutes||0}/{h.targetMinutes}m</Text>
                       </View>
                     )}
+
+                    {/* Weekly cumulative line */}
+                    {ws&&(
+                      <View style={{flexDirection:'row',alignItems:'center',gap:4,marginTop:3}}>
+                        <Text style={{fontSize:9,color:C.textDim}}>Week:</Text>
+                        <View style={{flex:1,height:3,backgroundColor:cat.border+'80',borderRadius:2,overflow:'hidden'}}>
+                          <View style={{height:'100%',width:`${Math.min(100,ws.weekPct)}%`,
+                            backgroundColor:ws.weekPct>=100?brand.green:cat.color+'80',borderRadius:2}}/></View>
+                        <Text style={{fontSize:9,fontWeight:'700',color:ws.weekPct>=100?brand.green:C.textDim}}>
+                          {h.type==='timer'?`${ws.weekMins}/${ws.weekTarget}m`:`${ws.weekDone}/${ws.weekTarget}x`}
+                          {ws.weekPct>=100?' ✓':''}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </TouchableOpacity>
+
+                {/* Timer: +/- buttons */}
                 {h.type==='timer'&&(
                   <View style={{flexDirection:'row',gap:4,marginTop:4,paddingLeft:36}}>
-                    {[-5,5,15].map(delta=>(
+                    {[-5,5,15,30].map(delta=>(
                       <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,todayStr,delta,h.targetMinutes)}
-                        style={{paddingHorizontal:12,paddingVertical:5,borderRadius:6,
+                        style={{paddingHorizontal:10,paddingVertical:5,borderRadius:6,
                           backgroundColor:delta>0?'#fff':C.bg,borderWidth:1,borderColor:cat.border}}>
                         <Text style={{fontSize:11,fontWeight:'700',color:delta>0?cat.color:C.textDim}}>
                           {delta>0?'+':''}{delta}</Text>
@@ -328,7 +371,8 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
             );
           })}
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
