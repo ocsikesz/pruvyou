@@ -482,6 +482,111 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
         </View>
         );
       })}
+
+      {/* ── Catch Up — habits not scheduled today but missed this week ── */}
+      {(()=>{
+        // Find habits NOT active today but with missed days this week
+        const catchUpHabits=habits.filter(h=>{
+          // Skip if already showing in today's list
+          const isToday=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx));
+          if(isToday) return false;
+          if(h.frequency!=='weekly') return false;
+          // Check if any scheduled day this week was missed
+          const selDays=h.selectedDays||[];
+          for(let i=0;i<7;i++){
+            if(i>=todayDayIdx) continue; // only past days
+            if(!selDays.includes(i)) continue; // not scheduled
+            const ds=fmt(weekDates[i]);
+            if(!log[ds]?.[h.id]?.done) return true; // missed!
+          }
+          return false;
+        });
+
+        // Also include weekly habits not scheduled today where user might want to log extra
+        const extraLogHabits=habits.filter(h=>{
+          const isToday=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx));
+          if(isToday) return false;
+          if(h.frequency!=='weekly') return false;
+          // Not in catchUp already, but user might want to do it today
+          const selDays=h.selectedDays||[];
+          // Check weekly target not yet met
+          const weekDone=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
+          const weekMins=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0);
+          const target=h.type==='timer'?h.targetMinutes*selDays.length:selDays.length;
+          const actual=h.type==='timer'?weekMins:weekDone;
+          return actual<target && !catchUpHabits.includes(h);
+        });
+
+        const allCatchUp=[...catchUpHabits,...extraLogHabits];
+        if(!allCatchUp.length) return null;
+
+        // Group by category
+        const catchUpGrouped=CATS.map(cat=>({
+          cat, habits:allCatchUp.filter(h=>h.categoryId===cat.id)
+        })).filter(g=>g.habits.length>0);
+
+        return(
+          <View style={{marginTop:16}}>
+            <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:10}}>
+              <Text style={s.sectionTitle}>⚡ Catch Up</Text>
+              <Text style={{fontSize:10,color:C.textDim}}>Log missed habits on today</Text>
+            </View>
+
+            {catchUpGrouped.map(({cat,habits:ch})=>(
+              <View key={cat.id} style={{backgroundColor:cat.bg+'80',borderRadius:12,padding:12,marginBottom:8,
+                borderWidth:1,borderColor:cat.border,borderStyle:'dashed'}}>
+                <Text style={{fontSize:12,fontWeight:'700',color:cat.color,marginBottom:6}}>{cat.icon} {cat.name}</Text>
+                {ch.map(h=>{
+                  const todayEntry=log[todayStr]?.[h.id];
+                  const todayDone=!!todayEntry?.done;
+                  // Show which days were missed
+                  const missedDays=(h.selectedDays||[]).filter(i=>i<todayDayIdx&&!log[fmt(weekDates[i])]?.[h.id]?.done);
+                  // Weekly progress
+                  const weekVal=h.type==='timer'
+                    ?weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0)
+                    :weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
+                  const weekTarget=h.type==='timer'?h.targetMinutes*(h.selectedDays||[]).length:(h.selectedDays||[]).length;
+
+                  return(
+                    <View key={h.id} style={{marginBottom:8}}>
+                      <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+                        {h.type==='check'?(
+                          <TouchableOpacity onPress={()=>toggleDay(h.id,todayStr)}
+                            style={[s.check,{width:22,height:22,borderRadius:11},
+                              todayDone&&{backgroundColor:cat.color,borderColor:cat.color}]}>
+                            {todayDone&&<Text style={{color:'#fff',fontSize:12,fontWeight:'700'}}>✓</Text>}
+                          </TouchableOpacity>
+                        ):<View style={{width:22}}/>}
+                        <View style={{flex:1}}>
+                          <Text style={{fontSize:12,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
+                          <Text style={{fontSize:9,color:C.textDim}}>
+                            Scheduled: {(h.selectedDays||[]).map(d=>DAYS[d]).join(', ')}
+                            {missedDays.length>0?'  ·  Missed: '+missedDays.map(d=>DAYS[d]).join(', '):''}
+                          </Text>
+                          <Text style={{fontSize:9,color:cat.color,marginTop:1}}>
+                            Week: {weekVal}/{weekTarget}{h.type==='timer'?'m':'x'}
+                            {weekVal>=weekTarget?' ✓':` — ${weekTarget-weekVal}${h.type==='timer'?'m':''} to go`}
+                          </Text>
+                        </View>
+                      </View>
+                      {h.type==='timer'&&(
+                        <View style={{flexDirection:'row',gap:4,marginTop:4,paddingLeft:30}}>
+                          {[15,30,h.targetMinutes].filter((v,i,a)=>a.indexOf(v)===i).map(delta=>(
+                            <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,todayStr,delta,h.targetMinutes)}
+                              style={{paddingHorizontal:10,paddingVertical:5,borderRadius:6,
+                                backgroundColor:'#fff',borderWidth:1,borderColor:cat.border}}>
+                              <Text style={{fontSize:11,fontWeight:'700',color:cat.color}}>+{delta}m today</Text>
+                            </TouchableOpacity>))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+        );
+      })()}
     </View>
   );
 }
