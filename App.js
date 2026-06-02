@@ -204,11 +204,14 @@ function DayEditor({dateStr,dayIndex,habits,log,toggleDay,addMinutes,onClose}) {
 function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,todayStr,setEditDay}) {
   const todayDayIdx=today().getDay()===0?6:today().getDay()-1;
 
-  // Habits active today
-  const todayHabits=habits.filter(h=>
-    h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx)));
-  const doneToday=todayHabits.filter(h=>log[todayStr]?.[h.id]?.done).length;
-  const todayPct=todayHabits.length>0?Math.round((doneToday/todayHabits.length)*100):0;
+  // Habits active today — separated
+  const dailyHabits=habits.filter(h=>h.frequency==='daily');
+  const weeklyToday=habits.filter(h=>h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx));
+  const todayHabits=[...dailyHabits,...weeklyToday];
+
+  const doneDaily=dailyHabits.filter(h=>log[todayStr]?.[h.id]?.done).length;
+  const doneWeekly=weeklyToday.filter(h=>log[todayStr]?.[h.id]?.done).length;
+  const dailyPct=dailyHabits.length>0?Math.round((doneDaily/dailyHabits.length)*100):0;
 
   // Group today's habits by category
   const todayGrouped=CATS.map(cat=>({
@@ -238,12 +241,16 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
           const ds=fmt(d);
           const isToday=ds===todayStr;
           const isFuture=d>today();
-          const active=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(i)));
-          const total=active.length;
-          const done=active.filter(h=>log[ds]?.[h.id]?.done).length;
-          const ratio=total>0?done/total:0;
+          // Only count daily habits for the day card percentage
+          const dayDailyHabits=habits.filter(h=>h.frequency==='daily');
+          const dayWeeklyHabits=habits.filter(h=>h.frequency==='weekly'&&(h.selectedDays||[]).includes(i));
+          const dailyTotal=dayDailyHabits.length;
+          const dailyDone=dayDailyHabits.filter(h=>log[ds]?.[h.id]?.done).length;
+          const weeklyDone=dayWeeklyHabits.filter(h=>log[ds]?.[h.id]?.done).length;
+          const ratio=dailyTotal>0?dailyDone/dailyTotal:0;
           const pct=Math.round(ratio*100);
           const fill=compColor(ratio);
+          const hasWeekly=dayWeeklyHabits.length>0;
           return(
             <TouchableOpacity key={i} activeOpacity={0.7}
               onPress={()=>{if(!isFuture) setEditDay({dateStr:ds,dayIndex:i});}}
@@ -253,15 +260,18 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
                   <View style={[s.dcFill,{height:`${pct}%`,backgroundColor:fill}]}/>
                 </View>
                 <View style={s.dcOverlay}>
-                  {total>0&&<Text style={[s.dcCount,{color:fill}]}>{done}/{total}</Text>}
-                  <Text style={[s.dcPct,{color:pct>45?'#fff':C.textMuted}]}>{total>0?`${pct}%`:'—'}</Text>
+                  {dailyTotal>0&&<Text style={[s.dcCount,{color:fill}]}>{dailyDone}/{dailyTotal}</Text>}
+                  <Text style={[s.dcPct,{color:pct>45?'#fff':C.textMuted}]}>{dailyTotal>0?`${pct}%`:'—'}</Text>
+                  {hasWeekly&&<Text style={{position:'absolute',bottom:4,fontSize:7,fontWeight:'700',
+                    color:weeklyDone===dayWeeklyHabits.length?brand.green:brand.blue}}>
+                    +{weeklyDone}/{dayWeeklyHabits.length}</Text>}
                 </View>
               </View>
               <View style={[s.dcLabel,isToday&&{backgroundColor:brand.gold+'18'}]}>
                 <Text style={[s.dcDay,isToday&&{color:brand.gold}]}>{DAYS[i]}</Text>
                 <Text style={[s.dcNum,isToday&&{color:brand.gold}]}>{d.getDate()}</Text>
               </View>
-              {pct>=100&&<View style={s.dcCheck}><Text style={{fontSize:8}}>✓</Text></View>}
+              {pct>=100&&weeklyDone>=dayWeeklyHabits.length&&<View style={s.dcCheck}><Text style={{fontSize:8}}>✓</Text></View>}
             </TouchableOpacity>
           );
         })}
@@ -270,9 +280,17 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
       {/* ── Today Header ── */}
       <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
         <Text style={s.sectionTitle}>Today</Text>
-        <View style={{flexDirection:'row',alignItems:'center',gap:6}}>
-          <Text style={{fontSize:22,fontWeight:'800',color:compColor(todayPct/100)}}>{todayPct}%</Text>
-          <Text style={{fontSize:11,color:C.textDim}}>{doneToday}/{todayHabits.length}</Text>
+        <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+          <View style={{alignItems:'center'}}>
+            <Text style={{fontSize:20,fontWeight:'800',color:compColor(dailyPct/100)}}>{doneDaily}/{dailyHabits.length}</Text>
+            <Text style={{fontSize:8,color:C.textDim}}>daily</Text>
+          </View>
+          {weeklyToday.length>0&&(
+            <View style={{alignItems:'center'}}>
+              <Text style={{fontSize:14,fontWeight:'700',color:brand.blue}}>{doneWeekly}/{weeklyToday.length}</Text>
+              <Text style={{fontSize:8,color:C.textDim}}>weekly</Text>
+            </View>
+          )}
         </View>
       </View>
 
