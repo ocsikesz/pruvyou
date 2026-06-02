@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, SafeAreaView, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, SafeAreaView, Modal, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Brand & Theme ─────────────────────────────────────────────────
@@ -91,8 +91,7 @@ export default function App() {
       <ScrollView style={s.content} showsVerticalScrollIndicator={false}>
         {/* Logo */}
         <View style={s.logoArea}>
-          <Text style={s.logoMark}>P<Text style={{color:brand.green}}>Y</Text><Text style={{fontSize:14,color:brand.green}}>↗</Text></Text>
-          <Text style={s.logoName}>PRUVYOU</Text>
+          <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain" />
           <Text style={s.logoSub}>PROVE YOURSELF DAILY</Text>
         </View>
 
@@ -203,6 +202,9 @@ function DayEditor({dateStr,dayIndex,habits,log,toggleDay,addMinutes,onClose}) {
 // ═══════════════════════════════════════════════════════════════════
 function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,todayStr,setEditDay}) {
   const todayDayIdx=today().getDay()===0?6:today().getDay()-1;
+  const yesterday=new Date(today()); yesterday.setDate(yesterday.getDate()-1);
+  const yesterdayStr=fmt(yesterday);
+  const yesterdayDayIdx=yesterday.getDay()===0?6:yesterday.getDay()-1;
 
   // Habits active today — separated
   const dailyHabits=habits.filter(h=>h.frequency==='daily');
@@ -385,6 +387,49 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
                       </TouchableOpacity>))}
                   </View>
                 )}
+
+                {/* Yesterday quick-log */}
+                {(()=>{
+                  const wasActiveYesterday=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(yesterdayDayIdx));
+                  if(!wasActiveYesterday) return null;
+                  const yesterdayEntry=log[yesterdayStr]?.[h.id];
+                  const yesterdayDone=!!yesterdayEntry?.done;
+                  if(h.type==='check'){
+                    return(
+                      <TouchableOpacity onPress={()=>toggleDay(h.id,yesterdayStr)}
+                        style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:6,paddingLeft:36,paddingVertical:4}}>
+                        <View style={{width:16,height:16,borderRadius:8,borderWidth:1.5,
+                          borderColor:yesterdayDone?brand.green:C.textDark,
+                          backgroundColor:yesterdayDone?brand.green:'transparent',
+                          justifyContent:'center',alignItems:'center'}}>
+                          {yesterdayDone&&<Text style={{color:'#fff',fontSize:8,fontWeight:'700'}}>✓</Text>}
+                        </View>
+                        <Text style={{fontSize:10,color:yesterdayDone?brand.green:C.textDim}}>
+                          {yesterdayDone?'Done yesterday ✓':'Did this yesterday? Tap to log'}</Text>
+                      </TouchableOpacity>
+                    );
+                  } else {
+                    return(
+                      <View style={{marginTop:6,paddingLeft:36}}>
+                        <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:4}}>
+                          <Text style={{fontSize:10,color:yesterdayDone?brand.green:C.textDim}}>
+                            📅 Yesterday: {yesterdayEntry?.minutes||0}/{h.targetMinutes}m
+                            {yesterdayDone?' ✓':''}</Text>
+                        </View>
+                        {!yesterdayDone&&(
+                          <View style={{flexDirection:'row',gap:4}}>
+                            {[5,15,30].map(delta=>(
+                              <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,yesterdayStr,delta,h.targetMinutes)}
+                                style={{paddingHorizontal:8,paddingVertical:3,borderRadius:5,
+                                  backgroundColor:C.bg,borderWidth:1,borderColor:C.border}}>
+                                <Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>+{delta}m yday</Text>
+                              </TouchableOpacity>))}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  }
+                })()}
               </View>
             );
           })}
@@ -555,9 +600,8 @@ const s = StyleSheet.create({
   root:{flex:1,backgroundColor:C.bg},
   content:{flex:1,paddingHorizontal:16},
   logoArea:{alignItems:'center',paddingTop:12,marginBottom:4},
-  logoMark:{fontSize:28,fontWeight:'800',color:brand.blue,letterSpacing:-1},
-  logoName:{fontSize:11,fontWeight:'700',color:brand.blue,letterSpacing:3,marginTop:2},
-  logoSub:{fontSize:8,fontWeight:'600',color:C.textDim,letterSpacing:2},
+  logoImg:{width:200,height:50},
+  logoSub:{fontSize:8,fontWeight:'600',color:C.textDim,letterSpacing:2,marginTop:2},
   tagline:{textAlign:'center',fontSize:14,fontWeight:'600',color:C.textMuted,marginBottom:16},
 
   weekNav:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10},
