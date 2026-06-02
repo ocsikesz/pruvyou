@@ -1,6 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, SafeAreaView, Modal, Image } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 
 // ─── Brand & Theme ─────────────────────────────────────────────────
 const brand = { blue: '#1A4F8A', green: '#34C79F', gold: '#F7C602' };
@@ -39,6 +43,47 @@ function getWeekDates(offset=0) {
 
 const load=async(k,fb)=>{try{const r=await AsyncStorage.getItem(k);return r?JSON.parse(r):fb;}catch{return fb;}};
 const save=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch{}};
+
+// ─── Progress Ring (SVG) ───────────────────────────────────────────
+function Ring({size,sw,pct,color,children}) {
+  const r=(size-sw)/2; const circ=2*Math.PI*r; const off=circ-(Math.min(100,pct)/100)*circ;
+  return(
+    <View style={{width:size,height:size,alignItems:'center',justifyContent:'center'}}>
+      <Svg width={size} height={size} style={{position:'absolute',transform:[{rotate:'-90deg'}]}}>
+        <Circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E0E4EA" strokeWidth={sw}/>
+        <Circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={sw}
+          strokeDasharray={`${circ}`} strokeDashoffset={off} strokeLinecap="round"/>
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
+// ─── Backup / Restore ──────────────────────────────────────────────
+async function backupToFile(habits, log) {
+  const data = JSON.stringify({ habits, log, exportDate: new Date().toISOString(), app: 'PruvYou' }, null, 2);
+  const path = FileSystem.cacheDirectory + 'pruvyou_backup_' + fmt(today()) + '.json';
+  await FileSystem.writeAsStringAsync(path, data);
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Backup PruvYou — Save to Google Drive' });
+  } else { Alert.alert('Saved', 'Backup file saved locally'); }
+}
+
+async function restoreFromFile(setHabits, setLog) {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
+    if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    const content = await FileSystem.readAsStringAsync(uri);
+    const data = JSON.parse(content);
+    if (data.habits && data.log && data.app === 'PruvYou') {
+      Alert.alert('Restore', 'Found ' + data.habits.length + ' habits. Restore?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restore', onPress: () => { setHabits(data.habits); setLog(data.log); Alert.alert('Done', 'Data restored!'); }},
+      ]);
+    } else { Alert.alert('Error', 'Invalid backup file'); }
+  } catch (e) { Alert.alert('Error', 'Could not read file'); }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN APP
@@ -101,7 +146,8 @@ export default function App() {
         {tab==='habits'&&<HabitsTab habits={habits} showAdd={showAdd} setShowAdd={setShowAdd}
           addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit}
           updateHabit={updateHabit} deleteHabit={deleteHabit}/>}
-        {tab==='stats'&&<StatsTab habits={habits} log={log}/>}
+        {tab==='stats'&&<StatsTab habits={habits} log={log} weekDates={weekDates}/>}
+        {tab==='settings'&&<SettingsTab habits={habits} log={log} setHabits={setHabits} setLog={setLog}/>}
         <View style={{height:80}}/>
       </ScrollView>
 
@@ -554,42 +600,162 @@ function HabitForm({habit,onSave,onCancel}) {
 // ═══════════════════════════════════════════════════════════════════
 // STATS TAB
 // ═══════════════════════════════════════════════════════════════════
-function StatsTab({habits,log}) {
+function StatsTab({habits,log,weekDates}) {
   const last30=useMemo(()=>Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(29-i));return d;}),[]);
-  const habitStats=useMemo(()=>habits.map(h=>{
-    const done=last30.filter(d=>log[fmt(d)]?.[h.id]?.done).length;
-    const cat=CATS.find(c=>c.id===h.categoryId);
-    return{name:h.icon+' '+h.name,rate:Math.round((done/30)*100),color:h.color,cat};}),[habits,log,last30]);
-  const streaks=useMemo(()=>habits.map(h=>{let streak=0;
-    for(let i=0;i<365;i++){const d=new Date();d.setDate(d.getDate()-i);if(log[fmt(d)]?.[h.id]?.done)streak++;else break;}
-    return{name:h.icon+' '+h.name,streak,color:h.color};}).sort((a,b)=>b.streak-a.streak),[habits,log]);
 
   if(!habits.length) return <View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>📊</Text>
     <Text style={s.emptySub}>Add habits to see stats</Text></View>;
 
-  // Group stats by category
-  const grouped=CATS.map(cat=>({cat,stats:habitStats.filter(h=>h.cat?.id===cat.id)})).filter(g=>g.stats.length>0);
+  // Per-category stats with rings
+  const catStats=CATS.map(cat=>{
+    const ch=habits.filter(h=>h.categoryId===cat.id);
+    if(!ch.length) return null;
+    const habitData=ch.map(h=>{
+      const done30=last30.filter(d=>log[fmt(d)]?.[h.id]?.done).length;
+      const rate=Math.round((done30/30)*100);
+      // Weekly
+      const weekMins=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0);
+      const weekDone=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
+      const schedDays=h.frequency==='daily'?7:(h.selectedDays||[]).length;
+      const weekTarget=h.type==='timer'?h.targetMinutes*schedDays:schedDays;
+      const weekVal=h.type==='timer'?weekMins:weekDone;
+      const weekPct=weekTarget>0?Math.round((weekVal/weekTarget)*100):0;
+      // Streak
+      let streak=0;for(let i=0;i<365;i++){const d=new Date();d.setDate(d.getDate()-i);if(log[fmt(d)]?.[h.id]?.done)streak++;else break;}
+      return {h,rate,weekPct,weekVal,weekTarget,streak};
+    });
+    const avgRate=Math.round(habitData.reduce((s,h)=>s+h.rate,0)/habitData.length);
+    const avgWeek=Math.round(habitData.reduce((s,h)=>s+h.weekPct,0)/habitData.length);
+    return {cat,habitData,avgRate,avgWeek};
+  }).filter(Boolean);
 
   return(<View>
-    {grouped.map(({cat,stats})=>(
-      <View key={cat.id} style={[s.statsCard,{borderLeftWidth:3,borderLeftColor:cat.color}]}>
-        <Text style={[s.statsTitle,{color:cat.color}]}>{cat.icon} {cat.name}</Text>
-        {stats.map((h,i)=>(<View key={i} style={{flexDirection:'row',alignItems:'center',marginBottom:10}}>
-          <Text style={{width:90,fontSize:11,color:C.textMuted}} numberOfLines={1}>{h.name}</Text>
-          <View style={{flex:1,height:10,backgroundColor:C.borderLight,borderRadius:5,overflow:'hidden',marginHorizontal:8}}>
-            <View style={{height:'100%',width:`${h.rate}%`,backgroundColor:h.color,borderRadius:5}}/></View>
-          <Text style={{width:36,textAlign:'right',fontSize:12,fontWeight:'700',color:h.color}}>{h.rate}%</Text>
-        </View>))}
+    {/* Overview rings */}
+    <View style={[s.statsCard,{alignItems:'center'}]}>
+      <Text style={[s.statsTitle,{textAlign:'center'}]}>Weekly Overview</Text>
+      <View style={{flexDirection:'row',justifyContent:'space-around',width:'100%',marginTop:8}}>
+        {catStats.map(({cat,avgWeek})=>(
+          <View key={cat.id} style={{alignItems:'center'}}>
+            <Ring size={64} sw={6} pct={avgWeek} color={cat.color}>
+              <Text style={{fontSize:14,fontWeight:'800',color:cat.color}}>{avgWeek}%</Text>
+            </Ring>
+            <Text style={{fontSize:8,fontWeight:'600',color:C.textDim,marginTop:4,textAlign:'center'}} numberOfLines={1}>{cat.icon} {cat.name.split(' ')[0]}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+
+    {/* Per category detailed */}
+    {catStats.map(({cat,habitData,avgRate,avgWeek})=>(
+      <View key={cat.id} style={[s.statsCard,{borderColor:cat.border}]}>
+        <View style={{flexDirection:'row',alignItems:'center',marginBottom:12}}>
+          <Text style={{fontSize:18,marginRight:8}}>{cat.icon}</Text>
+          <Text style={[s.statsTitle,{color:cat.color,marginBottom:0,flex:1}]}>{cat.name}</Text>
+          <Ring size={44} sw={4} pct={avgWeek} color={cat.color}>
+            <Text style={{fontSize:10,fontWeight:'800',color:cat.color}}>{avgWeek}%</Text>
+          </Ring>
+        </View>
+
+        {habitData.map(({h,rate,weekPct,weekVal,weekTarget,streak},i)=>(
+          <View key={i} style={{marginBottom:12}}>
+            <View style={{flexDirection:'row',alignItems:'center',gap:10}}>
+              <Ring size={48} sw={5} pct={weekPct} color={h.color}>
+                <Text style={{fontSize:10,fontWeight:'800',color:weekPct>=100?brand.green:h.color}}>{weekPct}%</Text>
+              </Ring>
+              <View style={{flex:1}}>
+                <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
+                <Text style={{fontSize:10,color:C.textDim,marginTop:2}}>
+                  Week: {weekVal}/{weekTarget}{h.type==='timer'?'m':'x'}
+                  {weekPct>=100?' ✓':''}  ·  30d: {rate}%
+                </Text>
+                {streak>0&&<Text style={{fontSize:10,fontWeight:'700',color:streak>7?brand.green:brand.gold,marginTop:1}}>
+                  🔥 {streak} day streak</Text>}
+              </View>
+            </View>
+            {/* 30-day mini bar chart */}
+            <View style={{flexDirection:'row',gap:1,marginTop:6,height:20,paddingLeft:58}}>
+              {last30.slice(-14).map((d,j)=>{
+                const done=log[fmt(d)]?.[h.id]?.done;
+                return <View key={j} style={{flex:1,backgroundColor:done?h.color+'60':C.borderLight,borderRadius:2,
+                  height:done?20:6,alignSelf:'flex-end'}}/>;
+              })}
+            </View>
+          </View>
+        ))}
       </View>
     ))}
-    {streaks.length>0&&<View style={s.statsCard}>
-      <Text style={s.statsTitle}>🔥 Current streaks</Text>
-      {streaks.map((st,i)=>(<View key={i} style={{flexDirection:'row',justifyContent:'space-between',paddingVertical:8,
-        borderBottomWidth:i<streaks.length-1?1:0,borderBottomColor:C.borderLight}}>
-        <Text style={{fontSize:13,color:C.textMuted}}>{st.name}</Text>
-        <Text style={{fontSize:16,fontWeight:'800',color:st.streak>7?brand.green:st.streak>0?brand.gold:C.textDark}}>
-          {st.streak} {st.streak===1?'day':'days'}</Text></View>))}
-    </View>}
+  </View>);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETTINGS TAB — Backup, Restore, About
+// ═══════════════════════════════════════════════════════════════════
+function SettingsTab({habits,log,setHabits,setLog}) {
+  const [backing,setBacking]=useState(false);
+
+  const handleBackup=async()=>{
+    setBacking(true);
+    try { await backupToFile(habits,log); } catch(e) { Alert.alert('Error','Backup failed'); }
+    setBacking(false);
+  };
+
+  return(<View>
+    {/* Google Drive Backup */}
+    <View style={s.statsCard}>
+      <Text style={s.statsTitle}>☁️ Backup & Sync</Text>
+      <Text style={{fontSize:12,color:C.textDim,marginBottom:12,lineHeight:18}}>
+        Export your habits and progress as a JSON file. Share it directly to Google Drive, email, or any app.
+      </Text>
+      <TouchableOpacity onPress={handleBackup} disabled={backing}
+        style={{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center',marginBottom:8,opacity:backing?0.5:1}}>
+        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>
+          {backing?'Exporting...':'📤 Backup to Google Drive'}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={()=>restoreFromFile(setHabits,setLog)}
+        style={{padding:14,borderRadius:12,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border}}>
+        <Text style={{fontSize:14,fontWeight:'600',color:C.textMuted}}>📥 Restore from file</Text>
+      </TouchableOpacity>
+    </View>
+
+    {/* Data info */}
+    <View style={s.statsCard}>
+      <Text style={s.statsTitle}>📊 Your Data</Text>
+      <View style={{flexDirection:'row',justifyContent:'space-around'}}>
+        <View style={{alignItems:'center'}}>
+          <Text style={{fontSize:24,fontWeight:'800',color:brand.blue}}>{habits.length}</Text>
+          <Text style={{fontSize:10,color:C.textDim}}>habits</Text>
+        </View>
+        <View style={{alignItems:'center'}}>
+          <Text style={{fontSize:24,fontWeight:'800',color:brand.green}}>{Object.keys(log).length}</Text>
+          <Text style={{fontSize:10,color:C.textDim}}>days logged</Text>
+        </View>
+        <View style={{alignItems:'center'}}>
+          <Text style={{fontSize:24,fontWeight:'800',color:brand.gold}}>
+            {Object.values(log).reduce((s,day)=>s+Object.values(day).filter(e=>e.done).length,0)}
+          </Text>
+          <Text style={{fontSize:10,color:C.textDim}}>completions</Text>
+        </View>
+      </View>
+    </View>
+
+    {/* About */}
+    <View style={[s.statsCard,{alignItems:'center'}]}>
+      <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
+      <Text style={{fontSize:10,color:C.textDim,marginTop:6}}>Prove Yourself Daily</Text>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:2}}>v1.0.0</Text>
+    </View>
+
+    {/* Danger zone */}
+    <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL habits and progress data?',[
+      {text:'Cancel',style:'cancel'},
+      {text:'Delete Everything',style:'destructive',onPress:async()=>{
+        setHabits([]);setLog({});
+        await AsyncStorage.clear();
+        Alert.alert('Done','All data cleared');
+      }},
+    ])} style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
+      <Text style={{fontSize:13,fontWeight:'600',color:'#C44'}}>🗑 Reset all data</Text>
+    </TouchableOpacity>
   </View>);
 }
 
