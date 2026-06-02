@@ -936,7 +936,7 @@ function SettingsTab({habits,log,setHabits,setLog}) {
 
     {/* About */}
     <View style={[s.statsCard,{alignItems:'center'}]}>
-      <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
+      <Image source={require('./assets/PruvYou_logo.png')} style={{width:200,height:50}} resizeMode="contain"/>
       <Text style={{fontSize:10,color:C.textDim,marginTop:6}}>Prove Yourself Daily</Text>
       <Text style={{fontSize:9,color:C.textLight,marginTop:2}}>v1.0.0</Text>
     </View>
