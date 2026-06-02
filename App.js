@@ -1,126 +1,85 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, SafeAreaView, Modal, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, SafeAreaView, Modal, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
-// ─── Brand & Theme ─────────────────────────────────────────────────
-const brand = { blue: '#1A4F8A', green: '#34C79F', gold: '#F7C602' };
-const C = {
-  bg: '#F5F7FA', white: '#FFFFFF',
-  border: '#E0E4EA', borderLight: '#EDF0F5',
-  text: '#1A2E44', textMuted: '#4D5E74', textDim: '#7889A0',
-  textDark: '#A0AEBC', textLight: '#B0BACA',
-};
-const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-const ICONS = ['🏃','🧘','💪','📖','🧠','💧','🍎','😴','✍️','🎯','⏰','🔥','💰','📝','🌿'];
-
-// ─── Category Groups ───────────────────────────────────────────────
-const CATS = [
-  { id:'fitness', name:'Health & Fitness', icon:'💪', color:brand.green, bg:'#E8F8F0', border:'#B8E6D0',
-    examples:'Yoga, Running, Workout, Meditation, Sleep' },
-  { id:'develop', name:'Development', icon:'📖', color:brand.blue, bg:'#E6EFF8', border:'#B0CDE8',
-    examples:'Reading, Learning, Courses, Coding' },
-  { id:'finance', name:'Finance', icon:'💰', color:brand.gold, bg:'#FEF8E6', border:'#F5DFA0',
-    examples:'Budget review, Savings, Invoices, Investing' },
-  { id:'lifestyle', name:'Lifestyle', icon:'🌿', color:'#9B7ED4', bg:'#F0EDFE', border:'#C8C4E8',
-    examples:'Journaling, Cooking, Cleaning, No phone' },
-  { id:'work', name:'Work & Productivity', icon:'🎯', color:'#E8956B', bg:'#FEF0E6', border:'#F5D0A0',
-    examples:'Deep work, Emails, Planning, Proposals' },
+const brand={blue:'#1A4F8A',green:'#34C79F',gold:'#F7C602'};
+const C={bg:'#F5F7FA',white:'#FFFFFF',border:'#E0E4EA',borderLight:'#EDF0F5',
+  text:'#1A2E44',textMuted:'#4D5E74',textDim:'#7889A0',textDark:'#A0AEBC',textLight:'#B0BACA',
+  greenBg:'#E8F8F0',greenBorder:'#B8E6D0',blueBg:'#E6EFF8',blueBorder:'#B0CDE8',
+  goldBg:'#FEF8E6',goldBorder:'#F5DFA0',purpleBg:'#F0EDFE',purpleBorder:'#C8C4E8'};
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const ICONS=['🏃','🧘','💪','📖','🧠','💧','🍎','😴','✍️','🎯','⏰','🔥','💰','📝','🌿'];
+const CATS=[
+  {id:'fitness',name:'Health & Fitness',icon:'💪',color:brand.green,bg:C.greenBg,border:C.greenBorder},
+  {id:'develop',name:'Development',icon:'📖',color:brand.blue,bg:C.blueBg,border:C.blueBorder},
+  {id:'finance',name:'Finance',icon:'💰',color:brand.gold,bg:C.goldBg,border:C.goldBorder},
+  {id:'lifestyle',name:'Lifestyle',icon:'🌿',color:'#9B7ED4',bg:C.purpleBg,border:C.purpleBorder},
+  {id:'work',name:'Work & Productivity',icon:'🎯',color:'#E8956B',bg:C.goldBg,border:C.goldBorder},
 ];
-const compColor = (r) => r>=1?brand.green:r>=0.7?brand.gold:r>=0.4?'#E8956B':C.textDark;
-const fmt = (d) => d.toISOString().split('T')[0];
-const today = () => new Date();
-const clamp = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
+const compColor=(r)=>r>=1?brand.green:r>=0.7?brand.gold:r>=0.4?'#E8956B':C.textDark;
+const fmt=(d)=>d.toISOString().split('T')[0];
+const today=()=>new Date();
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+function getWeekDates(off=0){const d=today();const day=d.getDay()===0?6:d.getDay()-1;
+  const mon=new Date(d);mon.setDate(d.getDate()-day+off*7);
+  return Array.from({length:7},(_,i)=>{const x=new Date(mon);x.setDate(mon.getDate()+i);return x;});}
+function getMonthDates(y,m){const days=new Date(y,m+1,0).getDate();
+  return Array.from({length:days},(_,i)=>new Date(y,m,i+1));}
 
-function getWeekDates(offset=0) {
-  const d=today(); const day=d.getDay()===0?6:d.getDay()-1;
-  const mon=new Date(d); mon.setDate(d.getDate()-day+offset*7);
-  return Array.from({length:7},(_,i)=>{const x=new Date(mon);x.setDate(mon.getDate()+i);return x;});
-}
+const ld=async(k,fb)=>{try{const r=await AsyncStorage.getItem(k);return r?JSON.parse(r):fb;}catch{return fb;}};
+const sv=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch{}};
 
-const load=async(k,fb)=>{try{const r=await AsyncStorage.getItem(k);return r?JSON.parse(r):fb;}catch{return fb;}};
-const save=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch{}};
+function Ring({size,sw,pct,color,children}){
+  const r=(size-sw)/2,circ=2*Math.PI*r,off=circ-(Math.min(100,pct)/100)*circ;
+  return(<View style={{width:size,height:size,alignItems:'center',justifyContent:'center'}}>
+    <Svg width={size} height={size} style={{position:'absolute',transform:[{rotate:'-90deg'}]}}>
+      <Circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E0E4EA" strokeWidth={sw}/>
+      <Circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={sw}
+        strokeDasharray={`${circ}`} strokeDashoffset={off} strokeLinecap="round"/></Svg>
+    {children}</View>);}
 
-// ─── Progress Ring (SVG) ───────────────────────────────────────────
-function Ring({size,sw,pct,color,children}) {
-  const r=(size-sw)/2; const circ=2*Math.PI*r; const off=circ-(Math.min(100,pct)/100)*circ;
-  return(
-    <View style={{width:size,height:size,alignItems:'center',justifyContent:'center'}}>
-      <Svg width={size} height={size} style={{position:'absolute',transform:[{rotate:'-90deg'}]}}>
-        <Circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E0E4EA" strokeWidth={sw}/>
-        <Circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={`${circ}`} strokeDashoffset={off} strokeLinecap="round"/>
-      </Svg>
-      {children}
-    </View>
-  );
-}
-
-// ─── Backup / Restore ──────────────────────────────────────────────
-async function backupToFile(habits, log) {
-  const data = JSON.stringify({ habits, log, exportDate: new Date().toISOString(), app: 'PruvYou' }, null, 2);
-  const path = FileSystem.cacheDirectory + 'pruvyou_backup_' + fmt(today()) + '.json';
-  await FileSystem.writeAsStringAsync(path, data);
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Backup PruvYou — Save to Google Drive' });
-  } else { Alert.alert('Saved', 'Backup file saved locally'); }
-}
-
-async function restoreFromFile(setHabits, setLog) {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
-    if (result.canceled) return;
-    const uri = result.assets[0].uri;
-    const content = await FileSystem.readAsStringAsync(uri);
-    const data = JSON.parse(content);
-    if (data.habits && data.log && data.app === 'PruvYou') {
-      Alert.alert('Restore', 'Found ' + data.habits.length + ' habits. Restore?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Restore', onPress: () => { setHabits(data.habits); setLog(data.log); Alert.alert('Done', 'Data restored!'); }},
-      ]);
-    } else { Alert.alert('Error', 'Invalid backup file'); }
-  } catch (e) { Alert.alert('Error', 'Could not read file'); }
-}
+// Tab icons
+const TAB_ICONS={home:require('./assets/Home.png'),habits:require('./assets/Habits.png'),
+  projects:require('./assets/Projects.png'),stats:require('./assets/Stats.png'),settings:require('./assets/Setting.png')};
 
 // ═══════════════════════════════════════════════════════════════════
-// MAIN APP
-// ═══════════════════════════════════════════════════════════════════
-export default function App() {
+export default function App(){
   const [tab,setTab]=useState('home');
   const [habits,setHabits]=useState([]);
-  const [log,setLog]=useState({});
+  const [log,setLog]=useState({}); // {dateStr:{habitId:{done,minutes,notes}}}
+  const [projects,setProjects]=useState([]);
+  const [projLog,setProjLog]=useState({}); // {dateStr:{projId:{minutes,notes}}}
   const [loaded,setLoaded]=useState(false);
   const [weekOff,setWeekOff]=useState(0);
   const [showAdd,setShowAdd]=useState(false);
   const [editHabit,setEditHabit]=useState(null);
-  // For editing a past day
-  const [editDay,setEditDay]=useState(null); // { dateStr, dayIndex }
+  const [editDay,setEditDay]=useState(null);
+  const [noteModal,setNoteModal]=useState(null); // {habitId,dateStr,type:'habit'|'project'}
 
   useEffect(()=>{(async()=>{
-    setHabits(await load('pv-habits',[]));
-    setLog(await load('pv-log',{}));
-    setLoaded(true);
-  })();},[]);
-  useEffect(()=>{if(loaded)save('pv-habits',habits);},[habits,loaded]);
-  useEffect(()=>{if(loaded)save('pv-log',log);},[log,loaded]);
+    setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
+    setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
+    setLoaded(true);})();},[]);
+  useEffect(()=>{if(loaded)sv('pv-habits',habits);},[habits,loaded]);
+  useEffect(()=>{if(loaded)sv('pv-log',log);},[log,loaded]);
+  useEffect(()=>{if(loaded)sv('pv-projects',projects);},[projects,loaded]);
+  useEffect(()=>{if(loaded)sv('pv-projlog',projLog);},[projLog,loaded]);
 
-  const toggleDay=useCallback((hid,ds)=>{
-    setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
-      const cur=c[ds][hid];
-      c[ds]={...c[ds],[hid]:{done:!cur?.done,minutes:cur?.minutes||0}};
-      return c;});
-  },[]);
-
-  const addMinutes=useCallback((hid,ds,delta,target)=>{
-    setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
-      const cur=c[ds][hid]?.minutes||0;
-      const next=clamp(cur+delta,0,999);
-      c[ds]={...c[ds],[hid]:{done:next>=target,minutes:next}};
-      return c;});
-  },[]);
+  const toggleDay=useCallback((hid,ds)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
+    const cur=c[ds][hid];c[ds]={...c[ds],[hid]:{...cur,done:!cur?.done}};return c;});},[]);
+  const addMinutes=useCallback((hid,ds,delta,target)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
+    const cur=c[ds][hid]?.minutes||0;const next=clamp(cur+delta,0,999);
+    c[ds]={...c[ds],[hid]:{...c[ds][hid],done:next>=target,minutes:next}};return c;});},[]);
+  const setNote=useCallback((hid,ds,note)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
+    c[ds]={...c[ds],[hid]:{...c[ds][hid],notes:note}};return c;});},[]);
+  const addProjMinutes=useCallback((pid,ds,delta)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
+    const cur=c[ds][pid]?.minutes||0;c[ds]={...c[ds],[pid]:{...c[ds][pid],minutes:clamp(cur+delta,0,999)}};return c;});},[]);
+  const setProjNote=useCallback((pid,ds,note)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
+    c[ds]={...c[ds],[pid]:{...c[ds][pid],notes:note}};return c;});},[]);
 
   const addHabit=(h)=>{setHabits(p=>[...p,{...h,id:Date.now().toString()}]);setShowAdd(false);};
   const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));setEditHabit(null);};
@@ -128,474 +87,200 @@ export default function App() {
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
-  if(!loaded) return <SafeAreaView style={s.root}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
+  if(!loaded)return<SafeAreaView style={s.root}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView>;
 
-  return (
+  const TABS=[{id:'home',label:'Home'},{id:'habits',label:'Habits'},{id:'projects',label:'Projects'},
+    {id:'stats',label:'Stats'},{id:'settings',label:'Settings'}];
+
+  return(
     <SafeAreaView style={s.root}>
-      <ScrollView style={s.content} showsVerticalScrollIndicator={false}>
-        {/* Logo */}
+      <ScrollView style={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={s.logoArea}>
-          <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain" />
+          <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain"/>
           <Text style={s.logoSub}>PROVE YOURSELF DAILY</Text>
         </View>
-
         {tab==='home'&&<HomeTab habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
-          setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes}
-          todayStr={todayStr} setEditDay={setEditDay}/>}
+          setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} todayStr={todayStr}
+          setEditDay={setEditDay} setNoteModal={setNoteModal}/>}
         {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
           addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit}
           updateHabit={updateHabit} deleteHabit={deleteHabit}
-          toggleDay={toggleDay} addMinutes={addMinutes} todayStr={todayStr} weekDates={weekDates}/>}
-        {tab==='stats'&&<StatsTab habits={habits} log={log} weekDates={weekDates}/>}
-        {tab==='settings'&&<SettingsTab habits={habits} log={log} setHabits={setHabits} setLog={setLog}/>}
+          toggleDay={toggleDay} addMinutes={addMinutes} todayStr={todayStr} weekDates={weekDates} setNoteModal={setNoteModal}/>}
+        {tab==='projects'&&<ProjectsTab projects={projects} setProjects={setProjects}
+          projLog={projLog} addProjMinutes={addProjMinutes} setProjNote={setProjNote}
+          todayStr={todayStr} weekDates={weekDates} setNoteModal={setNoteModal}/>}
+        {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog}/>}
+        {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog}/>}
         <View style={{height:80}}/>
       </ScrollView>
 
-      {/* Tab Bar */}
+      {/* Tab Bar with PNG icons */}
       <View style={s.tabBar}>
-        {[{id:'home',icon:'🏠',label:'Home'},{id:'habits',icon:'📋',label:'Habits'},
-          {id:'stats',icon:'📊',label:'Stats'},{id:'settings',icon:'⚙️',label:'Settings'}].map(t=>(
+        {TABS.map(t=>(
           <TouchableOpacity key={t.id} onPress={()=>setTab(t.id)} style={s.tabItem}>
-            <Text style={{fontSize:20}}>{t.icon}</Text>
+            <Image source={TAB_ICONS[t.id]} style={[s.tabIcon,tab===t.id&&{tintColor:brand.blue}]} resizeMode="contain"/>
             <Text style={[s.tabLabel,tab===t.id&&{color:brand.blue,fontWeight:'700'}]}>{t.label}</Text>
           </TouchableOpacity>))}
       </View>
 
-      {/* ── Edit Past Day Modal ── */}
-      {editDay&&(
-        <Modal transparent animationType="slide" visible={!!editDay} onRequestClose={()=>setEditDay(null)}>
-          <View style={s.modalBg}>
-            <View style={s.modalBox}>
-              <DayEditor
-                dateStr={editDay.dateStr}
-                dayIndex={editDay.dayIndex}
-                habits={habits}
-                log={log}
-                toggleDay={toggleDay}
-                addMinutes={addMinutes}
-                onClose={()=>setEditDay(null)}
-              />
-            </View>
-          </View>
-        </Modal>
-      )}
-    </SafeAreaView>
-  );
+      {/* Note Modal */}
+      {noteModal&&(<Modal transparent animationType="slide" visible={!!noteModal} onRequestClose={()=>setNoteModal(null)}>
+        <NoteEditor modal={noteModal} log={log} projLog={projLog} setNote={setNote} setProjNote={setProjNote}
+          habits={habits} projects={projects} onClose={()=>setNoteModal(null)}/>
+      </Modal>)}
+
+      {/* Day Editor Modal */}
+      {editDay&&(<Modal transparent animationType="slide" visible={!!editDay} onRequestClose={()=>setEditDay(null)}>
+        <View style={s.modalBg}><View style={s.modalBox}>
+          <DayEditor dateStr={editDay.dateStr} dayIndex={editDay.dayIndex} habits={habits} log={log}
+            toggleDay={toggleDay} addMinutes={addMinutes} setNoteModal={setNoteModal} onClose={()=>setEditDay(null)}/>
+        </View></View>
+      </Modal>)}
+    </SafeAreaView>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// DAY EDITOR MODAL — edit any day's habits (past or today)
+// NOTE EDITOR MODAL
 // ═══════════════════════════════════════════════════════════════════
-function DayEditor({dateStr,dayIndex,habits,log,toggleDay,addMinutes,onClose}) {
+function NoteEditor({modal,log,projLog,setNote,setProjNote,habits,projects,onClose}){
+  const isProj=modal.type==='project';
+  const item=isProj?projects.find(p=>p.id===modal.id):habits.find(h=>h.id===modal.id);
+  const existing=isProj?(projLog[modal.dateStr]?.[modal.id]?.notes||''):(log[modal.dateStr]?.[modal.id]?.notes||'');
+  const [text,setText]=useState(existing);
+  const d=new Date(modal.dateStr+'T12:00:00');
+  return(
+    <View style={s.modalBg}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={s.modalBox}>
+      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+        <View><Text style={{fontSize:15,fontWeight:'700',color:C.text}}>{item?.icon||'📝'} {item?.name||'Note'}</Text>
+          <Text style={{fontSize:11,color:C.textDim}}>{d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text></View>
+        <TouchableOpacity onPress={onClose} style={{padding:8}}><Text style={{fontSize:20,color:C.textDim}}>✕</Text></TouchableOpacity>
+      </View>
+      <TextInput value={text} onChangeText={setText} placeholder="Add notes for this day..."
+        placeholderTextColor={C.textDark} style={[s.input,{height:120,textAlignVertical:'top'}]} multiline/>
+      <TouchableOpacity onPress={()=>{
+        if(isProj) setProjNote(modal.id,modal.dateStr,text);
+        else setNote(modal.id,modal.dateStr,text);
+        onClose();
+      }} style={{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center'}}>
+        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>Save Note</Text>
+      </TouchableOpacity>
+    </KeyboardAvoidingView></View>);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+function DayEditor({dateStr,dayIndex,habits,log,toggleDay,addMinutes,setNoteModal,onClose}){
   const d=new Date(dateStr+'T12:00:00');
-  const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'});
-  const activeHabits=habits.filter(h=>
-    h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIndex)));
-
-  return (
-    <View>
-      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-        <View>
-          <Text style={{fontSize:16,fontWeight:'700',color:C.text}}>{DAYS[dayIndex]}</Text>
-          <Text style={{fontSize:12,color:C.textDim}}>{dayLabel}</Text>
-        </View>
-        <TouchableOpacity onPress={onClose} style={{padding:8}}>
-          <Text style={{fontSize:20,color:C.textDim}}>✕</Text>
+  const active=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIndex)));
+  return(<View>
+    <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+      <View><Text style={{fontSize:16,fontWeight:'700',color:C.text}}>{DAYS[dayIndex]}</Text>
+        <Text style={{fontSize:12,color:C.textDim}}>{d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text></View>
+      <TouchableOpacity onPress={onClose} style={{padding:8}}><Text style={{fontSize:20,color:C.textDim}}>✕</Text></TouchableOpacity></View>
+    {!active.length&&<Text style={{color:C.textDim,textAlign:'center',padding:20}}>No habits scheduled</Text>}
+    {active.map(h=>{const entry=log[dateStr]?.[h.id];const done=!!entry?.done;const cat=CATS.find(c=>c.id===h.categoryId);
+      return(<View key={h.id} style={{marginBottom:12}}>
+        <TouchableOpacity onPress={()=>{if(h.type==='check')toggleDay(h.id,dateStr);}}
+          style={{flexDirection:'row',alignItems:'center',padding:12,backgroundColor:done?(cat?.bg||C.greenBg):C.bg,
+            borderRadius:10,borderWidth:1,borderColor:done?(cat?.color||brand.green):C.border}}>
+          <View style={[s.check,done&&{backgroundColor:cat?.color,borderColor:cat?.color}]}>
+            {done&&<Text style={{color:'#fff',fontSize:14,fontWeight:'700'}}>✓</Text>}</View>
+          <View style={{flex:1,marginLeft:10}}>
+            <Text style={{fontSize:14,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
+            {h.type==='timer'&&<Text style={{fontSize:11,color:C.textDim}}>{entry?.minutes||0}/{h.targetMinutes}m</Text>}
+            {entry?.notes&&<Text style={{fontSize:10,color:brand.blue,marginTop:2}}>📝 {entry.notes}</Text>}
+          </View>
+          <TouchableOpacity onPress={()=>setNoteModal({id:h.id,dateStr,type:'habit'})}
+            style={{padding:6}}><Text style={{fontSize:16}}>📝</Text></TouchableOpacity>
         </TouchableOpacity>
-      </View>
-
-      {activeHabits.length===0&&<Text style={{color:C.textDim,textAlign:'center',padding:20}}>No habits scheduled for this day</Text>}
-
-      {activeHabits.map(h=>{
-        const entry=log[dateStr]?.[h.id];
-        const done=!!entry?.done;
-        const cat=CATS.find(c=>c.id===h.categoryId);
-        return(
-          <View key={h.id} style={{marginBottom:12}}>
-            <TouchableOpacity onPress={()=>{if(h.type==='check')toggleDay(h.id,dateStr);}}
-              style={{flexDirection:'row',alignItems:'center',padding:12,backgroundColor:done?(cat?.bg||'#E8F8F0'):C.bg,
-                borderRadius:10,borderWidth:1,borderColor:done?(cat?.color||brand.green):C.border}}>
-              <View style={[s.check,done&&{backgroundColor:cat?.color||brand.green,borderColor:cat?.color||brand.green}]}>
-                {done&&<Text style={{color:'#fff',fontSize:14,fontWeight:'700'}}>✓</Text>}
-              </View>
-              <View style={{flex:1}}>
-                <Text style={{fontSize:14,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
-                {h.type==='timer'&&<Text style={{fontSize:11,color:C.textDim,marginTop:2}}>
-                  {entry?.minutes||0} / {h.targetMinutes} min</Text>}
-              </View>
-            </TouchableOpacity>
-            {h.type==='timer'&&(
-              <View style={{flexDirection:'row',gap:8,marginTop:6,paddingLeft:4}}>
-                {[-15,-5,-1,1,5,15].map(delta=>(
-                  <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,dateStr,delta,h.targetMinutes)}
-                    style={{flex:1,padding:8,borderRadius:8,backgroundColor:delta>0?(cat?.bg||C.bg):C.bg,
-                      borderWidth:1,borderColor:cat?.border||C.border,alignItems:'center'}}>
-                    <Text style={{fontSize:12,fontWeight:'700',color:delta>0?(cat?.color||brand.blue):C.textDim}}>
-                      {delta>0?'+':''}{delta}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
+        {h.type==='timer'&&(<View style={{flexDirection:'row',gap:6,marginTop:6}}>
+          {[-5,5,15,30].map(delta=>(<TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,dateStr,delta,h.targetMinutes)}
+            style={{flex:1,padding:6,borderRadius:6,backgroundColor:delta>0?C.greenBg:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center'}}>
+            <Text style={{fontSize:11,fontWeight:'700',color:delta>0?brand.green:C.textDim}}>{delta>0?'+':''}{delta}</Text>
+          </TouchableOpacity>))}</View>)}
+      </View>);})}</View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// HOME TAB — 7 day cards + today's habits by category
+// HOME TAB — thin habit cards with progress
 // ═══════════════════════════════════════════════════════════════════
-function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,todayStr,setEditDay}) {
+function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,todayStr,setEditDay,setNoteModal}){
   const todayDayIdx=today().getDay()===0?6:today().getDay()-1;
-  const yesterday=new Date(today()); yesterday.setDate(yesterday.getDate()-1);
-  const yesterdayStr=fmt(yesterday);
-  const yesterdayDayIdx=yesterday.getDay()===0?6:yesterday.getDay()-1;
-
-  // Habits active today — separated
-  const dailyHabits=habits.filter(h=>h.frequency==='daily');
+  const dailyH=habits.filter(h=>h.frequency==='daily');
   const weeklyToday=habits.filter(h=>h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx));
-  const todayHabits=[...dailyHabits,...weeklyToday];
+  const todayH=[...dailyH,...weeklyToday];
+  const doneD=dailyH.filter(h=>log[todayStr]?.[h.id]?.done).length;
+  const doneW=weeklyToday.filter(h=>log[todayStr]?.[h.id]?.done).length;
+  const dPct=dailyH.length>0?Math.round((doneD/dailyH.length)*100):0;
 
-  const doneDaily=dailyHabits.filter(h=>log[todayStr]?.[h.id]?.done).length;
-  const doneWeekly=weeklyToday.filter(h=>log[todayStr]?.[h.id]?.done).length;
-  const dailyPct=dailyHabits.length>0?Math.round((doneDaily/dailyHabits.length)*100):0;
+  if(!habits.length)return<View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>🌱</Text>
+    <Text style={s.emptyTitle}>No habits yet</Text><Text style={s.emptySub}>Go to Habits tab to add your first</Text></View>;
 
-  // Group today's habits by category
-  const todayGrouped=CATS.map(cat=>({
-    cat, habits:todayHabits.filter(h=>h.categoryId===cat.id)
-  })).filter(g=>g.habits.length>0);
+  return(<View>
+    <Text style={s.tagline}>Track. <Text style={{color:brand.green}}>Achieve.</Text> <Text style={{color:brand.gold}}>Triumph.</Text></Text>
 
-  if(!habits.length) return <View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>🌱</Text>
-    <Text style={s.emptyTitle}>No habits yet</Text>
-    <Text style={s.emptySub}>Go to Habits tab to add your first</Text></View>;
+    {/* Week nav */}
+    <View style={s.weekNav}>
+      <TouchableOpacity onPress={()=>setWeekOff(w=>w-1)} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+      <Text style={s.weekLabel}>{weekOff===0?'This week':
+        `${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}</Text>
+      <TouchableOpacity onPress={()=>setWeekOff(w=>Math.min(0,w+1))} style={[s.navBtn,weekOff>=0&&{opacity:.3}]} disabled={weekOff>=0}>
+        <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
 
-  return (
-    <View>
-      <Text style={s.tagline}>Track. <Text style={{color:brand.green}}>Achieve.</Text> <Text style={{color:brand.gold}}>Triumph.</Text></Text>
+    {/* 7 Day Cards */}
+    <View style={s.cardsRow}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
+      const act=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(i)));
+      const total=act.length;const done=act.filter(h=>log[ds]?.[h.id]?.done).length;
+      const pct=total>0?Math.round((done/total)*100):0;const fill=compColor(done/Math.max(1,total));
+      return(<TouchableOpacity key={i} activeOpacity={0.7} onPress={()=>{if(!isFut)setEditDay({dateStr:ds,dayIndex:i});}}
+        style={[s.dayCard,isT&&{borderColor:brand.gold,borderWidth:2},isFut&&{opacity:.35}]}>
+        <View style={s.dcProgress}><View style={s.dcTrack}><View style={[s.dcFill,{height:`${pct}%`,backgroundColor:fill}]}/></View>
+          <View style={s.dcOverlay}>{total>0&&<Text style={[s.dcCount,{color:fill}]}>{done}/{total}</Text>}
+            <Text style={[s.dcPct,{color:pct>45?'#fff':C.textMuted}]}>{total>0?`${pct}%`:'—'}</Text></View></View>
+        <View style={[s.dcLabel,isT&&{backgroundColor:brand.gold+'18'}]}>
+          <Text style={[s.dcDay,isT&&{color:brand.gold}]}>{DAYS[i]}</Text>
+          <Text style={[s.dcNum,isT&&{color:brand.gold}]}>{d.getDate()}</Text></View>
+      </TouchableOpacity>);})}</View>
 
-      {/* ── Week Navigator ── */}
-      <View style={s.weekNav}>
-        <TouchableOpacity onPress={()=>setWeekOff(w=>w-1)} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
-        <Text style={s.weekLabel}>{weekOff===0?'This week':
-          `${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}</Text>
-        <TouchableOpacity onPress={()=>setWeekOff(w=>Math.min(0,w+1))} style={[s.navBtn,weekOff>=0&&{opacity:.3}]} disabled={weekOff>=0}>
-          <Text style={s.navBtnT}>▸</Text></TouchableOpacity>
-      </View>
+    {/* Today header */}
+    <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+      <Text style={s.sectionTitle}>Today</Text>
+      <View style={{flexDirection:'row',gap:8}}>
+        <Text style={{fontSize:18,fontWeight:'800',color:compColor(dPct/100)}}>{doneD}/{dailyH.length}</Text>
+        {weeklyToday.length>0&&<Text style={{fontSize:14,fontWeight:'700',color:brand.blue}}>+{doneW}/{weeklyToday.length}</Text>}
+      </View></View>
 
-      {/* ── 7 Day Cards (tap to edit any day) ── */}
-      <View style={s.cardsRow}>
-        {weekDates.map((d,i)=>{
-          const ds=fmt(d);
-          const isToday=ds===todayStr;
-          const isFuture=d>today();
-          // Only count daily habits for the day card percentage
-          const dayDailyHabits=habits.filter(h=>h.frequency==='daily');
-          const dayWeeklyHabits=habits.filter(h=>h.frequency==='weekly'&&(h.selectedDays||[]).includes(i));
-          const dailyTotal=dayDailyHabits.length;
-          const dailyDone=dayDailyHabits.filter(h=>log[ds]?.[h.id]?.done).length;
-          const weeklyDone=dayWeeklyHabits.filter(h=>log[ds]?.[h.id]?.done).length;
-          const ratio=dailyTotal>0?dailyDone/dailyTotal:0;
-          const pct=Math.round(ratio*100);
-          const fill=compColor(ratio);
-          const hasWeekly=dayWeeklyHabits.length>0;
-          return(
-            <TouchableOpacity key={i} activeOpacity={0.7}
-              onPress={()=>{if(!isFuture) setEditDay({dateStr:ds,dayIndex:i});}}
-              style={[s.dayCard,isToday&&{borderColor:brand.gold,borderWidth:2},isFuture&&{opacity:.35}]}>
-              <View style={s.dcProgress}>
-                <View style={s.dcTrack}>
-                  <View style={[s.dcFill,{height:`${pct}%`,backgroundColor:fill}]}/>
-                </View>
-                <View style={s.dcOverlay}>
-                  {dailyTotal>0&&<Text style={[s.dcCount,{color:fill}]}>{dailyDone}/{dailyTotal}</Text>}
-                  <Text style={[s.dcPct,{color:pct>45?'#fff':C.textMuted}]}>{dailyTotal>0?`${pct}%`:'—'}</Text>
-                  {hasWeekly&&<Text style={{position:'absolute',bottom:4,fontSize:7,fontWeight:'700',
-                    color:weeklyDone===dayWeeklyHabits.length?brand.green:brand.blue}}>
-                    +{weeklyDone}/{dayWeeklyHabits.length}</Text>}
-                </View>
-              </View>
-              <View style={[s.dcLabel,isToday&&{backgroundColor:brand.gold+'18'}]}>
-                <Text style={[s.dcDay,isToday&&{color:brand.gold}]}>{DAYS[i]}</Text>
-                <Text style={[s.dcNum,isToday&&{color:brand.gold}]}>{d.getDate()}</Text>
-              </View>
-              {pct>=100&&weeklyDone>=dayWeeklyHabits.length&&<View style={s.dcCheck}><Text style={{fontSize:8}}>✓</Text></View>}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* ── Today Header ── */}
-      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-        <Text style={s.sectionTitle}>Today</Text>
-        <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
-          <View style={{alignItems:'center'}}>
-            <Text style={{fontSize:20,fontWeight:'800',color:compColor(dailyPct/100)}}>{doneDaily}/{dailyHabits.length}</Text>
-            <Text style={{fontSize:8,color:C.textDim}}>daily</Text>
-          </View>
-          {weeklyToday.length>0&&(
-            <View style={{alignItems:'center'}}>
-              <Text style={{fontSize:14,fontWeight:'700',color:brand.blue}}>{doneWeekly}/{weeklyToday.length}</Text>
-              <Text style={{fontSize:8,color:C.textDim}}>weekly</Text>
-            </View>
-          )}
+    {/* Thin habit cards */}
+    {todayH.map(h=>{const entry=log[todayStr]?.[h.id];const done=!!entry?.done;
+      const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.green;
+      return(<TouchableOpacity key={h.id} onPress={()=>{if(h.type==='check')toggleDay(h.id,todayStr);}}
+        activeOpacity={0.7}
+        style={[s.thinCard,{borderLeftWidth:3,borderLeftColor:color},done&&{backgroundColor:cat?.bg||C.greenBg}]}>
+        <View style={[s.thinCheck,done&&{backgroundColor:color,borderColor:color}]}>
+          {done&&<Text style={{color:'#fff',fontSize:11,fontWeight:'700'}}>✓</Text>}</View>
+        <View style={{flex:1}}>
+          <Text style={[s.thinName,done&&{textDecorationLine:'line-through',color:C.textDim}]}>{h.icon} {h.name}</Text>
+          {h.type==='timer'&&(<View style={{flexDirection:'row',alignItems:'center',gap:4,marginTop:3}}>
+            <View style={{flex:1,height:3,backgroundColor:C.border,borderRadius:2,overflow:'hidden'}}>
+              <View style={{height:'100%',width:`${Math.min(100,(entry?.minutes||0)/h.targetMinutes*100)}%`,backgroundColor:color,borderRadius:2}}/></View>
+            <Text style={{fontSize:9,fontWeight:'700',color}}>{entry?.minutes||0}/{h.targetMinutes}m</Text></View>)}
+          {entry?.notes&&<Text style={{fontSize:9,color:brand.blue,marginTop:2}} numberOfLines={1}>📝 {entry.notes}</Text>}
         </View>
-      </View>
-
-      {/* ── Category Cards with today's habits + weekly cumulative ── */}
-      {todayGrouped.map(({cat,habits:ch})=>{
-        // Weekly cumulative for this category
-        const weeklyStats=ch.map(h=>{
-          const scheduledDays=h.frequency==='daily'?7:(h.selectedDays||[]).length;
-          if(h.type==='timer'){
-            const weekMins=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0);
-            const weekTarget=h.targetMinutes*scheduledDays;
-            return {h,weekMins,weekTarget,weekPct:weekTarget>0?Math.round((weekMins/weekTarget)*100):0};
-          } else {
-            const weekDone=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
-            return {h,weekDone,weekTarget:scheduledDays,weekPct:scheduledDays>0?Math.round((weekDone/scheduledDays)*100):0};
-          }
-        });
-        const catWeekPct=weeklyStats.length>0?Math.round(weeklyStats.reduce((s,ws)=>s+ws.weekPct,0)/weeklyStats.length):0;
-
-        return(
-        <View key={cat.id} style={[s.catCard,{backgroundColor:cat.bg,borderColor:cat.border}]}>
-          <View style={s.catHeader}>
-            <View style={[s.catIcon,{backgroundColor:cat.color+'20'}]}><Text style={{fontSize:16}}>{cat.icon}</Text></View>
-            <View style={{flex:1,marginLeft:10}}>
-              <Text style={[s.catTitle,{color:cat.color}]}>{cat.name}</Text>
-              <Text style={{fontSize:10,color:cat.color+'90'}}>{ch.filter(h=>log[todayStr]?.[h.id]?.done).length}/{ch.length} done today</Text>
-            </View>
-            {/* Weekly cumulative badge */}
-            <View style={{alignItems:'center'}}>
-              <Text style={{fontSize:16,fontWeight:'800',color:compColor(catWeekPct/100)}}>{catWeekPct}%</Text>
-              <Text style={{fontSize:8,color:C.textDim}}>week</Text>
-            </View>
-          </View>
-
-          {/* Weekly cumulative bar for category */}
-          <View style={{height:4,backgroundColor:cat.border,borderRadius:2,overflow:'hidden',marginTop:8,marginBottom:4}}>
-            <View style={{height:'100%',width:`${Math.min(100,catWeekPct)}%`,backgroundColor:cat.color,borderRadius:2}}/></View>
-
-          {ch.map(h=>{
-            const entry=log[todayStr]?.[h.id];
-            const done=!!entry?.done;
-            const ws=weeklyStats.find(w=>w.h.id===h.id);
-            return(
-              <View key={h.id} style={{marginTop:8}}>
-                <TouchableOpacity onPress={()=>{if(h.type==='check')toggleDay(h.id,todayStr);}}
-                  style={{flexDirection:'row',alignItems:'center',gap:10,padding:10,
-                    backgroundColor:done?'#fff':'transparent',borderRadius:10,
-                    borderWidth:done?1:0,borderColor:cat.border}}>
-                  <View style={[s.check,done&&{backgroundColor:cat.color,borderColor:cat.color}]}>
-                    {done&&<Text style={{color:'#fff',fontSize:14,fontWeight:'700'}}>✓</Text>}
-                  </View>
-                  <View style={{flex:1}}>
-                    <Text style={[{fontSize:13,fontWeight:'600',color:C.text},
-                      done&&{textDecorationLine:'line-through',color:C.textDim}]}>{h.icon} {h.name}</Text>
-
-                    {/* Timer: daily progress */}
-                    {h.type==='timer'&&(
-                      <View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:4}}>
-                        <View style={{flex:1,height:4,backgroundColor:cat.border,borderRadius:2,overflow:'hidden'}}>
-                          <View style={{height:'100%',width:`${Math.min(100,(entry?.minutes||0)/h.targetMinutes*100)}%`,
-                            backgroundColor:cat.color,borderRadius:2}}/></View>
-                        <Text style={{fontSize:11,fontWeight:'700',color:cat.color}}>
-                          {entry?.minutes||0}/{h.targetMinutes}m</Text>
-                      </View>
-                    )}
-
-                    {/* Weekly cumulative line */}
-                    {ws&&(
-                      <View style={{flexDirection:'row',alignItems:'center',gap:4,marginTop:3}}>
-                        <Text style={{fontSize:9,color:C.textDim}}>Week:</Text>
-                        <View style={{flex:1,height:3,backgroundColor:cat.border+'80',borderRadius:2,overflow:'hidden'}}>
-                          <View style={{height:'100%',width:`${Math.min(100,ws.weekPct)}%`,
-                            backgroundColor:ws.weekPct>=100?brand.green:cat.color+'80',borderRadius:2}}/></View>
-                        <Text style={{fontSize:9,fontWeight:'700',color:ws.weekPct>=100?brand.green:C.textDim}}>
-                          {h.type==='timer'?`${ws.weekMins}/${ws.weekTarget}m`:`${ws.weekDone}/${ws.weekTarget}x`}
-                          {ws.weekPct>=100?' ✓':''}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-
-                {/* Timer: +/- buttons */}
-                {h.type==='timer'&&(
-                  <View style={{flexDirection:'row',gap:4,marginTop:4,paddingLeft:36}}>
-                    {[-5,5,15,30].map(delta=>(
-                      <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,todayStr,delta,h.targetMinutes)}
-                        style={{paddingHorizontal:10,paddingVertical:5,borderRadius:6,
-                          backgroundColor:delta>0?'#fff':C.bg,borderWidth:1,borderColor:cat.border}}>
-                        <Text style={{fontSize:11,fontWeight:'700',color:delta>0?cat.color:C.textDim}}>
-                          {delta>0?'+':''}{delta}</Text>
-                      </TouchableOpacity>))}
-                  </View>
-                )}
-
-                {/* Yesterday quick-log */}
-                {(()=>{
-                  const wasActiveYesterday=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(yesterdayDayIdx));
-                  if(!wasActiveYesterday) return null;
-                  const yesterdayEntry=log[yesterdayStr]?.[h.id];
-                  const yesterdayDone=!!yesterdayEntry?.done;
-                  if(h.type==='check'){
-                    return(
-                      <TouchableOpacity onPress={()=>toggleDay(h.id,yesterdayStr)}
-                        style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:6,paddingLeft:36,paddingVertical:4}}>
-                        <View style={{width:16,height:16,borderRadius:8,borderWidth:1.5,
-                          borderColor:yesterdayDone?brand.green:C.textDark,
-                          backgroundColor:yesterdayDone?brand.green:'transparent',
-                          justifyContent:'center',alignItems:'center'}}>
-                          {yesterdayDone&&<Text style={{color:'#fff',fontSize:8,fontWeight:'700'}}>✓</Text>}
-                        </View>
-                        <Text style={{fontSize:10,color:yesterdayDone?brand.green:C.textDim}}>
-                          {yesterdayDone?'Done yesterday ✓':'Did this yesterday? Tap to log'}</Text>
-                      </TouchableOpacity>
-                    );
-                  } else {
-                    return(
-                      <View style={{marginTop:6,paddingLeft:36}}>
-                        <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:4}}>
-                          <Text style={{fontSize:10,color:yesterdayDone?brand.green:C.textDim}}>
-                            📅 Yesterday: {yesterdayEntry?.minutes||0}/{h.targetMinutes}m
-                            {yesterdayDone?' ✓':''}</Text>
-                        </View>
-                        {!yesterdayDone&&(
-                          <View style={{flexDirection:'row',gap:4}}>
-                            {[5,15,30].map(delta=>(
-                              <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,yesterdayStr,delta,h.targetMinutes)}
-                                style={{paddingHorizontal:8,paddingVertical:3,borderRadius:5,
-                                  backgroundColor:C.bg,borderWidth:1,borderColor:C.border}}>
-                                <Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>+{delta}m yday</Text>
-                              </TouchableOpacity>))}
-                          </View>
-                        )}
-                      </View>
-                    );
-                  }
-                })()}
-              </View>
-            );
-          })}
-        </View>
-        );
-      })}
-
-      {/* ── Catch Up — habits not scheduled today but missed this week ── */}
-      {(()=>{
-        // Find habits NOT active today but with missed days this week
-        const catchUpHabits=habits.filter(h=>{
-          // Skip if already showing in today's list
-          const isToday=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx));
-          if(isToday) return false;
-          if(h.frequency!=='weekly') return false;
-          // Check if any scheduled day this week was missed
-          const selDays=h.selectedDays||[];
-          for(let i=0;i<7;i++){
-            if(i>=todayDayIdx) continue; // only past days
-            if(!selDays.includes(i)) continue; // not scheduled
-            const ds=fmt(weekDates[i]);
-            if(!log[ds]?.[h.id]?.done) return true; // missed!
-          }
-          return false;
-        });
-
-        // Also include weekly habits not scheduled today where user might want to log extra
-        const extraLogHabits=habits.filter(h=>{
-          const isToday=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx));
-          if(isToday) return false;
-          if(h.frequency!=='weekly') return false;
-          // Not in catchUp already, but user might want to do it today
-          const selDays=h.selectedDays||[];
-          // Check weekly target not yet met
-          const weekDone=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
-          const weekMins=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0);
-          const target=h.type==='timer'?h.targetMinutes*selDays.length:selDays.length;
-          const actual=h.type==='timer'?weekMins:weekDone;
-          return actual<target && !catchUpHabits.includes(h);
-        });
-
-        const allCatchUp=[...catchUpHabits,...extraLogHabits];
-        if(!allCatchUp.length) return null;
-
-        // Group by category
-        const catchUpGrouped=CATS.map(cat=>({
-          cat, habits:allCatchUp.filter(h=>h.categoryId===cat.id)
-        })).filter(g=>g.habits.length>0);
-
-        return(
-          <View style={{marginTop:16}}>
-            <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:10}}>
-              <Text style={s.sectionTitle}>⚡ Catch Up</Text>
-              <Text style={{fontSize:10,color:C.textDim}}>Log missed habits on today</Text>
-            </View>
-
-            {catchUpGrouped.map(({cat,habits:ch})=>(
-              <View key={cat.id} style={{backgroundColor:cat.bg+'80',borderRadius:12,padding:12,marginBottom:8,
-                borderWidth:1,borderColor:cat.border,borderStyle:'dashed'}}>
-                <Text style={{fontSize:12,fontWeight:'700',color:cat.color,marginBottom:6}}>{cat.icon} {cat.name}</Text>
-                {ch.map(h=>{
-                  const todayEntry=log[todayStr]?.[h.id];
-                  const todayDone=!!todayEntry?.done;
-                  // Show which days were missed
-                  const missedDays=(h.selectedDays||[]).filter(i=>i<todayDayIdx&&!log[fmt(weekDates[i])]?.[h.id]?.done);
-                  // Weekly progress
-                  const weekVal=h.type==='timer'
-                    ?weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0)
-                    :weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
-                  const weekTarget=h.type==='timer'?h.targetMinutes*(h.selectedDays||[]).length:(h.selectedDays||[]).length;
-
-                  return(
-                    <View key={h.id} style={{marginBottom:8}}>
-                      <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
-                        {h.type==='check'?(
-                          <TouchableOpacity onPress={()=>toggleDay(h.id,todayStr)}
-                            style={[s.check,{width:22,height:22,borderRadius:11},
-                              todayDone&&{backgroundColor:cat.color,borderColor:cat.color}]}>
-                            {todayDone&&<Text style={{color:'#fff',fontSize:12,fontWeight:'700'}}>✓</Text>}
-                          </TouchableOpacity>
-                        ):<View style={{width:22}}/>}
-                        <View style={{flex:1}}>
-                          <Text style={{fontSize:12,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
-                          <Text style={{fontSize:9,color:C.textDim}}>
-                            Scheduled: {(h.selectedDays||[]).map(d=>DAYS[d]).join(', ')}
-                            {missedDays.length>0?'  ·  Missed: '+missedDays.map(d=>DAYS[d]).join(', '):''}
-                          </Text>
-                          <Text style={{fontSize:9,color:cat.color,marginTop:1}}>
-                            Week: {weekVal}/{weekTarget}{h.type==='timer'?'m':'x'}
-                            {weekVal>=weekTarget?' ✓':` — ${weekTarget-weekVal}${h.type==='timer'?'m':''} to go`}
-                          </Text>
-                        </View>
-                      </View>
-                      {h.type==='timer'&&(
-                        <View style={{flexDirection:'row',gap:4,marginTop:4,paddingLeft:30}}>
-                          {[15,30,h.targetMinutes].filter((v,i,a)=>a.indexOf(v)===i).map(delta=>(
-                            <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,todayStr,delta,h.targetMinutes)}
-                              style={{paddingHorizontal:10,paddingVertical:5,borderRadius:6,
-                                backgroundColor:'#fff',borderWidth:1,borderColor:cat.border}}>
-                              <Text style={{fontSize:11,fontWeight:'700',color:cat.color}}>+{delta}m today</Text>
-                            </TouchableOpacity>))}
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
-        );
-      })()}
-    </View>
-  );
+        {h.type==='timer'&&(<View style={{flexDirection:'row',gap:3}}>
+          {[5,15].map(d=>(<TouchableOpacity key={d} onPress={(e)=>{e.stopPropagation;addMinutes(h.id,todayStr,d,h.targetMinutes);}}
+            style={s.miniBtn}><Text style={[s.miniBtnT,{color}]}>+{d}</Text></TouchableOpacity>))}</View>)}
+        <TouchableOpacity onPress={()=>setNoteModal({id:h.id,dateStr:todayStr,type:'habit'})} style={{padding:4}}>
+          <Text style={{fontSize:14}}>📝</Text></TouchableOpacity>
+      </TouchableOpacity>);
+    })}
+  </View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// HABITS TAB
+// HABITS TAB (same as before, abbreviated)
 // ═══════════════════════════════════════════════════════════════════
-function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,updateHabit,deleteHabit,toggleDay,addMinutes,todayStr,weekDates}) {
+function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,updateHabit,deleteHabit,toggleDay,addMinutes,todayStr,weekDates,setNoteModal}){
   const [expanded,setExpanded]=useState(null);
   return(<View>
     <TouchableOpacity onPress={()=>{setShowAdd(true);setEditHabit(null);}} style={s.addBtn}>
@@ -603,116 +288,49 @@ function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabi
     {(showAdd||editHabit)&&<HabitForm habit={editHabit} onSave={editHabit?updateHabit:addHabit}
       onCancel={()=>{setShowAdd(false);setEditHabit(null);}}/>}
     {!habits.length&&!showAdd&&<View style={s.empty}><Text style={{fontSize:36,marginBottom:12}}>📋</Text>
-      <Text style={s.emptySub}>Tap the button above to create your first habit</Text></View>}
+      <Text style={s.emptySub}>Tap + to create your first habit</Text></View>}
     {CATS.map(cat=>{const ch=habits.filter(h=>h.categoryId===cat.id);if(!ch.length)return null;
       return(<View key={cat.id} style={[s.catCard,{backgroundColor:cat.bg,borderColor:cat.border,marginBottom:12}]}>
-        <View style={s.catHeader}>
-          <View style={[s.catIcon,{backgroundColor:cat.color+'20'}]}><Text style={{fontSize:16}}>{cat.icon}</Text></View>
-          <View style={{flex:1,marginLeft:10}}>
-            <Text style={[s.catTitle,{color:cat.color}]}>{cat.name}</Text>
-            <Text style={{fontSize:10,color:C.textDim}}>{ch.length} habit{ch.length>1?'s':''}</Text>
-          </View>
-        </View>
-        {ch.map(h=>{
-          const todayEntry=log[todayStr]?.[h.id];
-          const todayDone=!!todayEntry?.done;
-          const isExp=expanded===h.id;
-          const weekVal=h.type==='timer'
-            ?weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0)
-            :weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
-          const schedDays=h.frequency==='daily'?7:(h.selectedDays||[]).length;
-          const weekTarget=h.type==='timer'?h.targetMinutes*schedDays:schedDays;
-          const weekPct=weekTarget>0?Math.round((weekVal/weekTarget)*100):0;
-
-          return(<View key={h.id} style={{marginTop:8}}>
+        <View style={{flexDirection:'row',alignItems:'center',marginBottom:6}}>
+          <Text style={{fontSize:16}}>{cat.icon}</Text>
+          <Text style={{fontSize:14,fontWeight:'700',color:cat.color,marginLeft:8,flex:1}}>{cat.name}</Text></View>
+        {ch.map(h=>{const entry=log[todayStr]?.[h.id];const done=!!entry?.done;const isExp=expanded===h.id;
+          return(<View key={h.id} style={{marginTop:6}}>
             <TouchableOpacity onPress={()=>setExpanded(isExp?null:h.id)}
-              style={{backgroundColor:'#fff',borderRadius:10,padding:12,borderWidth:1,borderColor:cat.border}}>
-              <View style={{flexDirection:'row',alignItems:'center'}}>
-                <TouchableOpacity onPress={()=>{
-                  if(h.type==='check') toggleDay(h.id,todayStr);
-                  else if(!todayDone) addMinutes(h.id,todayStr,h.targetMinutes,h.targetMinutes);
-                  else addMinutes(h.id,todayStr,-(todayEntry?.minutes||0),h.targetMinutes);
-                }} style={[s.check,todayDone&&{backgroundColor:cat.color,borderColor:cat.color}]}>
-                  {todayDone&&<Text style={{color:'#fff',fontSize:14,fontWeight:'700'}}>✓</Text>}
-                </TouchableOpacity>
-                <View style={{flex:1,marginLeft:10}}>
-                  <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
-                  <Text style={{fontSize:10,color:C.textDim,marginTop:2}}>
-                    {h.type==='timer'?`${h.targetMinutes} min`:'Checkbox'} · {h.frequency==='daily'?'Daily':
-                      (h.selectedDays||[]).map(d=>DAYS[d]).join(', ')}</Text>
-                </View>
-                <View style={{alignItems:'center',marginRight:8}}>
-                  <Text style={{fontSize:12,fontWeight:'800',color:compColor(weekPct/100)}}>{weekPct}%</Text>
-                  <Text style={{fontSize:7,color:C.textDim}}>week</Text>
-                </View>
-                <Text style={{fontSize:14,color:C.textDark}}>{isExp?'▾':'▸'}</Text>
-              </View>
-              {h.type==='timer'&&(
-                <View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:6}}>
-                  <View style={{flex:1,height:4,backgroundColor:cat.border,borderRadius:2,overflow:'hidden'}}>
-                    <View style={{height:'100%',width:`${Math.min(100,(todayEntry?.minutes||0)/h.targetMinutes*100)}%`,
-                      backgroundColor:cat.color,borderRadius:2}}/></View>
-                  <Text style={{fontSize:10,fontWeight:'700',color:cat.color}}>{todayEntry?.minutes||0}/{h.targetMinutes}m</Text>
-                </View>
-              )}
+              style={{backgroundColor:'#fff',borderRadius:10,padding:12,borderWidth:1,borderColor:cat.border,flexDirection:'row',alignItems:'center'}}>
+              <TouchableOpacity onPress={()=>{if(h.type==='check')toggleDay(h.id,todayStr);
+                else if(!done)addMinutes(h.id,todayStr,h.targetMinutes,h.targetMinutes);}}
+                style={[s.check,done&&{backgroundColor:cat.color,borderColor:cat.color}]}>
+                {done&&<Text style={{color:'#fff',fontSize:14,fontWeight:'700'}}>✓</Text>}</TouchableOpacity>
+              <View style={{flex:1,marginLeft:10}}>
+                <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
+                <Text style={{fontSize:10,color:C.textDim}}>{h.type==='timer'?`${h.targetMinutes}m`:'Check'} · {h.frequency==='daily'?'Daily':
+                  (h.selectedDays||[]).map(d=>DAYS[d]).join(', ')}</Text></View>
+              <Text style={{fontSize:14,color:C.textDark}}>{isExp?'▾':'▸'}</Text>
             </TouchableOpacity>
-
             {isExp&&(<View style={{backgroundColor:'#fff',borderRadius:10,padding:12,marginTop:4,borderWidth:1,borderColor:cat.border}}>
-              {h.type==='timer'&&(<View style={{marginBottom:10}}>
-                <Text style={{fontSize:10,fontWeight:'600',color:C.textDim,marginBottom:4}}>ADD MINUTES TODAY</Text>
-                <View style={{flexDirection:'row',gap:4}}>
-                  {[-15,-5,5,15,30,h.targetMinutes].filter((v,i,a)=>a.indexOf(v)===i).map(delta=>(
-                    <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,todayStr,delta,h.targetMinutes)}
-                      style={{flex:1,paddingVertical:6,borderRadius:6,alignItems:'center',
-                        backgroundColor:delta>0?cat.bg:C.bg,borderWidth:1,borderColor:cat.border}}>
-                      <Text style={{fontSize:11,fontWeight:'700',color:delta>0?cat.color:C.textDim}}>
-                        {delta>0?'+':''}{delta}</Text>
-                    </TouchableOpacity>))}
-                </View>
-              </View>)}
-
-              <Text style={{fontSize:10,fontWeight:'600',color:C.textDim,marginBottom:4}}>THIS WEEK — tap any day</Text>
               <View style={{flexDirection:'row',gap:3,marginBottom:10}}>
-                {weekDates.map((d,i)=>{
-                  const ds=fmt(d); const dayDone=log[ds]?.[h.id]?.done; const dayMins=log[ds]?.[h.id]?.minutes||0;
-                  const scheduled=h.frequency==='daily'||(h.selectedDays||[]).includes(i);
-                  const isFuture=d>today();
-                  return(<TouchableOpacity key={i} onPress={()=>{
-                    if(isFuture) return;
-                    if(h.type==='check') toggleDay(h.id,ds);
-                    else addMinutes(h.id,ds,dayDone?-(dayMins):h.targetMinutes,h.targetMinutes);
-                  }} style={{flex:1,paddingVertical:6,borderRadius:8,alignItems:'center',
-                    backgroundColor:dayDone?cat.color:(scheduled?'#fff':C.bg),
-                    borderWidth:1,borderColor:dayDone?cat.color:(scheduled?cat.border:C.border),opacity:isFuture?0.3:1}}>
-                    <Text style={{fontSize:8,fontWeight:'700',color:dayDone?'#fff':C.textDim}}>{DAYS[i]}</Text>
-                    <Text style={{fontSize:10,fontWeight:'800',color:dayDone?'#fff':(scheduled?cat.color:C.textDark)}}>
-                      {h.type==='timer'?(dayMins>0?dayMins+'m':'—'):(dayDone?'✓':'○')}</Text>
-                  </TouchableOpacity>);
-                })}
-              </View>
-
-              <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10}}>
-                <View style={{flex:1,height:4,backgroundColor:cat.border,borderRadius:2,overflow:'hidden'}}>
-                  <View style={{height:'100%',width:`${Math.min(100,weekPct)}%`,
-                    backgroundColor:weekPct>=100?brand.green:cat.color,borderRadius:2}}/></View>
-                <Text style={{fontSize:10,fontWeight:'700',color:weekPct>=100?brand.green:cat.color}}>
-                  {weekVal}/{weekTarget}{h.type==='timer'?'m':'x'} {weekPct>=100?'✓':''}</Text>
-              </View>
-
+                {weekDates.map((d,i)=>{const ds=fmt(d);const dd=log[ds]?.[h.id]?.done;const dm=log[ds]?.[h.id]?.minutes||0;
+                  const dn=log[ds]?.[h.id]?.notes;const isFut=d>today();
+                  return(<TouchableOpacity key={i} onPress={()=>{if(!isFut){if(h.type==='check')toggleDay(h.id,ds);
+                    else addMinutes(h.id,ds,dd?-(dm):h.targetMinutes,h.targetMinutes);}}}
+                    style={{flex:1,paddingVertical:6,borderRadius:8,alignItems:'center',
+                      backgroundColor:dd?cat.color:'#fff',borderWidth:1,borderColor:dd?cat.color:C.border,opacity:isFut?0.3:1}}>
+                    <Text style={{fontSize:8,fontWeight:'700',color:dd?'#fff':C.textDim}}>{DAYS[i]}</Text>
+                    <Text style={{fontSize:10,fontWeight:'800',color:dd?'#fff':C.textDark}}>
+                      {h.type==='timer'?(dm>0?dm+'m':'—'):(dd?'✓':'○')}</Text>
+                    {dn&&<Text style={{fontSize:6,color:dd?'#fff':brand.blue}}>📝</Text>}
+                  </TouchableOpacity>);})}</View>
               <View style={{flexDirection:'row',gap:8}}>
                 <TouchableOpacity onPress={()=>{setExpanded(null);setEditHabit(h);}}
-                  style={{flex:1,padding:10,borderRadius:8,backgroundColor:cat.bg,alignItems:'center',borderWidth:1,borderColor:cat.border}}>
-                  <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>✏️ Edit</Text>
-                </TouchableOpacity>
+                  style={{flex:1,padding:8,borderRadius:8,backgroundColor:cat.bg,alignItems:'center',borderWidth:1,borderColor:cat.border}}>
+                  <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>✏️ Edit</Text></TouchableOpacity>
                 <TouchableOpacity onPress={()=>Alert.alert('Delete',`Delete "${h.name}"?`,[{text:'Cancel',style:'cancel'},
-                  {text:'Delete',style:'destructive',onPress:()=>{setExpanded(null);deleteHabit(h.id);}},
-                ])} style={{flex:1,padding:10,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
-                  <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🗑 Delete</Text>
-                </TouchableOpacity>
-              </View>
+                  {text:'Delete',style:'destructive',onPress:()=>{setExpanded(null);deleteHabit(h.id);}}])}
+                  style={{flex:1,padding:8,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
+                  <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🗑 Delete</Text></TouchableOpacity></View>
             </View>)}
-          </View>);
-        })}
+          </View>);})}
       </View>);})}
   </View>);
 }
@@ -720,306 +338,283 @@ function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabi
 // ═══════════════════════════════════════════════════════════════════
 // HABIT FORM
 // ═══════════════════════════════════════════════════════════════════
-function HabitForm({habit,onSave,onCancel}) {
-  const [name,setName]=useState(habit?.name||'');
-  const [type,setType]=useState(habit?.type||'check');
-  const [freq,setFreq]=useState(habit?.frequency||'daily');
-  const [mins,setMins]=useState(String(habit?.targetMinutes||15));
-  const [selectedDays,setSelectedDays]=useState(habit?.selectedDays||[]);
-  const [icon,setIcon]=useState(habit?.icon||'🎯');
-  const [catId,setCatId]=useState(habit?.categoryId||'fitness');
-  const cat=CATS.find(c=>c.id===catId)||CATS[0];
-  const toggleDaySel=(i)=>setSelectedDays(p=>p.includes(i)?p.filter(d=>d!==i):[...p,i].sort());
+function HabitForm({habit,onSave,onCancel}){
+  const [name,setName]=useState(habit?.name||'');const [type,setType]=useState(habit?.type||'check');
+  const [freq,setFreq]=useState(habit?.frequency||'daily');const [mins,setMins]=useState(String(habit?.targetMinutes||15));
+  const [selectedDays,setSelectedDays]=useState(habit?.selectedDays||[]);const [icon,setIcon]=useState(habit?.icon||'🎯');
+  const [catId,setCatId]=useState(habit?.categoryId||'fitness');const cat=CATS.find(c=>c.id===catId)||CATS[0];
+  const tds=(i)=>setSelectedDays(p=>p.includes(i)?p.filter(d=>d!==i):[...p,i].sort());
+  return(<View style={s.form}><Text style={s.formTitle}>{habit?'Edit':'New habit'}</Text>
+    <Text style={s.label}>CATEGORY</Text>
+    <View style={{gap:6,marginBottom:12}}>{CATS.map(c=>(<TouchableOpacity key={c.id} onPress={()=>setCatId(c.id)}
+      style={{flexDirection:'row',alignItems:'center',padding:10,borderRadius:10,backgroundColor:catId===c.id?c.bg:C.bg,
+        borderWidth:catId===c.id?2:1,borderColor:catId===c.id?c.color:C.border}}>
+      <Text style={{fontSize:18,marginRight:10}}>{c.icon}</Text>
+      <Text style={{fontSize:13,fontWeight:'600',color:catId===c.id?c.color:C.textMuted}}>{c.name}</Text>
+    </TouchableOpacity>))}</View>
+    <Text style={s.label}>NAME</Text>
+    <TextInput value={name} onChangeText={setName} placeholder="e.g. Yoga, Reading" placeholderTextColor={C.textDark} style={s.input}/>
+    <Text style={s.label}>ICON</Text>
+    <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginBottom:12}}>{ICONS.map(ic=>(<TouchableOpacity key={ic} onPress={()=>setIcon(ic)}
+      style={[s.iconBtn,icon===ic&&{borderColor:cat.color,borderWidth:2,backgroundColor:cat.bg}]}>
+      <Text style={{fontSize:18}}>{ic}</Text></TouchableOpacity>))}</View>
+    <Text style={s.label}>TYPE</Text>
+    <View style={{flexDirection:'row',gap:8,marginBottom:12}}>{[['check','✓ Checkbox'],['timer','⏱ Timer']].map(([v,l])=>(
+      <TouchableOpacity key={v} onPress={()=>setType(v)} style={[s.toggle,type===v&&{borderColor:cat.color,backgroundColor:cat.bg}]}>
+        <Text style={[s.toggleT,type===v&&{color:cat.color}]}>{l}</Text></TouchableOpacity>))}</View>
+    {type==='timer'&&(<><Text style={s.label}>MINUTES/DAY</Text>
+      <TextInput value={mins} onChangeText={setMins} keyboardType="number-pad" style={s.input}/></>)}
+    <Text style={s.label}>FREQUENCY</Text>
+    <View style={{flexDirection:'row',gap:8,marginBottom:12}}>{[['daily','Every day'],['weekly','Specific days']].map(([v,l])=>(
+      <TouchableOpacity key={v} onPress={()=>setFreq(v)} style={[s.toggle,freq===v&&{borderColor:cat.color,backgroundColor:cat.bg}]}>
+        <Text style={[s.toggleT,freq===v&&{color:cat.color}]}>{l}</Text></TouchableOpacity>))}</View>
+    {freq==='weekly'&&(<><Text style={s.label}>SELECT DAYS</Text>
+      <View style={{flexDirection:'row',gap:4,marginBottom:12}}>{DAYS.map((d,i)=>{const sel=selectedDays.includes(i);return(
+        <TouchableOpacity key={i} onPress={()=>tds(i)} style={[s.dayChip,sel&&{backgroundColor:cat.color,borderColor:cat.color}]}>
+          <Text style={[s.dayChipT,sel&&{color:'#fff'}]}>{d}</Text></TouchableOpacity>);})}</View></>)}
+    <View style={{flexDirection:'row',gap:10,marginTop:8}}>
+      <TouchableOpacity onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
+      <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
+        targetMinutes:parseInt(mins)||15,weeklyTarget:freq==='weekly'?selectedDays.length:7,
+        selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId});}}
+        style={[s.saveBtn,{backgroundColor:cat.color}]}><Text style={s.saveBtnT}>Save</Text></TouchableOpacity></View>
+  </View>);
+}
 
-  return(
-    <View style={s.form}>
-      <Text style={s.formTitle}>{habit?'Edit habit':'New habit'}</Text>
+// ═══════════════════════════════════════════════════════════════════
+// PROJECTS TAB
+// ═══════════════════════════════════════════════════════════════════
+function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,todayStr,weekDates,setNoteModal}){
+  const [showAdd,setShowAdd]=useState(false);
+  const [name,setName]=useState('');const [color,setColor]=useState(brand.blue);
+  const [expanded,setExpanded]=useState(null);
+  const PCOLORS=[brand.blue,brand.green,brand.gold,'#E8956B','#9B7ED4','#5CB8D6'];
 
-      <Text style={s.label}>CATEGORY</Text>
-      <View style={{gap:6,marginBottom:12}}>
-        {CATS.map(c=>(
-          <TouchableOpacity key={c.id} onPress={()=>setCatId(c.id)}
-            style={{flexDirection:'row',alignItems:'center',padding:10,borderRadius:10,
-              backgroundColor:catId===c.id?c.bg:C.bg,borderWidth:catId===c.id?2:1,
-              borderColor:catId===c.id?c.color:C.border}}>
-            <Text style={{fontSize:18,marginRight:10}}>{c.icon}</Text>
+  const addProject=()=>{if(!name.trim())return;
+    setProjects(p=>[...p,{id:Date.now().toString(),name:name.trim(),color,startDate:todayStr,status:'active'}]);
+    setName('');setShowAdd(false);};
+
+  return(<View>
+    <TouchableOpacity onPress={()=>setShowAdd(!showAdd)} style={s.addBtn}>
+      <Text style={s.addBtnT}>＋ Add new project</Text></TouchableOpacity>
+
+    {showAdd&&(<View style={s.form}>
+      <Text style={s.formTitle}>New Project</Text>
+      <Text style={s.label}>PROJECT NAME</Text>
+      <TextInput value={name} onChangeText={setName} placeholder="e.g. PruvYou App" placeholderTextColor={C.textDark} style={s.input}/>
+      <Text style={s.label}>COLOR</Text>
+      <View style={{flexDirection:'row',gap:8,marginBottom:12}}>{PCOLORS.map(c=>(
+        <TouchableOpacity key={c} onPress={()=>setColor(c)}
+          style={{width:32,height:32,borderRadius:16,backgroundColor:c,borderWidth:color===c?3:0,borderColor:'#fff'}}/>))}</View>
+      <View style={{flexDirection:'row',gap:10}}>
+        <TouchableOpacity onPress={()=>setShowAdd(false)} style={s.cancelBtn}><Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
+        <TouchableOpacity onPress={addProject} style={[s.saveBtn,{backgroundColor:color}]}><Text style={s.saveBtnT}>Create</Text></TouchableOpacity></View>
+    </View>)}
+
+    {!projects.length&&!showAdd&&<View style={s.empty}><Text style={{fontSize:36,marginBottom:12}}>📁</Text>
+      <Text style={s.emptySub}>Add your first project</Text></View>}
+
+    {projects.map(p=>{const isExp=expanded===p.id;
+      const weekMins=weekDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
+      const totalMins=Object.values(projLog).reduce((sum,day)=>sum+(day[p.id]?.minutes||0),0);
+      return(<View key={p.id} style={{marginBottom:10}}>
+        <TouchableOpacity onPress={()=>setExpanded(isExp?null:p.id)}
+          style={[s.catCard,{backgroundColor:p.color+'10',borderColor:p.color+'40',marginBottom:0}]}>
+          <View style={{flexDirection:'row',alignItems:'center'}}>
+            <View style={{width:8,height:8,borderRadius:4,backgroundColor:p.color,marginRight:10}}/>
             <View style={{flex:1}}>
-              <Text style={{fontSize:13,fontWeight:'600',color:catId===c.id?c.color:C.textMuted}}>{c.name}</Text>
-              <Text style={{fontSize:9,color:C.textDim}}>{c.examples}</Text>
+              <Text style={{fontSize:14,fontWeight:'700',color:C.text}}>{p.name}</Text>
+              <Text style={{fontSize:10,color:C.textDim}}>Since {p.startDate} · {Math.round(totalMins/60)}h total · {weekMins}m this week</Text>
             </View>
-          </TouchableOpacity>))}
-      </View>
-
-      <Text style={s.label}>HABIT NAME</Text>
-      <TextInput value={name} onChangeText={setName} placeholder="e.g. Morning yoga, Read 30min"
-        placeholderTextColor={C.textDark} style={s.input}/>
-
-      <Text style={s.label}>ICON</Text>
-      <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginBottom:12}}>
-        {ICONS.map(ic=>(<TouchableOpacity key={ic} onPress={()=>setIcon(ic)}
-          style={[s.iconBtn,icon===ic&&{borderColor:cat.color,borderWidth:2,backgroundColor:cat.bg}]}>
-          <Text style={{fontSize:18}}>{ic}</Text></TouchableOpacity>))}</View>
-
-      <Text style={s.label}>TYPE</Text>
-      <View style={{flexDirection:'row',gap:8,marginBottom:12}}>
-        {[['check','✓ Checkbox'],['timer','⏱ Timer (minutes)']].map(([v,l])=>(
-          <TouchableOpacity key={v} onPress={()=>setType(v)} style={[s.toggle,type===v&&{borderColor:cat.color,backgroundColor:cat.bg}]}>
-            <Text style={[s.toggleT,type===v&&{color:cat.color}]}>{l}</Text></TouchableOpacity>))}</View>
-
-      {type==='timer'&&(<><Text style={s.label}>DAILY TARGET (MINUTES)</Text>
-        <TextInput value={mins} onChangeText={setMins} keyboardType="number-pad" style={s.input}/></>)}
-
-      <Text style={s.label}>FREQUENCY</Text>
-      <View style={{flexDirection:'row',gap:8,marginBottom:12}}>
-        {[['daily','Every day'],['weekly','Specific days']].map(([v,l])=>(
-          <TouchableOpacity key={v} onPress={()=>setFreq(v)} style={[s.toggle,freq===v&&{borderColor:cat.color,backgroundColor:cat.bg}]}>
-            <Text style={[s.toggleT,freq===v&&{color:cat.color}]}>{l}</Text></TouchableOpacity>))}</View>
-
-      {freq==='weekly'&&(<><Text style={s.label}>SELECT DAYS</Text>
-        <View style={{flexDirection:'row',gap:4,marginBottom:6}}>
-          {DAYS.map((d,i)=>{const sel=selectedDays.includes(i);return(
-            <TouchableOpacity key={i} onPress={()=>toggleDaySel(i)}
-              style={[s.dayChip,sel&&{backgroundColor:cat.color,borderColor:cat.color}]}>
-              <Text style={[s.dayChipT,sel&&{color:'#fff'}]}>{d}</Text></TouchableOpacity>);})}</View>
-        <Text style={{fontSize:10,color:C.textDim,marginBottom:12}}>
-          {selectedDays.length>0?`${selectedDays.length}x/week: ${selectedDays.map(d=>DAYS[d]).join(', ')}`:'Tap the days'}</Text></>)}
-
-      <View style={{flexDirection:'row',gap:10,marginTop:8}}>
-        <TouchableOpacity onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
-        <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
-          targetMinutes:parseInt(mins)||15,weeklyTarget:freq==='weekly'?selectedDays.length:7,
-          selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId});}}
-          style={[s.saveBtn,{backgroundColor:cat.color}]}><Text style={s.saveBtnT}>Save</Text></TouchableOpacity></View>
-    </View>);
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// STATS TAB
-// ═══════════════════════════════════════════════════════════════════
-function StatsTab({habits,log,weekDates}) {
-  const last30=useMemo(()=>Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(29-i));return d;}),[]);
-
-  if(!habits.length) return <View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>📊</Text>
-    <Text style={s.emptySub}>Add habits to see stats</Text></View>;
-
-  // Per-category stats with rings
-  const catStats=CATS.map(cat=>{
-    const ch=habits.filter(h=>h.categoryId===cat.id);
-    if(!ch.length) return null;
-    const habitData=ch.map(h=>{
-      const done30=last30.filter(d=>log[fmt(d)]?.[h.id]?.done).length;
-      const rate=Math.round((done30/30)*100);
-      // Weekly
-      const weekMins=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0);
-      const weekDone=weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
-      const schedDays=h.frequency==='daily'?7:(h.selectedDays||[]).length;
-      const weekTarget=h.type==='timer'?h.targetMinutes*schedDays:schedDays;
-      const weekVal=h.type==='timer'?weekMins:weekDone;
-      const weekPct=weekTarget>0?Math.round((weekVal/weekTarget)*100):0;
-      // Streak
-      let streak=0;for(let i=0;i<365;i++){const d=new Date();d.setDate(d.getDate()-i);if(log[fmt(d)]?.[h.id]?.done)streak++;else break;}
-      return {h,rate,weekPct,weekVal,weekTarget,streak};
-    });
-    const avgRate=Math.round(habitData.reduce((s,h)=>s+h.rate,0)/habitData.length);
-    const avgWeek=Math.round(habitData.reduce((s,h)=>s+h.weekPct,0)/habitData.length);
-    return {cat,habitData,avgRate,avgWeek};
-  }).filter(Boolean);
-
-  return(<View>
-    {/* Overview rings */}
-    <View style={[s.statsCard,{alignItems:'center'}]}>
-      <Text style={[s.statsTitle,{textAlign:'center'}]}>Weekly Overview</Text>
-      <View style={{flexDirection:'row',justifyContent:'space-around',width:'100%',marginTop:8}}>
-        {catStats.map(({cat,avgWeek})=>(
-          <View key={cat.id} style={{alignItems:'center'}}>
-            <Ring size={64} sw={6} pct={avgWeek} color={cat.color}>
-              <Text style={{fontSize:14,fontWeight:'800',color:cat.color}}>{avgWeek}%</Text>
-            </Ring>
-            <Text style={{fontSize:8,fontWeight:'600',color:C.textDim,marginTop:4,textAlign:'center'}} numberOfLines={1}>{cat.icon} {cat.name.split(' ')[0]}</Text>
+            <Text style={{fontSize:14,color:C.textDark}}>{isExp?'▾':'▸'}</Text>
           </View>
-        ))}
-      </View>
-    </View>
+        </TouchableOpacity>
 
-    {/* Per category detailed */}
-    {catStats.map(({cat,habitData,avgRate,avgWeek})=>(
-      <View key={cat.id} style={[s.statsCard,{borderColor:cat.border}]}>
-        <View style={{flexDirection:'row',alignItems:'center',marginBottom:12}}>
-          <Text style={{fontSize:18,marginRight:8}}>{cat.icon}</Text>
-          <Text style={[s.statsTitle,{color:cat.color,marginBottom:0,flex:1}]}>{cat.name}</Text>
-          <Ring size={44} sw={4} pct={avgWeek} color={cat.color}>
-            <Text style={{fontSize:10,fontWeight:'800',color:cat.color}}>{avgWeek}%</Text>
-          </Ring>
-        </View>
+        {isExp&&(<View style={{backgroundColor:'#fff',borderRadius:10,padding:12,marginTop:4,borderWidth:1,borderColor:p.color+'40'}}>
+          {/* Today log */}
+          <Text style={{fontSize:10,fontWeight:'600',color:C.textDim,marginBottom:4}}>LOG TIME TODAY</Text>
+          <View style={{flexDirection:'row',gap:4,marginBottom:10}}>
+            {[15,30,60,120].map(d=>(<TouchableOpacity key={d} onPress={()=>addProjMinutes(p.id,todayStr,d)}
+              style={{flex:1,padding:8,borderRadius:8,backgroundColor:p.color+'10',borderWidth:1,borderColor:p.color+'30',alignItems:'center'}}>
+              <Text style={{fontSize:12,fontWeight:'700',color:p.color}}>+{d}m</Text>
+            </TouchableOpacity>))}</View>
 
-        {habitData.map(({h,rate,weekPct,weekVal,weekTarget,streak},i)=>(
-          <View key={i} style={{marginBottom:12}}>
-            <View style={{flexDirection:'row',alignItems:'center',gap:10}}>
-              <Ring size={48} sw={5} pct={weekPct} color={h.color}>
-                <Text style={{fontSize:10,fontWeight:'800',color:weekPct>=100?brand.green:h.color}}>{weekPct}%</Text>
-              </Ring>
-              <View style={{flex:1}}>
-                <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
-                <Text style={{fontSize:10,color:C.textDim,marginTop:2}}>
-                  Week: {weekVal}/{weekTarget}{h.type==='timer'?'m':'x'}
-                  {weekPct>=100?' ✓':''}  ·  30d: {rate}%
-                </Text>
-                {streak>0&&<Text style={{fontSize:10,fontWeight:'700',color:streak>7?brand.green:brand.gold,marginTop:1}}>
-                  🔥 {streak} day streak</Text>}
-              </View>
-            </View>
-            {/* 30-day mini bar chart */}
-            <View style={{flexDirection:'row',gap:1,marginTop:6,height:20,paddingLeft:58}}>
-              {last30.slice(-14).map((d,j)=>{
-                const done=log[fmt(d)]?.[h.id]?.done;
-                return <View key={j} style={{flex:1,backgroundColor:done?h.color+'60':C.borderLight,borderRadius:2,
-                  height:done?20:6,alignSelf:'flex-end'}}/>;
-              })}
-            </View>
-          </View>
-        ))}
-      </View>
-    ))}
+          <Text style={{fontSize:10,fontWeight:'600',color:C.textDim,marginBottom:4}}>THIS WEEK</Text>
+          <View style={{flexDirection:'row',gap:3,marginBottom:10}}>
+            {weekDates.map((d,i)=>{const ds=fmt(d);const dm=projLog[ds]?.[p.id]?.minutes||0;const dn=projLog[ds]?.[p.id]?.notes;
+              return(<TouchableOpacity key={i} onPress={()=>setNoteModal({id:p.id,dateStr:ds,type:'project'})}
+                style={{flex:1,paddingVertical:6,borderRadius:8,alignItems:'center',
+                  backgroundColor:dm>0?p.color+'15':'#fff',borderWidth:1,borderColor:dm>0?p.color+'40':C.border}}>
+                <Text style={{fontSize:8,fontWeight:'700',color:C.textDim}}>{DAYS[i]}</Text>
+                <Text style={{fontSize:10,fontWeight:'800',color:dm>0?p.color:C.textDark}}>{dm>0?dm+'m':'—'}</Text>
+                {dn&&<Text style={{fontSize:6,color:p.color}}>📝</Text>}
+              </TouchableOpacity>);})}</View>
+
+          {/* Add note for today */}
+          <TouchableOpacity onPress={()=>setNoteModal({id:p.id,dateStr:todayStr,type:'project'})}
+            style={{padding:10,borderRadius:8,backgroundColor:p.color+'10',alignItems:'center',marginBottom:8,borderWidth:1,borderColor:p.color+'30'}}>
+            <Text style={{fontSize:12,fontWeight:'600',color:p.color}}>📝 Add note for today</Text></TouchableOpacity>
+
+          <TouchableOpacity onPress={()=>Alert.alert('Delete',`Delete "${p.name}"?`,[{text:'Cancel',style:'cancel'},
+            {text:'Delete',style:'destructive',onPress:()=>{setExpanded(null);setProjects(pr=>pr.filter(x=>x.id!==p.id));}}])}
+            style={{padding:8,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
+            <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🗑 Delete project</Text></TouchableOpacity>
+        </View>)}
+      </View>);})}
   </View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SETTINGS TAB — Backup, Restore, About
+// STATS TAB — Monthly heatmap + project status
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,setHabits,setLog}) {
-  const [backing,setBacking]=useState(false);
+function StatsTab({habits,log,projects,projLog}){
+  const [selMonth,setSelMonth]=useState(today().getMonth());
+  const [selYear,setSelYear]=useState(today().getFullYear());
+  const [detailDay,setDetailDay]=useState(null);
+  const monthDates=useMemo(()=>getMonthDates(selYear,selMonth),[selYear,selMonth]);
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+  if(!habits.length&&!projects.length)return<View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>📊</Text>
+    <Text style={s.emptySub}>Add habits or projects to see stats</Text></View>;
+
+  return(<View>
+    {/* Month selector */}
+    <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+      <TouchableOpacity onPress={()=>{if(selMonth===0){setSelMonth(11);setSelYear(y=>y-1);}else setSelMonth(m=>m-1);}} style={s.navBtn}>
+        <Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+      <Text style={{fontSize:16,fontWeight:'700',color:C.text}}>{MONTHS[selMonth]} {selYear}</Text>
+      <TouchableOpacity onPress={()=>{if(selMonth===11){setSelMonth(0);setSelYear(y=>y+1);}else setSelMonth(m=>m+1);}} style={s.navBtn}>
+        <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
+
+    {/* Heatmap */}
+    <View style={[s.statsCard,{paddingBottom:8}]}>
+      <Text style={s.statsTitle}>📅 Habit Completion</Text>
+      <View style={{flexDirection:'row',flexWrap:'wrap',gap:3}}>
+        {monthDates.map((d,i)=>{const ds=fmt(d);const dayLog=log[ds]||{};
+          const active=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(d.getDay()===0?6:d.getDay()-1)));
+          const done=active.filter(h=>dayLog[h.id]?.done).length;
+          const ratio=active.length>0?done/active.length:0;
+          const isSel=detailDay===ds;
+          return(<TouchableOpacity key={i} onPress={()=>setDetailDay(isSel?null:ds)}
+            style={{width:28,height:28,borderRadius:6,justifyContent:'center',alignItems:'center',
+              backgroundColor:ratio>=1?brand.green:ratio>=0.5?brand.gold:ratio>0?'#E8956B20':C.borderLight,
+              borderWidth:isSel?2:0,borderColor:brand.blue}}>
+            <Text style={{fontSize:9,fontWeight:'700',color:ratio>=0.5?'#fff':C.textDim}}>{d.getDate()}</Text>
+          </TouchableOpacity>);})}</View>
+
+      {/* Detail for selected day */}
+      {detailDay&&(()=>{const dayLog=log[detailDay]||{};const d=new Date(detailDay+'T12:00:00');
+        return(<View style={{marginTop:10,padding:10,backgroundColor:C.bg,borderRadius:10}}>
+          <Text style={{fontSize:12,fontWeight:'700',color:C.text,marginBottom:6}}>
+            {d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text>
+          {habits.map(h=>{const entry=dayLog[h.id];if(!entry?.done&&!entry?.minutes&&!entry?.notes)return null;
+            return(<View key={h.id} style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:4}}>
+              <Text style={{fontSize:10,color:entry?.done?brand.green:C.textDim}}>{entry?.done?'✓':'○'}</Text>
+              <Text style={{fontSize:11,color:C.text}}>{h.icon} {h.name}</Text>
+              {h.type==='timer'&&<Text style={{fontSize:9,color:C.textDim}}>{entry?.minutes||0}m</Text>}
+              {entry?.notes&&<Text style={{fontSize:9,color:brand.blue,flex:1}} numberOfLines={1}>📝 {entry.notes}</Text>}
+            </View>);})}</View>);})()}
+    </View>
+
+    {/* Project status */}
+    {projects.length>0&&(<View style={s.statsCard}>
+      <Text style={s.statsTitle}>📁 Project Status</Text>
+      {projects.map(p=>{
+        const totalMins=Object.values(projLog).reduce((sum,day)=>sum+(day[p.id]?.minutes||0),0);
+        const totalHrs=Math.round(totalMins/60*10)/10;
+        const monthMins=monthDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
+        return(<View key={p.id} style={{marginBottom:12}}>
+          <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:4}}>
+            <View style={{width:10,height:10,borderRadius:5,backgroundColor:p.color}}/>
+            <Text style={{fontSize:13,fontWeight:'600',color:C.text,flex:1}}>{p.name}</Text>
+            <Text style={{fontSize:12,fontWeight:'700',color:p.color}}>{totalHrs}h</Text></View>
+          <View style={{flexDirection:'row',gap:2}}>
+            {monthDates.map((d,i)=>{const dm=projLog[fmt(d)]?.[p.id]?.minutes||0;
+              return(<View key={i} style={{flex:1,height:dm>0?clamp(dm/60*20,4,20):3,
+                backgroundColor:dm>0?p.color:C.borderLight,borderRadius:2,alignSelf:'flex-end'}}/>);})}</View>
+          <Text style={{fontSize:9,color:C.textDim,marginTop:2}}>{monthMins}m in {MONTHS[selMonth]}</Text>
+        </View>);})}
+    </View>)}
+  </View>);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETTINGS TAB
+// ═══════════════════════════════════════════════════════════════════
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog}){
   const handleBackup=async()=>{
-    setBacking(true);
-    try { await backupToFile(habits,log); } catch(e) { Alert.alert('Error','Backup failed'); }
-    setBacking(false);
+    const data=JSON.stringify({habits,log,projects,projLog,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
+    const path=FileSystem.cacheDirectory+'pruvyou_backup_'+fmt(today())+'.json';
+    await FileSystem.writeAsStringAsync(path,data);
+    if(await Sharing.isAvailableAsync())await Sharing.shareAsync(path,{mimeType:'application/json',dialogTitle:'Backup PruvYou'});
   };
-
+  const handleRestore=async()=>{
+    try{const result=await DocumentPicker.getDocumentAsync({type:'application/json'});if(result.canceled)return;
+      const content=await FileSystem.readAsStringAsync(result.assets[0].uri);const data=JSON.parse(content);
+      if(data.app==='PruvYou'){Alert.alert('Restore','Found '+data.habits?.length+' habits, '+(data.projects?.length||0)+' projects. Restore?',[
+        {text:'Cancel',style:'cancel'},{text:'Restore',onPress:()=>{
+          if(data.habits)setHabits(data.habits);if(data.log)setLog(data.log);
+          if(data.projects)setProjects(data.projects);if(data.projLog)setProjLog(data.projLog);
+          Alert.alert('Done','Data restored!');}}]);}
+    }catch{Alert.alert('Error','Could not read file');}};
   return(<View>
-    {/* Google Drive Backup */}
-    <View style={s.statsCard}>
-      <Text style={s.statsTitle}>☁️ Backup & Sync</Text>
-      <Text style={{fontSize:12,color:C.textDim,marginBottom:12,lineHeight:18}}>
-        Export your habits and progress as a JSON file. Share it directly to Google Drive, email, or any app.
-      </Text>
-      <TouchableOpacity onPress={handleBackup} disabled={backing}
-        style={{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center',marginBottom:8,opacity:backing?0.5:1}}>
-        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>
-          {backing?'Exporting...':'📤 Backup to Google Drive'}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={()=>restoreFromFile(setHabits,setLog)}
-        style={{padding:14,borderRadius:12,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border}}>
-        <Text style={{fontSize:14,fontWeight:'600',color:C.textMuted}}>📥 Restore from file</Text>
-      </TouchableOpacity>
-    </View>
-
-    {/* Data info */}
-    <View style={s.statsCard}>
-      <Text style={s.statsTitle}>📊 Your Data</Text>
+    <View style={s.statsCard}><Text style={s.statsTitle}>☁️ Backup & Sync</Text>
+      <TouchableOpacity onPress={handleBackup} style={{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center',marginBottom:8}}>
+        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>📤 Backup to Google Drive</Text></TouchableOpacity>
+      <TouchableOpacity onPress={handleRestore} style={{padding:14,borderRadius:12,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border}}>
+        <Text style={{fontSize:14,fontWeight:'600',color:C.textMuted}}>📥 Restore from file</Text></TouchableOpacity></View>
+    <View style={s.statsCard}><Text style={s.statsTitle}>📊 Your Data</Text>
       <View style={{flexDirection:'row',justifyContent:'space-around'}}>
-        <View style={{alignItems:'center'}}>
-          <Text style={{fontSize:24,fontWeight:'800',color:brand.blue}}>{habits.length}</Text>
-          <Text style={{fontSize:10,color:C.textDim}}>habits</Text>
-        </View>
-        <View style={{alignItems:'center'}}>
-          <Text style={{fontSize:24,fontWeight:'800',color:brand.green}}>{Object.keys(log).length}</Text>
-          <Text style={{fontSize:10,color:C.textDim}}>days logged</Text>
-        </View>
-        <View style={{alignItems:'center'}}>
-          <Text style={{fontSize:24,fontWeight:'800',color:brand.gold}}>
-            {Object.values(log).reduce((s,day)=>s+Object.values(day).filter(e=>e.done).length,0)}
-          </Text>
-          <Text style={{fontSize:10,color:C.textDim}}>completions</Text>
-        </View>
-      </View>
-    </View>
-
-    {/* About */}
+        <View style={{alignItems:'center'}}><Text style={{fontSize:24,fontWeight:'800',color:brand.blue}}>{habits.length}</Text><Text style={{fontSize:10,color:C.textDim}}>habits</Text></View>
+        <View style={{alignItems:'center'}}><Text style={{fontSize:24,fontWeight:'800',color:brand.green}}>{projects.length}</Text><Text style={{fontSize:10,color:C.textDim}}>projects</Text></View>
+        <View style={{alignItems:'center'}}><Text style={{fontSize:24,fontWeight:'800',color:brand.gold}}>{Object.keys(log).length}</Text><Text style={{fontSize:10,color:C.textDim}}>days</Text></View>
+      </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
-      <Image source={require('./assets/PruvYou_logo.png')} style={{width:200,height:50}} resizeMode="contain"/>
-      <Text style={{fontSize:10,color:C.textDim,marginTop:6}}>Prove Yourself Daily</Text>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:2}}>v1.0.0</Text>
-    </View>
-
-    {/* Danger zone */}
-    <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL habits and progress data?',[
-      {text:'Cancel',style:'cancel'},
-      {text:'Delete Everything',style:'destructive',onPress:async()=>{
-        setHabits([]);setLog({});
-        await AsyncStorage.clear();
-        Alert.alert('Done','All data cleared');
-      }},
-    ])} style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
-      <Text style={{fontSize:13,fontWeight:'600',color:'#C44'}}>🗑 Reset all data</Text>
-    </TouchableOpacity>
+      <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.1.0</Text></View>
+    <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
+      {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
+      style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
+      <Text style={{fontSize:13,fontWeight:'600',color:'#C44'}}>🗑 Reset all data</Text></TouchableOpacity>
   </View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STYLES
-// ═══════════════════════════════════════════════════════════════════
-const s = StyleSheet.create({
-  root:{flex:1,backgroundColor:C.bg},
-  content:{flex:1,paddingHorizontal:16},
-  logoArea:{alignItems:'center',paddingTop:12,marginBottom:4},
-  logoImg:{width:200,height:50},
-  logoSub:{fontSize:8,fontWeight:'600',color:C.textDim,letterSpacing:2,marginTop:2},
+const s=StyleSheet.create({
+  root:{flex:1,backgroundColor:C.bg},content:{flex:1,paddingHorizontal:16},
+  logoArea:{alignItems:'center',paddingTop:12,marginBottom:4},logoImg:{width:240,height:60},logoSub:{fontSize:8,fontWeight:'600',color:C.textDim,letterSpacing:2,marginTop:2},
   tagline:{textAlign:'center',fontSize:14,fontWeight:'600',color:C.textMuted,marginBottom:16},
-
   weekNav:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10},
   navBtn:{width:32,height:32,borderRadius:16,backgroundColor:C.white,borderWidth:1,borderColor:C.border,justifyContent:'center',alignItems:'center'},
-  navBtnT:{color:C.textDim,fontSize:14},
-  weekLabel:{fontSize:12,fontWeight:'600',color:C.textDim},
-
+  navBtnT:{color:C.textDim,fontSize:14},weekLabel:{fontSize:12,fontWeight:'600',color:C.textDim},
   cardsRow:{flexDirection:'row',marginBottom:16,gap:4},
-  dayCard:{flex:1,borderRadius:12,backgroundColor:C.white,borderWidth:1,borderColor:C.border,overflow:'hidden',minHeight:110,position:'relative'},
-  dcProgress:{flex:1,padding:3,position:'relative'},
-  dcTrack:{position:'absolute',left:3,right:3,top:3,bottom:3,borderRadius:9,backgroundColor:'#E8ECF0',overflow:'hidden',justifyContent:'flex-end'},
-  dcFill:{width:'100%',borderRadius:9,minHeight:1},
-  dcOverlay:{position:'absolute',left:0,right:0,top:0,bottom:0,justifyContent:'center',alignItems:'center'},
-  dcPct:{fontSize:11,fontWeight:'800'},
-  dcCount:{fontSize:7,fontWeight:'700',position:'absolute',top:6},
-  dcLabel:{paddingVertical:4,alignItems:'center',borderTopWidth:1,borderTopColor:C.border},
-  dcDay:{fontSize:9,fontWeight:'700',color:C.textDim,letterSpacing:.3},
-  dcNum:{fontSize:12,fontWeight:'800',color:C.textMuted},
-  dcCheck:{position:'absolute',top:2,right:2,width:14,height:14,borderRadius:7,backgroundColor:brand.green,justifyContent:'center',alignItems:'center'},
-
+  dayCard:{flex:1,borderRadius:12,backgroundColor:C.white,borderWidth:1,borderColor:C.border,overflow:'hidden',minHeight:100,position:'relative'},
+  dcProgress:{flex:1,padding:3,position:'relative'},dcTrack:{position:'absolute',left:3,right:3,top:3,bottom:3,borderRadius:9,backgroundColor:'#E8ECF0',overflow:'hidden',justifyContent:'flex-end'},
+  dcFill:{width:'100%',borderRadius:9,minHeight:1},dcOverlay:{position:'absolute',left:0,right:0,top:0,bottom:0,justifyContent:'center',alignItems:'center'},
+  dcPct:{fontSize:11,fontWeight:'800'},dcCount:{fontSize:7,fontWeight:'700',position:'absolute',top:6},
+  dcLabel:{paddingVertical:4,alignItems:'center',borderTopWidth:1,borderTopColor:C.border},dcDay:{fontSize:9,fontWeight:'700',color:C.textDim},dcNum:{fontSize:12,fontWeight:'800',color:C.textMuted},
   sectionTitle:{fontSize:16,fontWeight:'700',color:C.text},
-  catCard:{borderRadius:14,padding:14,marginBottom:10,borderWidth:1},
-  catHeader:{flexDirection:'row',alignItems:'center'},
-  catIcon:{width:32,height:32,borderRadius:8,justifyContent:'center',alignItems:'center'},
-  catTitle:{fontSize:14,fontWeight:'700'},
+  thinCard:{flexDirection:'row',alignItems:'center',backgroundColor:C.white,borderRadius:10,padding:10,marginBottom:5,borderWidth:1,borderColor:C.border},
+  thinCheck:{width:22,height:22,borderRadius:11,borderWidth:2,borderColor:C.textDark,justifyContent:'center',alignItems:'center',marginRight:8},
+  thinName:{fontSize:12,fontWeight:'600',color:C.text},
+  miniBtn:{paddingHorizontal:8,paddingVertical:4,borderRadius:6,backgroundColor:C.bg,borderWidth:1,borderColor:C.border},
+  miniBtnT:{fontSize:10,fontWeight:'700'},
+  catCard:{borderRadius:14,padding:14,marginBottom:10,borderWidth:1},catHeader:{flexDirection:'row',alignItems:'center'},
+  catIcon:{width:32,height:32,borderRadius:8,justifyContent:'center',alignItems:'center'},catTitle:{fontSize:14,fontWeight:'700'},
   check:{width:24,height:24,borderRadius:12,borderWidth:2,borderColor:C.textDark,justifyContent:'center',alignItems:'center'},
-
-  empty:{alignItems:'center',paddingVertical:50},
-  emptyTitle:{fontSize:18,fontWeight:'700',color:C.textDim,marginBottom:8},
-  emptySub:{fontSize:13,color:C.textDark,textAlign:'center'},
-
+  empty:{alignItems:'center',paddingVertical:50},emptyTitle:{fontSize:18,fontWeight:'700',color:C.textDim,marginBottom:8},emptySub:{fontSize:13,color:C.textDark,textAlign:'center'},
   actionBtn:{width:32,height:32,borderRadius:6,borderWidth:1,borderColor:C.border,justifyContent:'center',alignItems:'center',marginLeft:4},
-  addBtn:{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center',marginBottom:14},
-  addBtnT:{fontSize:14,fontWeight:'700',color:'#fff'},
-
+  addBtn:{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center',marginBottom:14},addBtnT:{fontSize:14,fontWeight:'700',color:'#fff'},
   form:{backgroundColor:C.white,borderRadius:16,padding:18,marginBottom:14,borderWidth:1,borderColor:C.border},
-  formTitle:{fontSize:17,fontWeight:'700',color:brand.blue,marginBottom:14},
-  label:{fontSize:10,fontWeight:'600',color:C.textDim,letterSpacing:1,marginBottom:5,marginTop:2},
+  formTitle:{fontSize:17,fontWeight:'700',color:brand.blue,marginBottom:14},label:{fontSize:10,fontWeight:'600',color:C.textDim,letterSpacing:1,marginBottom:5,marginTop:2},
   input:{backgroundColor:C.bg,borderWidth:1,borderColor:C.border,borderRadius:10,padding:11,color:C.text,fontSize:14,marginBottom:10},
   iconBtn:{width:36,height:36,borderRadius:8,borderWidth:1,borderColor:C.border,backgroundColor:C.bg,justifyContent:'center',alignItems:'center'},
-  toggle:{flex:1,padding:10,borderRadius:10,borderWidth:1,borderColor:C.border,backgroundColor:C.bg,alignItems:'center'},
-  toggleT:{fontSize:12,fontWeight:'600',color:C.textDark},
-  dayChip:{flex:1,height:36,borderRadius:8,borderWidth:1.5,borderColor:C.border,backgroundColor:C.bg,justifyContent:'center',alignItems:'center'},
-  dayChipT:{fontSize:10,fontWeight:'700',color:C.textDark},
-  cancelBtn:{flex:1,padding:12,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center'},
-  cancelBtnT:{fontSize:13,fontWeight:'600',color:C.textDim},
-  saveBtn:{flex:1,padding:12,borderRadius:10,alignItems:'center'},
-  saveBtnT:{fontSize:13,fontWeight:'700',color:'#fff'},
-
-  statsCard:{backgroundColor:C.white,borderRadius:14,padding:16,marginBottom:12,borderWidth:1,borderColor:C.border},
-  statsTitle:{fontSize:13,fontWeight:'700',color:brand.blue,marginBottom:12},
-
+  toggle:{flex:1,padding:10,borderRadius:10,borderWidth:1,borderColor:C.border,backgroundColor:C.bg,alignItems:'center'},toggleT:{fontSize:12,fontWeight:'600',color:C.textDark},
+  dayChip:{flex:1,height:36,borderRadius:8,borderWidth:1.5,borderColor:C.border,backgroundColor:C.bg,justifyContent:'center',alignItems:'center'},dayChipT:{fontSize:10,fontWeight:'700',color:C.textDark},
+  cancelBtn:{flex:1,padding:12,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center'},cancelBtnT:{fontSize:13,fontWeight:'600',color:C.textDim},
+  saveBtn:{flex:1,padding:12,borderRadius:10,alignItems:'center'},saveBtnT:{fontSize:13,fontWeight:'700',color:'#fff'},
+  statsCard:{backgroundColor:C.white,borderRadius:14,padding:16,marginBottom:12,borderWidth:1,borderColor:C.border},statsTitle:{fontSize:13,fontWeight:'700',color:brand.blue,marginBottom:12},
   tabBar:{position:'absolute',bottom:0,left:0,right:0,height:64,backgroundColor:C.white,borderTopWidth:1,borderTopColor:C.border,flexDirection:'row',alignItems:'center',justifyContent:'space-around'},
-  tabItem:{alignItems:'center',gap:2},
-  tabLabel:{fontSize:9,fontWeight:'500',color:C.textLight},
-
-  modalBg:{flex:1,backgroundColor:'rgba(0,0,0,0.4)',justifyContent:'flex-end'},
-  modalBox:{backgroundColor:C.white,borderTopLeftRadius:24,borderTopRightRadius:24,padding:20,maxHeight:'80%'},
+  tabItem:{alignItems:'center',gap:2},tabIcon:{width:24,height:24,tintColor:C.textDark},tabLabel:{fontSize:9,fontWeight:'500',color:C.textLight},
+  modalBg:{flex:1,backgroundColor:'rgba(0,0,0,0.4)',justifyContent:'flex-end'},modalBox:{backgroundColor:C.white,borderTopLeftRadius:24,borderTopRightRadius:24,padding:20,maxHeight:'80%'},
 });
