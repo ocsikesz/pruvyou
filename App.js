@@ -143,9 +143,10 @@ export default function App() {
         {tab==='home'&&<HomeTab habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes}
           todayStr={todayStr} setEditDay={setEditDay}/>}
-        {tab==='habits'&&<HabitsTab habits={habits} showAdd={showAdd} setShowAdd={setShowAdd}
+        {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
           addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit}
-          updateHabit={updateHabit} deleteHabit={deleteHabit}/>}
+          updateHabit={updateHabit} deleteHabit={deleteHabit}
+          toggleDay={toggleDay} addMinutes={addMinutes} todayStr={todayStr} weekDates={weekDates}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} weekDates={weekDates}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} setHabits={setHabits} setLog={setLog}/>}
         <View style={{height:80}}/>
@@ -594,7 +595,8 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
 // ═══════════════════════════════════════════════════════════════════
 // HABITS TAB
 // ═══════════════════════════════════════════════════════════════════
-function HabitsTab({habits,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,updateHabit,deleteHabit}) {
+function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,updateHabit,deleteHabit,toggleDay,addMinutes,todayStr,weekDates}) {
+  const [expanded,setExpanded]=useState(null);
   return(<View>
     <TouchableOpacity onPress={()=>{setShowAdd(true);setEditHabit(null);}} style={s.addBtn}>
       <Text style={s.addBtnT}>＋ Add new habit</Text></TouchableOpacity>
@@ -611,17 +613,106 @@ function HabitsTab({habits,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,up
             <Text style={{fontSize:10,color:C.textDim}}>{ch.length} habit{ch.length>1?'s':''}</Text>
           </View>
         </View>
-        {ch.map(h=>(<View key={h.id} style={{flexDirection:'row',alignItems:'center',marginTop:8,
-          backgroundColor:'#fff',borderRadius:10,padding:12,borderWidth:1,borderColor:cat.border}}>
-          <View style={{flex:1}}>
-            <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
-            <Text style={{fontSize:10,color:C.textDim,marginTop:2}}>
-              {h.type==='timer'?`${h.targetMinutes} min`:'Checkbox'} · {h.frequency==='daily'?'Daily':
-                `${(h.selectedDays||[]).map(d=>DAYS[d]).join(', ')}`}</Text></View>
-          <TouchableOpacity onPress={()=>setEditHabit(h)} style={s.actionBtn}><Text>✏️</Text></TouchableOpacity>
-          <TouchableOpacity onPress={()=>Alert.alert('Delete',`Delete "${h.name}"?`,[{text:'Cancel',style:'cancel'},
-            {text:'Delete',style:'destructive',onPress:()=>deleteHabit(h.id)}])} style={s.actionBtn}><Text>🗑</Text></TouchableOpacity>
-        </View>))}
+        {ch.map(h=>{
+          const todayEntry=log[todayStr]?.[h.id];
+          const todayDone=!!todayEntry?.done;
+          const isExp=expanded===h.id;
+          const weekVal=h.type==='timer'
+            ?weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.minutes||0),0)
+            :weekDates.reduce((sum,d)=>sum+(log[fmt(d)]?.[h.id]?.done?1:0),0);
+          const schedDays=h.frequency==='daily'?7:(h.selectedDays||[]).length;
+          const weekTarget=h.type==='timer'?h.targetMinutes*schedDays:schedDays;
+          const weekPct=weekTarget>0?Math.round((weekVal/weekTarget)*100):0;
+
+          return(<View key={h.id} style={{marginTop:8}}>
+            <TouchableOpacity onPress={()=>setExpanded(isExp?null:h.id)}
+              style={{backgroundColor:'#fff',borderRadius:10,padding:12,borderWidth:1,borderColor:cat.border}}>
+              <View style={{flexDirection:'row',alignItems:'center'}}>
+                <TouchableOpacity onPress={()=>{
+                  if(h.type==='check') toggleDay(h.id,todayStr);
+                  else if(!todayDone) addMinutes(h.id,todayStr,h.targetMinutes,h.targetMinutes);
+                  else addMinutes(h.id,todayStr,-(todayEntry?.minutes||0),h.targetMinutes);
+                }} style={[s.check,todayDone&&{backgroundColor:cat.color,borderColor:cat.color}]}>
+                  {todayDone&&<Text style={{color:'#fff',fontSize:14,fontWeight:'700'}}>✓</Text>}
+                </TouchableOpacity>
+                <View style={{flex:1,marginLeft:10}}>
+                  <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
+                  <Text style={{fontSize:10,color:C.textDim,marginTop:2}}>
+                    {h.type==='timer'?`${h.targetMinutes} min`:'Checkbox'} · {h.frequency==='daily'?'Daily':
+                      (h.selectedDays||[]).map(d=>DAYS[d]).join(', ')}</Text>
+                </View>
+                <View style={{alignItems:'center',marginRight:8}}>
+                  <Text style={{fontSize:12,fontWeight:'800',color:compColor(weekPct/100)}}>{weekPct}%</Text>
+                  <Text style={{fontSize:7,color:C.textDim}}>week</Text>
+                </View>
+                <Text style={{fontSize:14,color:C.textDark}}>{isExp?'▾':'▸'}</Text>
+              </View>
+              {h.type==='timer'&&(
+                <View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:6}}>
+                  <View style={{flex:1,height:4,backgroundColor:cat.border,borderRadius:2,overflow:'hidden'}}>
+                    <View style={{height:'100%',width:`${Math.min(100,(todayEntry?.minutes||0)/h.targetMinutes*100)}%`,
+                      backgroundColor:cat.color,borderRadius:2}}/></View>
+                  <Text style={{fontSize:10,fontWeight:'700',color:cat.color}}>{todayEntry?.minutes||0}/{h.targetMinutes}m</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {isExp&&(<View style={{backgroundColor:'#fff',borderRadius:10,padding:12,marginTop:4,borderWidth:1,borderColor:cat.border}}>
+              {h.type==='timer'&&(<View style={{marginBottom:10}}>
+                <Text style={{fontSize:10,fontWeight:'600',color:C.textDim,marginBottom:4}}>ADD MINUTES TODAY</Text>
+                <View style={{flexDirection:'row',gap:4}}>
+                  {[-15,-5,5,15,30,h.targetMinutes].filter((v,i,a)=>a.indexOf(v)===i).map(delta=>(
+                    <TouchableOpacity key={delta} onPress={()=>addMinutes(h.id,todayStr,delta,h.targetMinutes)}
+                      style={{flex:1,paddingVertical:6,borderRadius:6,alignItems:'center',
+                        backgroundColor:delta>0?cat.bg:C.bg,borderWidth:1,borderColor:cat.border}}>
+                      <Text style={{fontSize:11,fontWeight:'700',color:delta>0?cat.color:C.textDim}}>
+                        {delta>0?'+':''}{delta}</Text>
+                    </TouchableOpacity>))}
+                </View>
+              </View>)}
+
+              <Text style={{fontSize:10,fontWeight:'600',color:C.textDim,marginBottom:4}}>THIS WEEK — tap any day</Text>
+              <View style={{flexDirection:'row',gap:3,marginBottom:10}}>
+                {weekDates.map((d,i)=>{
+                  const ds=fmt(d); const dayDone=log[ds]?.[h.id]?.done; const dayMins=log[ds]?.[h.id]?.minutes||0;
+                  const scheduled=h.frequency==='daily'||(h.selectedDays||[]).includes(i);
+                  const isFuture=d>today();
+                  return(<TouchableOpacity key={i} onPress={()=>{
+                    if(isFuture) return;
+                    if(h.type==='check') toggleDay(h.id,ds);
+                    else addMinutes(h.id,ds,dayDone?-(dayMins):h.targetMinutes,h.targetMinutes);
+                  }} style={{flex:1,paddingVertical:6,borderRadius:8,alignItems:'center',
+                    backgroundColor:dayDone?cat.color:(scheduled?'#fff':C.bg),
+                    borderWidth:1,borderColor:dayDone?cat.color:(scheduled?cat.border:C.border),opacity:isFuture?0.3:1}}>
+                    <Text style={{fontSize:8,fontWeight:'700',color:dayDone?'#fff':C.textDim}}>{DAYS[i]}</Text>
+                    <Text style={{fontSize:10,fontWeight:'800',color:dayDone?'#fff':(scheduled?cat.color:C.textDark)}}>
+                      {h.type==='timer'?(dayMins>0?dayMins+'m':'—'):(dayDone?'✓':'○')}</Text>
+                  </TouchableOpacity>);
+                })}
+              </View>
+
+              <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10}}>
+                <View style={{flex:1,height:4,backgroundColor:cat.border,borderRadius:2,overflow:'hidden'}}>
+                  <View style={{height:'100%',width:`${Math.min(100,weekPct)}%`,
+                    backgroundColor:weekPct>=100?brand.green:cat.color,borderRadius:2}}/></View>
+                <Text style={{fontSize:10,fontWeight:'700',color:weekPct>=100?brand.green:cat.color}}>
+                  {weekVal}/{weekTarget}{h.type==='timer'?'m':'x'} {weekPct>=100?'✓':''}</Text>
+              </View>
+
+              <View style={{flexDirection:'row',gap:8}}>
+                <TouchableOpacity onPress={()=>{setExpanded(null);setEditHabit(h);}}
+                  style={{flex:1,padding:10,borderRadius:8,backgroundColor:cat.bg,alignItems:'center',borderWidth:1,borderColor:cat.border}}>
+                  <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>✏️ Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={()=>Alert.alert('Delete',`Delete "${h.name}"?`,[{text:'Cancel',style:'cancel'},
+                  {text:'Delete',style:'destructive',onPress:()=>{setExpanded(null);deleteHabit(h.id);}},
+                ])} style={{flex:1,padding:10,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
+                  <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🗑 Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>)}
+          </View>);
+        })}
       </View>);})}
   </View>);
 }
