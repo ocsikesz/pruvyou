@@ -209,7 +209,14 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,t
   const todayDayIdx=today().getDay()===0?6:today().getDay()-1;
   const dailyH=habits.filter(h=>h.frequency==='daily');
   const weeklyToday=habits.filter(h=>h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx));
-  const todayH=[...dailyH,...weeklyToday];
+  // Also include habits done/logged today but not scheduled for today
+  const extraDoneToday=habits.filter(h=>{
+    if(h.frequency==='daily') return false;
+    if(h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx)) return false;
+    const entry=log[todayStr]?.[h.id];
+    return entry?.done || (entry?.minutes && entry.minutes>0);
+  });
+  const todayH=[...dailyH,...weeklyToday,...extraDoneToday];
   const doneD=dailyH.filter(h=>log[todayStr]?.[h.id]?.done).length;
   const doneW=weeklyToday.filter(h=>log[todayStr]?.[h.id]?.done).length;
   const dPct=dailyH.length>0?Math.round((doneD/dailyH.length)*100):0;
@@ -388,16 +395,28 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,to
   const [showAdd,setShowAdd]=useState(false);
   const [name,setName]=useState('');const [color,setColor]=useState(brand.blue);
   const [expanded,setExpanded]=useState(null);
+  const [pMonth,setPMonth]=useState(today().getMonth());
+  const [pYear,setPYear]=useState(today().getFullYear());
   const PCOLORS=[brand.blue,brand.green,brand.gold,'#E8956B','#9B7ED4','#5CB8D6'];
+  const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthDates=useMemo(()=>getMonthDates(pYear,pMonth),[pYear,pMonth]);
 
   const addProject=()=>{if(!name.trim())return;
     setProjects(p=>[...p,{id:Date.now().toString(),name:name.trim(),color,startDate:todayStr,status:'active'}]);
     setName('');setShowAdd(false);};
 
+  // Calendar grid helper
+  const calGrid=(dates)=>{
+    const first=dates[0].getDay();const startPad=(first===0?6:first-1);
+    const cells=[...Array(startPad).fill(null),...dates];
+    const rows=[];for(let i=0;i<cells.length;i+=7)rows.push(cells.slice(i,i+7));
+    if(rows[rows.length-1].length<7)rows[rows.length-1].push(...Array(7-rows[rows.length-1].length).fill(null));
+    return rows;
+  };
+
   return(<View>
     <TouchableOpacity onPress={()=>setShowAdd(!showAdd)} style={s.addBtn}>
       <Text style={s.addBtnT}>＋ Add new project</Text></TouchableOpacity>
-
     {showAdd&&(<View style={s.form}>
       <Text style={s.formTitle}>New Project</Text>
       <Text style={s.label}>PROJECT NAME</Text>
@@ -410,13 +429,12 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,to
         <TouchableOpacity onPress={()=>setShowAdd(false)} style={s.cancelBtn}><Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
         <TouchableOpacity onPress={addProject} style={[s.saveBtn,{backgroundColor:color}]}><Text style={s.saveBtnT}>Create</Text></TouchableOpacity></View>
     </View>)}
-
     {!projects.length&&!showAdd&&<View style={s.empty}><Text style={{fontSize:36,marginBottom:12}}>📁</Text>
       <Text style={s.emptySub}>Add your first project</Text></View>}
 
     {projects.map(p=>{const isExp=expanded===p.id;
-      const weekMins=weekDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
       const totalMins=Object.values(projLog).reduce((sum,day)=>sum+(day[p.id]?.minutes||0),0);
+      const monthMins=monthDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
       return(<View key={p.id} style={{marginBottom:10}}>
         <TouchableOpacity onPress={()=>setExpanded(isExp?null:p.id)}
           style={[s.catCard,{backgroundColor:p.color+'10',borderColor:p.color+'40',marginBottom:0}]}>
@@ -424,10 +442,8 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,to
             <View style={{width:8,height:8,borderRadius:4,backgroundColor:p.color,marginRight:10}}/>
             <View style={{flex:1}}>
               <Text style={{fontSize:14,fontWeight:'700',color:C.text}}>{p.name}</Text>
-              <Text style={{fontSize:10,color:C.textDim}}>Since {p.startDate} · {Math.round(totalMins/60)}h total · {weekMins}m this week</Text>
-            </View>
-            <Text style={{fontSize:14,color:C.textDark}}>{isExp?'▾':'▸'}</Text>
-          </View>
+              <Text style={{fontSize:10,color:C.textDim}}>{Math.round(totalMins/60)}h total · {monthMins}m in {MN[pMonth]}</Text></View>
+            <Text style={{fontSize:14,color:C.textDark}}>{isExp?'▾':'▸'}</Text></View>
         </TouchableOpacity>
 
         {isExp&&(<View style={{backgroundColor:'#fff',borderRadius:10,padding:12,marginTop:4,borderWidth:1,borderColor:p.color+'40'}}>
@@ -436,25 +452,38 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,to
           <View style={{flexDirection:'row',gap:4,marginBottom:10}}>
             {[15,30,60,120].map(d=>(<TouchableOpacity key={d} onPress={()=>addProjMinutes(p.id,todayStr,d)}
               style={{flex:1,padding:8,borderRadius:8,backgroundColor:p.color+'10',borderWidth:1,borderColor:p.color+'30',alignItems:'center'}}>
-              <Text style={{fontSize:12,fontWeight:'700',color:p.color}}>+{d}m</Text>
-            </TouchableOpacity>))}</View>
+              <Text style={{fontSize:12,fontWeight:'700',color:p.color}}>+{d}m</Text></TouchableOpacity>))}</View>
 
-          <Text style={{fontSize:10,fontWeight:'600',color:C.textDim,marginBottom:4}}>THIS WEEK</Text>
-          <View style={{flexDirection:'row',gap:3,marginBottom:10}}>
-            {weekDates.map((d,i)=>{const ds=fmt(d);const dm=projLog[ds]?.[p.id]?.minutes||0;const dn=projLog[ds]?.[p.id]?.notes;
-              return(<TouchableOpacity key={i} onPress={()=>setNoteModal({id:p.id,dateStr:ds,type:'project'})}
-                style={{flex:1,paddingVertical:6,borderRadius:8,alignItems:'center',
-                  backgroundColor:dm>0?p.color+'15':'#fff',borderWidth:1,borderColor:dm>0?p.color+'40':C.border}}>
-                <Text style={{fontSize:8,fontWeight:'700',color:C.textDim}}>{DAYS[i]}</Text>
-                <Text style={{fontSize:10,fontWeight:'800',color:dm>0?p.color:C.textDark}}>{dm>0?dm+'m':'—'}</Text>
-                {dn&&<Text style={{fontSize:6,color:p.color}}>📝</Text>}
-              </TouchableOpacity>);})}</View>
+          {/* Month navigator */}
+          <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+            <TouchableOpacity onPress={()=>{if(pMonth===0){setPMonth(11);setPYear(y=>y-1);}else setPMonth(m=>m-1);}} style={s.navBtn}>
+              <Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+            <Text style={{fontSize:12,fontWeight:'700',color:C.text}}>{MN[pMonth]} {pYear}</Text>
+            <TouchableOpacity onPress={()=>{if(pMonth===11){setPMonth(0);setPYear(y=>y+1);}else setPMonth(m=>m+1);}} style={s.navBtn}>
+              <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
 
-          {/* Add note for today */}
+          {/* Calendar header */}
+          <View style={{flexDirection:'row',marginBottom:4}}>
+            {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:8,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
+
+          {/* Calendar grid */}
+          {calGrid(monthDates).map((row,ri)=>(
+            <View key={ri} style={{flexDirection:'row',gap:3,marginBottom:3}}>
+              {row.map((d,ci)=>{if(!d)return<View key={ci} style={{flex:1,height:32}}/>;
+                const ds=fmt(d);const dm=projLog[ds]?.[p.id]?.minutes||0;const dn=projLog[ds]?.[p.id]?.notes;
+                const isToday=ds===todayStr;
+                return(<TouchableOpacity key={ci} onPress={()=>setNoteModal({id:p.id,dateStr:ds,type:'project'})}
+                  style={{flex:1,height:32,borderRadius:6,alignItems:'center',justifyContent:'center',
+                    backgroundColor:dm>0?p.color+(dm>60?'40':'20'):C.bg,
+                    borderWidth:isToday?2:1,borderColor:isToday?brand.gold:(dm>0?p.color+'40':C.borderLight)}}>
+                  <Text style={{fontSize:9,fontWeight:'700',color:dm>0?p.color:C.textDim}}>{d.getDate()}</Text>
+                  {dm>0&&<Text style={{fontSize:6,fontWeight:'700',color:p.color}}>{dm}m</Text>}
+                  {dn&&<View style={{position:'absolute',top:1,right:1,width:4,height:4,borderRadius:2,backgroundColor:p.color}}/>}
+                </TouchableOpacity>);})}</View>))}
+
           <TouchableOpacity onPress={()=>setNoteModal({id:p.id,dateStr:todayStr,type:'project'})}
-            style={{padding:10,borderRadius:8,backgroundColor:p.color+'10',alignItems:'center',marginBottom:8,borderWidth:1,borderColor:p.color+'30'}}>
+            style={{padding:10,borderRadius:8,backgroundColor:p.color+'10',alignItems:'center',marginTop:8,marginBottom:8,borderWidth:1,borderColor:p.color+'30'}}>
             <Text style={{fontSize:12,fontWeight:'600',color:p.color}}>📝 Add note for today</Text></TouchableOpacity>
-
           <TouchableOpacity onPress={()=>Alert.alert('Delete',`Delete "${p.name}"?`,[{text:'Cancel',style:'cancel'},
             {text:'Delete',style:'destructive',onPress:()=>{setExpanded(null);setProjects(pr=>pr.filter(x=>x.id!==p.id));}}])}
             style={{padding:8,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
@@ -465,14 +494,25 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,to
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STATS TAB — Monthly heatmap + project status
+// STATS TAB — Proper monthly calendar + project status
 // ═══════════════════════════════════════════════════════════════════
 function StatsTab({habits,log,projects,projLog}){
   const [selMonth,setSelMonth]=useState(today().getMonth());
   const [selYear,setSelYear]=useState(today().getFullYear());
   const [detailDay,setDetailDay]=useState(null);
   const monthDates=useMemo(()=>getMonthDates(selYear,selMonth),[selYear,selMonth]);
-  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const todayStr=fmt(today());
+
+  // Calendar grid: proper rows starting on correct weekday
+  const calGrid=useMemo(()=>{
+    const first=monthDates[0].getDay();const startPad=(first===0?6:first-1);
+    const cells=[...Array(startPad).fill(null),...monthDates];
+    const rows=[];for(let i=0;i<cells.length;i+=7)rows.push(cells.slice(i,i+7));
+    if(rows.length>0&&rows[rows.length-1].length<7)
+      rows[rows.length-1].push(...Array(7-rows[rows.length-1].length).fill(null));
+    return rows;
+  },[monthDates]);
 
   if(!habits.length&&!projects.length)return<View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>📊</Text>
     <Text style={s.emptySub}>Add habits or projects to see stats</Text></View>;
@@ -482,39 +522,60 @@ function StatsTab({habits,log,projects,projLog}){
     <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
       <TouchableOpacity onPress={()=>{if(selMonth===0){setSelMonth(11);setSelYear(y=>y-1);}else setSelMonth(m=>m-1);}} style={s.navBtn}>
         <Text style={s.navBtnT}>◂</Text></TouchableOpacity>
-      <Text style={{fontSize:16,fontWeight:'700',color:C.text}}>{MONTHS[selMonth]} {selYear}</Text>
+      <Text style={{fontSize:16,fontWeight:'700',color:C.text}}>{MN[selMonth]} {selYear}</Text>
       <TouchableOpacity onPress={()=>{if(selMonth===11){setSelMonth(0);setSelYear(y=>y+1);}else setSelMonth(m=>m+1);}} style={s.navBtn}>
         <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
 
-    {/* Heatmap */}
-    <View style={[s.statsCard,{paddingBottom:8}]}>
+    {/* Habit Calendar */}
+    {habits.length>0&&(<View style={s.statsCard}>
       <Text style={s.statsTitle}>📅 Habit Completion</Text>
-      <View style={{flexDirection:'row',flexWrap:'wrap',gap:3}}>
-        {monthDates.map((d,i)=>{const ds=fmt(d);const dayLog=log[ds]||{};
-          const active=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(d.getDay()===0?6:d.getDay()-1)));
-          const done=active.filter(h=>dayLog[h.id]?.done).length;
-          const ratio=active.length>0?done/active.length:0;
-          const isSel=detailDay===ds;
-          return(<TouchableOpacity key={i} onPress={()=>setDetailDay(isSel?null:ds)}
-            style={{width:28,height:28,borderRadius:6,justifyContent:'center',alignItems:'center',
-              backgroundColor:ratio>=1?brand.green:ratio>=0.5?brand.gold:ratio>0?'#E8956B20':C.borderLight,
-              borderWidth:isSel?2:0,borderColor:brand.blue}}>
-            <Text style={{fontSize:9,fontWeight:'700',color:ratio>=0.5?'#fff':C.textDim}}>{d.getDate()}</Text>
-          </TouchableOpacity>);})}</View>
+      {/* Day headers */}
+      <View style={{flexDirection:'row',marginBottom:6}}>
+        {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
+      {/* Calendar rows */}
+      {calGrid.map((row,ri)=>(
+        <View key={ri} style={{flexDirection:'row',gap:3,marginBottom:3}}>
+          {row.map((d,ci)=>{
+            if(!d) return <View key={ci} style={{flex:1,height:32}}/>;
+            const ds=fmt(d);const dayLog=log[ds]||{};const isToday=ds===todayStr;
+            const dayIdx=d.getDay()===0?6:d.getDay()-1;
+            const active=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx)));
+            const done=active.filter(h=>dayLog[h.id]?.done).length;
+            const ratio=active.length>0?done/active.length:0;
+            const isSel=detailDay===ds;
+            return(<TouchableOpacity key={ci} onPress={()=>setDetailDay(isSel?null:ds)}
+              style={{flex:1,height:32,borderRadius:6,justifyContent:'center',alignItems:'center',
+                backgroundColor:ratio>=1?brand.green+(isSel?'60':'30'):ratio>=0.5?brand.gold+(isSel?'60':'25'):ratio>0?'#E8956B20':C.bg,
+                borderWidth:isToday?2:(isSel?2:1),borderColor:isToday?brand.gold:(isSel?brand.blue:C.borderLight)}}>
+              <Text style={{fontSize:9,fontWeight:'700',color:ratio>=0.5?(isSel?'#fff':compColor(ratio)):C.textDim}}>{d.getDate()}</Text>
+              {ratio>=1&&<Text style={{fontSize:6}}>✓</Text>}
+            </TouchableOpacity>);
+          })}</View>))}
+
+      {/* Legend */}
+      <View style={{flexDirection:'row',justifyContent:'center',gap:12,marginTop:8}}>
+        {[{c:brand.green+'30',l:'100%'},{c:brand.gold+'25',l:'50%+'},{c:'#E8956B20',l:'<50%'},{c:C.bg,l:'0%'}].map(({c,l})=>(
+          <View key={l} style={{flexDirection:'row',alignItems:'center',gap:4}}>
+            <View style={{width:12,height:12,borderRadius:3,backgroundColor:c,borderWidth:1,borderColor:C.border}}/>
+            <Text style={{fontSize:8,color:C.textDim}}>{l}</Text></View>))}</View>
 
       {/* Detail for selected day */}
       {detailDay&&(()=>{const dayLog=log[detailDay]||{};const d=new Date(detailDay+'T12:00:00');
-        return(<View style={{marginTop:10,padding:10,backgroundColor:C.bg,borderRadius:10}}>
-          <Text style={{fontSize:12,fontWeight:'700',color:C.text,marginBottom:6}}>
+        const hasData=habits.some(h=>dayLog[h.id]?.done||dayLog[h.id]?.minutes||dayLog[h.id]?.notes);
+        return(<View style={{marginTop:10,padding:12,backgroundColor:C.bg,borderRadius:10}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:C.text,marginBottom:6}}>
             {d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text>
+          {!hasData&&<Text style={{fontSize:11,color:C.textDim}}>No data for this day</Text>}
           {habits.map(h=>{const entry=dayLog[h.id];if(!entry?.done&&!entry?.minutes&&!entry?.notes)return null;
-            return(<View key={h.id} style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:4}}>
-              <Text style={{fontSize:10,color:entry?.done?brand.green:C.textDim}}>{entry?.done?'✓':'○'}</Text>
-              <Text style={{fontSize:11,color:C.text}}>{h.icon} {h.name}</Text>
-              {h.type==='timer'&&<Text style={{fontSize:9,color:C.textDim}}>{entry?.minutes||0}m</Text>}
-              {entry?.notes&&<Text style={{fontSize:9,color:brand.blue,flex:1}} numberOfLines={1}>📝 {entry.notes}</Text>}
+            return(<View key={h.id} style={{marginBottom:6}}>
+              <View style={{flexDirection:'row',alignItems:'center',gap:6}}>
+                <Text style={{fontSize:11,color:entry?.done?brand.green:C.textDim}}>{entry?.done?'✓':'○'}</Text>
+                <Text style={{fontSize:12,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
+                {h.type==='timer'&&<Text style={{fontSize:10,color:C.textDim}}>{entry?.minutes||0}m</Text>}
+              </View>
+              {entry?.notes&&<Text style={{fontSize:10,color:brand.blue,marginLeft:20,marginTop:2}}>📝 {entry.notes}</Text>}
             </View>);})}</View>);})()}
-    </View>
+    </View>)}
 
     {/* Project status */}
     {projects.length>0&&(<View style={s.statsCard}>
@@ -523,16 +584,20 @@ function StatsTab({habits,log,projects,projLog}){
         const totalMins=Object.values(projLog).reduce((sum,day)=>sum+(day[p.id]?.minutes||0),0);
         const totalHrs=Math.round(totalMins/60*10)/10;
         const monthMins=monthDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
-        return(<View key={p.id} style={{marginBottom:12}}>
-          <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:4}}>
+        return(<View key={p.id} style={{marginBottom:14}}>
+          <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:6}}>
             <View style={{width:10,height:10,borderRadius:5,backgroundColor:p.color}}/>
             <Text style={{fontSize:13,fontWeight:'600',color:C.text,flex:1}}>{p.name}</Text>
-            <Text style={{fontSize:12,fontWeight:'700',color:p.color}}>{totalHrs}h</Text></View>
-          <View style={{flexDirection:'row',gap:2}}>
+            <Text style={{fontSize:14,fontWeight:'800',color:p.color}}>{totalHrs}h</Text></View>
+          {/* Mini calendar bars */}
+          <View style={{flexDirection:'row',gap:1,height:24,alignItems:'flex-end'}}>
             {monthDates.map((d,i)=>{const dm=projLog[fmt(d)]?.[p.id]?.minutes||0;
-              return(<View key={i} style={{flex:1,height:dm>0?clamp(dm/60*20,4,20):3,
-                backgroundColor:dm>0?p.color:C.borderLight,borderRadius:2,alignSelf:'flex-end'}}/>);})}</View>
-          <Text style={{fontSize:9,color:C.textDim,marginTop:2}}>{monthMins}m in {MONTHS[selMonth]}</Text>
+              return(<View key={i} style={{flex:1,height:dm>0?clamp(dm/120*24,3,24):2,
+                backgroundColor:dm>0?p.color:C.borderLight,borderRadius:1}}>
+                {dm>60&&<Text style={{fontSize:4,color:'#fff',textAlign:'center'}}>{dm}</Text>}
+              </View>);})}
+          </View>
+          <Text style={{fontSize:9,color:C.textDim,marginTop:3}}>{monthMins}m in {MN[selMonth]} · {Math.round(monthMins/60*10)/10}h</Text>
         </View>);})}
     </View>)}
   </View>);
