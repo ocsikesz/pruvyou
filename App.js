@@ -419,7 +419,7 @@ function HabitForm({habit,onSave,onCancel}){
 // ═══════════════════════════════════════════════════════════════════
 // PROJECT DAY PANEL — inline panel for a selected day in project
 // ═══════════════════════════════════════════════════════════════════
-function ProjDayPanel({pid,ds,dm,dn,tasks,color,addProjMinutes,setProjMinutes,setProjNote,setProjTasks}){
+function ProjDayPanel({pid,ds,dm,dn,tasks,color,addProjMinutes,setProjMinutes,setProjNote,setProjTasks,onDelete}){
   const [note,setNoteLocal]=useState(dn);
   const [savedNote,setSavedNote]=useState(dn);
   const [taskInput,setTaskInput]=useState('');
@@ -479,42 +479,44 @@ function ProjDayPanel({pid,ds,dm,dn,tasks,color,addProjMinutes,setProjMinutes,se
         placeholderTextColor={C.textDark} style={[s.input,{height:60,textAlignVertical:'top',marginBottom:8}]} multiline/>
       {note!==savedNote&&(
         <TouchableOpacity onPress={()=>{setProjNote(pid,ds,note);setSavedNote(note);}}
-          style={{padding:10,borderRadius:8,backgroundColor:color,alignItems:'center'}}>
+          style={{padding:10,borderRadius:8,backgroundColor:color,alignItems:'center',marginBottom:8}}>
           <Text style={{fontSize:12,fontWeight:'700',color:'#fff'}}>Save Note</Text>
+        </TouchableOpacity>)}
+      {onDelete&&(
+        <TouchableOpacity onPress={onDelete}
+          style={{padding:8,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC',marginTop:4}}>
+          <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🗑 Delete project</Text>
         </TouchableOpacity>)}
     </View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// PROJECTS TAB
+// PROJECTS TAB — same layout as Home: week strip + day detail
 // ═══════════════════════════════════════════════════════════════════
 function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,setProjMinutes,setProjTasks,todayStr}){
   const [showAdd,setShowAdd]=useState(false);
   const [name,setName]=useState('');const [color,setColor]=useState(brand.blue);
-  const [expanded,setExpanded]=useState(null);
-  const [pMonth,setPMonth]=useState(today().getMonth());
-  const [pYear,setPYear]=useState(today().getFullYear());
-  const [projExpDay,setProjExpDay]=useState(null);
+  const [weekOff,setWeekOff]=useState(0);
+  const [selDay,setSelDay]=useState(todayStr);
+  const [expandedProj,setExpandedProj]=useState(null);
   const PCOLORS=[brand.blue,brand.green,brand.gold,'#E8956B','#9B7ED4','#5CB8D6'];
-  const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthDates=useMemo(()=>getMonthDates(pYear,pMonth),[pYear,pMonth]);
+  const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
+  const isToday=selDay===todayStr;
+  const selDate=new Date(selDay.split('-')[0],parseInt(selDay.split('-')[1])-1,selDay.split('-')[2]);
 
   const addProject=()=>{if(!name.trim())return;
     setProjects(p=>[...p,{id:Date.now().toString(),name:name.trim(),color,startDate:todayStr,status:'active'}]);
     setName('');setShowAdd(false);};
 
-  // Calendar grid helper
-  const calGrid=(dates)=>{
-    const first=dates[0].getDay();const startPad=(first===0?6:first-1);
-    const cells=[...Array(startPad).fill(null),...dates];
-    const rows=[];for(let i=0;i<cells.length;i+=7)rows.push(cells.slice(i,i+7));
-    if(rows[rows.length-1].length<7)rows[rows.length-1].push(...Array(7-rows[rows.length-1].length).fill(null));
-    return rows;
-  };
+  // Summary for each project on selected day
+  const dayMins=(pid)=>projLog[selDay]?.[pid]?.minutes||0;
+  const dayTasks=(pid)=>projLog[selDay]?.[pid]?.tasks||[];
+  const doneTasks=(pid)=>dayTasks(pid).filter(t=>t.done).length;
 
   return(<View>
     <TouchableOpacity onPress={()=>setShowAdd(!showAdd)} style={s.addBtn}>
       <Text style={s.addBtnT}>＋ Add new project</Text></TouchableOpacity>
+
     {showAdd&&(<View style={s.form}>
       <Text style={s.formTitle}>New Project</Text>
       <Text style={s.label}>PROJECT NAME</Text>
@@ -527,65 +529,86 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
         <TouchableOpacity onPress={()=>setShowAdd(false)} style={s.cancelBtn}><Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
         <TouchableOpacity onPress={addProject} style={[s.saveBtn,{backgroundColor:color}]}><Text style={s.saveBtnT}>Create</Text></TouchableOpacity></View>
     </View>)}
+
     {!projects.length&&!showAdd&&<View style={s.empty}><Text style={{fontSize:36,marginBottom:12}}>📁</Text>
       <Text style={s.emptySub}>Add your first project</Text></View>}
 
-    {projects.map(p=>{const isExp=expanded===p.id;
-      const totalMins=Object.values(projLog).reduce((sum,day)=>sum+(day[p.id]?.minutes||0),0);
-      const monthMins=monthDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
-      return(<View key={p.id} style={{marginBottom:10}}>
-        <TouchableOpacity onPress={()=>setExpanded(isExp?null:p.id)}
-          style={[s.catCard,{backgroundColor:p.color+'10',borderColor:p.color+'40',marginBottom:0}]}>
-          <View style={{flexDirection:'row',alignItems:'center'}}>
-            <View style={{width:8,height:8,borderRadius:4,backgroundColor:p.color,marginRight:10}}/>
+    {projects.length>0&&(<>
+      {/* Week nav */}
+      <View style={s.weekNav}>
+        <TouchableOpacity onPress={()=>{setWeekOff(w=>w-1);setExpandedProj(null);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+        <Text style={s.weekLabel}>{weekOff===0?'This week':
+          `${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}</Text>
+        <TouchableOpacity onPress={()=>setWeekOff(w=>Math.min(0,w+1))} style={[s.navBtn,weekOff>=0&&{opacity:.3}]} disabled={weekOff>=0}>
+          <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
+
+      {/* 7 Day Cards — show total minutes per day across all projects */}
+      <View style={s.cardsRow}>{weekDates.map((d,i)=>{
+        const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();const isSel=ds===selDay;
+        const totalMins=projects.reduce((sum,p)=>sum+(projLog[ds]?.[p.id]?.minutes||0),0);
+        const totalTasks=projects.reduce((sum,p)=>sum+(projLog[ds]?.[p.id]?.tasks||[]).length,0);
+        const doneTks=projects.reduce((sum,p)=>sum+(projLog[ds]?.[p.id]?.tasks||[]).filter(t=>t.done).length,0);
+        const pct=totalMins>0?Math.min(100,Math.round(totalMins/120*100)):0;
+        const fill=totalMins>0?brand.blue:C.textDark;
+        return(<TouchableOpacity key={i} activeOpacity={0.7}
+          onPress={()=>{if(!isFut){setSelDay(ds);setExpandedProj(null);}}}
+          style={[s.dayCard,isT&&{borderColor:brand.gold,borderWidth:2},isSel&&!isT&&{borderColor:brand.blue,borderWidth:2},isFut&&{opacity:.35}]}>
+          <View style={s.dcProgress}><View style={s.dcTrack}>
+            <View style={[s.dcFill,{height:`${pct}%`,backgroundColor:totalMins>0?brand.blue:C.borderLight}]}/></View>
+            <View style={s.dcOverlay}>
+              {totalMins>0&&<Text style={[s.dcCount,{color:brand.blue}]}>{totalMins}m</Text>}
+              {totalTasks>0&&<Text style={[s.dcPct,{color:pct>45?'#fff':C.textMuted,fontSize:9}]}>{doneTks}/{totalTasks}</Text>}
+              {totalMins===0&&totalTasks===0&&<Text style={[s.dcPct,{color:C.textMuted}]}>—</Text>}
+            </View></View>
+          <View style={[s.dcLabel,isT&&{backgroundColor:brand.gold+'18'},isSel&&!isT&&{backgroundColor:brand.blue+'12'}]}>
+            <Text style={[s.dcDay,isT&&{color:brand.gold},isSel&&!isT&&{color:brand.blue}]}>{DAYS[i]}</Text>
+            <Text style={[s.dcNum,isT&&{color:brand.gold},isSel&&!isT&&{color:brand.blue}]}>{d.getDate()}</Text></View>
+        </TouchableOpacity>);})}</View>
+
+      {/* Selected day header */}
+      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+        <View>
+          <Text style={s.sectionTitle}>{isToday?'Today':selDate.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'short'})}</Text>
+          {!isToday&&<Text style={{fontSize:10,color:C.textDim}}>Tap today to return</Text>}
+        </View>
+        <Text style={{fontSize:12,fontWeight:'700',color:C.textDim}}>
+          {projects.reduce((sum,p)=>sum+dayMins(p.id),0)}m logged</Text>
+      </View>
+
+      {/* Project cards for selected day */}
+      {projects.map(p=>{
+        const isExp=expandedProj===p.id;
+        const dm=dayMins(p.id);const tasks=dayTasks(p.id);const done=doneTasks(p.id);
+        const totalMins=Object.values(projLog).reduce((sum,day)=>sum+(day[p.id]?.minutes||0),0);
+        return(<View key={p.id}>
+          <TouchableOpacity onPress={()=>setExpandedProj(isExp?null:p.id)} activeOpacity={0.7}
+            style={[s.thinCard,{borderLeftWidth:3,borderLeftColor:p.color},dm>0&&{backgroundColor:p.color+'10'}]}>
+            <View style={{width:22,height:22,borderRadius:11,borderWidth:2,
+              borderColor:dm>0?p.color:C.textDark,backgroundColor:dm>0?p.color:'#fff',
+              justifyContent:'center',alignItems:'center',marginRight:8}}>
+              {dm>0&&<Text style={{color:'#fff',fontSize:9,fontWeight:'800'}}>{dm}m</Text>}
+            </View>
             <View style={{flex:1}}>
-              <Text style={{fontSize:14,fontWeight:'700',color:C.text}}>{p.name}</Text>
-              <Text style={{fontSize:10,color:C.textDim}}>{Math.round(totalMins/60)}h total · {monthMins}m in {MN[pMonth]}</Text></View>
-            <Text style={{fontSize:14,color:C.textDark}}>{isExp?'▾':'▸'}</Text></View>
-        </TouchableOpacity>
-
-        {isExp&&(<View style={{backgroundColor:'#fff',borderRadius:10,padding:12,marginTop:4,borderWidth:1,borderColor:p.color+'40'}}>
-          {/* Today log */}
-          <Text style={{fontSize:10,fontWeight:'600',color:C.textDim,marginBottom:4}}>LOG TIME TODAY</Text>
-          <View style={{flexDirection:'row',gap:4,marginBottom:10}}>
-            {[15,30,60,120].map(d=>(<TouchableOpacity key={d} onPress={()=>addProjMinutes(p.id,todayStr,d)}
-              style={{flex:1,padding:8,borderRadius:8,backgroundColor:p.color+'10',borderWidth:1,borderColor:p.color+'30',alignItems:'center'}}>
-              <Text style={{fontSize:12,fontWeight:'700',color:p.color}}>+{d}m</Text></TouchableOpacity>))}</View>
-
-          {/* Month navigator */}
-          <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-            <TouchableOpacity onPress={()=>{if(pMonth===0){setPMonth(11);setPYear(y=>y-1);}else setPMonth(m=>m-1);}} style={s.navBtn}>
-              <Text style={s.navBtnT}>◂</Text></TouchableOpacity>
-            <Text style={{fontSize:12,fontWeight:'700',color:C.text}}>{MN[pMonth]} {pYear}</Text>
-            <TouchableOpacity onPress={()=>{if(pMonth===11){setPMonth(0);setPYear(y=>y+1);}else setPMonth(m=>m+1);}} style={s.navBtn}>
-              <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
-
-          {/* Calendar header */}
-          <View style={{flexDirection:'row',marginBottom:4}}>
-            {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:8,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
-
-          {/* Calendar grid */}
-          {calGrid(monthDates).map((row,ri)=>(
-            <View key={ri} style={{flexDirection:'row',gap:3,marginBottom:3}}>
-              {row.map((d,ci)=>{if(!d)return<View key={ci} style={{flex:1,height:32}}/>;
-                const ds=fmt(d);const dm=projLog[ds]?.[p.id]?.minutes||0;const dn=projLog[ds]?.[p.id]?.notes;
-                const isToday=ds===todayStr;
-                const isSelDay=projExpDay===p.id+'|'+ds;
-                return(<TouchableOpacity key={ci} onPress={()=>setProjExpDay(isSelDay?null:p.id+'|'+ds)}
-                  style={{flex:1,height:32,borderRadius:6,alignItems:'center',justifyContent:'center',
-                    backgroundColor:dm>0?p.color+(dm>60?'40':'20'):C.bg,
-                    borderWidth:isToday?2:1,borderColor:isToday?brand.gold:(dm>0?p.color+'40':C.borderLight)}}>
-                  <Text style={{fontSize:9,fontWeight:'700',color:dm>0?p.color:C.textDim}}>{d.getDate()}</Text>
-                  {dm>0&&<Text style={{fontSize:6,fontWeight:'700',color:p.color}}>{dm}m</Text>}
-                  {dn&&<View style={{position:'absolute',top:1,right:1,width:4,height:4,borderRadius:2,backgroundColor:p.color}}/>}
-                </TouchableOpacity>);})}</View>))}
-
-          <TouchableOpacity onPress={()=>Alert.alert('Delete',`Delete "${p.name}"?`,[{text:'Cancel',style:'cancel'},
-            {text:'Delete',style:'destructive',onPress:()=>{setExpanded(null);setProjects(pr=>pr.filter(x=>x.id!==p.id));}}])}
-            style={{padding:8,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
-            <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🗑 Delete project</Text></TouchableOpacity>
-        </View>)}
-      </View>);})}
+              <Text style={[s.thinName]}>{p.name}</Text>
+              <Text style={{fontSize:9,color:C.textDim,marginTop:1}}>
+                {dm>0?`${dm}m today · `:'No time today · '}{Math.round(totalMins/60*10)/10}h total
+                {tasks.length>0?` · ${done}/${tasks.length} tasks`:''}
+              </Text>
+            </View>
+            <Text style={{fontSize:14,color:C.textDark,paddingHorizontal:6}}>{isExp?'▾':'▸'}</Text>
+          </TouchableOpacity>
+          {isExp&&<ProjDayPanel pid={p.id} ds={selDay}
+            dm={projLog[selDay]?.[p.id]?.minutes||0}
+            dn={projLog[selDay]?.[p.id]?.notes||''}
+            tasks={projLog[selDay]?.[p.id]?.tasks||[]}
+            color={p.color}
+            addProjMinutes={addProjMinutes} setProjMinutes={setProjMinutes}
+            setProjNote={setProjNote} setProjTasks={setProjTasks}
+            onDelete={()=>Alert.alert('Delete',`Delete "${p.name}"?`,[{text:'Cancel',style:'cancel'},
+              {text:'Delete',style:'destructive',onPress:()=>{setExpandedProj(null);setProjects(pr=>pr.filter(x=>x.id!==p.id));}}])}
+          />}
+        </View>);})}
+    </>)}
   </View>);
 }
 
