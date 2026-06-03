@@ -2,7 +2,7 @@
   "expo": {
     "name": "PruvYou",
     "slug": "pruvyou",
-    "version": "1.7.2",
+    "version": "1.7.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -31,7 +31,7 @@
           "action": "VIEW",
           "data": [
             {
-              "scheme": "com.googleusercontent.apps.808492519505"
+              "scheme": "com.ocsikesz.pruvyou"
             }
           ],
           "category": [
