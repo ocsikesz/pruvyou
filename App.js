@@ -124,15 +124,15 @@ export default function App(){
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
-  // ── Google Drive OAuth (SDK 52) ──
+  // ── Google Drive OAuth — authorization code + PKCE (Android Client ID) ──
   const discovery=AuthSession.useAutoDiscovery('https://accounts.google.com');
-  const redirectUri=AuthSession.makeRedirectUri({scheme:'com.ocsikesz.pruvyou',path:'oauth2redirect'});
+  const redirect='com.googleusercontent.apps.'+GOOGLE_CLIENT_ID.split('-')[0]+':/oauth2redirect';
   const [request,response,promptAsync]=AuthSession.useAuthRequest({
     clientId:GOOGLE_CLIENT_ID,
     scopes:[DRIVE_SCOPE,'email','profile'],
-    redirectUri,
-    responseType:AuthSession.ResponseType.Token,
-    usePKCE:false,
+    redirectUri:redirect,
+    responseType:AuthSession.ResponseType.Code,
+    usePKCE:true,
   },discovery);
 
   useEffect(()=>{
@@ -140,12 +140,23 @@ export default function App(){
   },[]);
 
   useEffect(()=>{
-    if(response?.type==='success'){
-      const token=response.params.access_token;
-      fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json',{headers:{Authorization:'Bearer '+token}})
-        .then(r=>r.json())
-        .then(u=>{setDriveToken(token);setDriveUser(u.email||'');sv('pv-drive-token',{token,email:u.email||''});})
-        .catch(()=>{setDriveToken(token);sv('pv-drive-token',{token,email:''});});
+    if(response?.type==='success'&&response.params.code){
+      (async()=>{
+        try{
+          // Exchange auth code for access token
+          const tokenRes=await AuthSession.exchangeCodeAsync({
+            clientId:GOOGLE_CLIENT_ID,
+            code:response.params.code,
+            redirectUri:redirect,
+            extraParams:{code_verifier:request.codeVerifier},
+          },discovery);
+          const token=tokenRes.accessToken;
+          const refreshToken=tokenRes.refreshToken;
+          const u=await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).catch(()=>({}));
+          setDriveToken(token);setDriveUser(u.email||'');
+          await sv('pv-drive-token',{token,email:u.email||'',refreshToken});
+        }catch(e){Alert.alert('Drive connection failed',e?.message||'Token exchange error');}
+      })();
     }
   },[response]);
 
@@ -1289,7 +1300,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.7.1</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.7.2</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
