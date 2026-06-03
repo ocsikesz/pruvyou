@@ -1,0 +1,13 @@
+name: Get SHA1
+on:
+  workflow_dispatch:
+jobs:
+  sha1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print debug SHA1
+        run: |
+          keytool -keystore ~/.android/debug.keystore -list -v \
+            -alias androiddebugkey -storepass android 2>/dev/null | grep "SHA1:"
+          echo "---"
+          echo "Package: com.ocsikesz.pruvyou"
