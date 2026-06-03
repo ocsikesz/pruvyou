@@ -1047,10 +1047,12 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   };
 
   const handleBackup=async()=>{
-    const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
-    const path=FileSystem.cacheDirectory+'pruvyou_backup_'+fmt(today())+'.json';
-    await FileSystem.writeAsStringAsync(path,data);
-    if(await Sharing.isAvailableAsync())await Sharing.shareAsync(path,{mimeType:'application/json',dialogTitle:'Backup PruvYou'});
+    try{
+      const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
+      const path=FileSystem.cacheDirectory+'pruvyou_backup_'+fmt(today())+'.json';
+      await FileSystem.writeAsStringAsync(path,data);
+      await Sharing.shareAsync(path,{mimeType:'application/json',dialogTitle:'Save PruvYou Backup',UTI:'public.json'});
+    }catch(e){Alert.alert('Backup failed',e?.message||'Could not share file');}
   };
   const handleRestore=async()=>{
     try{const result=await DocumentPicker.getDocumentAsync({type:'application/json'});if(result.canceled)return;
@@ -1096,7 +1098,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     {/* Backup */}
     <View style={s.statsCard}><Text style={s.statsTitle}>☁️ Backup & Sync</Text>
       <TouchableOpacity onPress={handleBackup} style={{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center',marginBottom:8}}>
-        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>📤 Backup to Google Drive</Text></TouchableOpacity>
+        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>📤 Export Backup</Text></TouchableOpacity>
       <TouchableOpacity onPress={handleRestore} style={{padding:14,borderRadius:12,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border}}>
         <Text style={{fontSize:14,fontWeight:'600',color:C.textMuted}}>📥 Restore from file</Text></TouchableOpacity></View>
 
@@ -1151,7 +1153,7 @@ const s=StyleSheet.create({
   cancelBtn:{flex:1,padding:12,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center'},cancelBtnT:{fontSize:13,fontWeight:'600',color:C.textDim},
   saveBtn:{flex:1,padding:12,borderRadius:10,alignItems:'center'},saveBtnT:{fontSize:13,fontWeight:'700',color:'#fff'},
   statsCard:{backgroundColor:C.white,borderRadius:14,padding:16,marginBottom:12,borderWidth:1,borderColor:C.border},statsTitle:{fontSize:13,fontWeight:'700',color:brand.blue,marginBottom:12},
-  tabBar:{position:'absolute',bottom:0,left:0,right:0,height:88,backgroundColor:C.white,borderTopWidth:1,borderTopColor:C.border,flexDirection:'row',alignItems:'center',justifyContent:'space-around'},
-  tabItem:{alignItems:'center',gap:2},tabIcon:{width:62,height:62},tabLabel:{fontSize:9,fontWeight:'500',color:C.textLight},
+  tabBar:{position:'absolute',bottom:0,left:0,right:0,height:80,backgroundColor:C.white,borderTopWidth:1,borderTopColor:C.border,flexDirection:'row',alignItems:'center',justifyContent:'space-around'},
+  tabItem:{alignItems:'center',gap:2},tabIcon:{width:50,height:50},tabLabel:{fontSize:9,fontWeight:'500',color:C.textLight},
   modalBg:{flex:1,backgroundColor:'rgba(0,0,0,0.4)',justifyContent:'flex-end'},modalBox:{backgroundColor:C.white,borderTopLeftRadius:24,borderTopRightRadius:24,padding:20,maxHeight:'80%'},
 });
