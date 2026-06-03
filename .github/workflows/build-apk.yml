@@ -81,14 +81,27 @@ jobs:
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
 
-      - name: Configure debug signing for release
+      - name: Setup release keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/pruvyou.keystore
+          echo "Keystore ready: $(ls -lh android/app/pruvyou.keystore)"
+
+      - name: Configure release signing
         run: |
           cat >> android/app/build.gradle << 'GRADLEOF'
 
           android {
+              signingConfigs {
+                  release {
+                      storeFile file("pruvyou.keystore")
+                      storePassword "pruvyou123"
+                      keyAlias "upload"
+                      keyPassword "pruvyou123"
+                  }
+              }
               buildTypes {
                   release {
-                      signingConfig signingConfigs.debug
+                      signingConfig signingConfigs.release
                   }
               }
           }
@@ -100,6 +113,11 @@ jobs:
           cd android && ./gradlew assembleRelease --no-daemon --stacktrace
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
+
+      - name: Print SHA1 of keystore
+        run: |
+          keytool -keystore android/app/pruvyou.keystore -list -v \
+            -alias upload -storepass pruvyou123 2>/dev/null | grep "SHA1:"
 
       - name: Rename APK
         run: |
