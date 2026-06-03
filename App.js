@@ -10,7 +10,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import * as BackgroundTask from 'expo-background-task';
+import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 WebBrowser.maybeCompleteAuthSession();
 
@@ -44,37 +44,32 @@ function getMonthDates(y,m){const days=new Date(y,m+1,0).getDate();
 const ld=async(k,fb)=>{try{const r=await AsyncStorage.getItem(k);return r?JSON.parse(r):fb;}catch{return fb;}};
 const sv=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch{}};
 
-// ─── Background backup task (runs even when app is closed) ───────────
+// ─── Background backup task (runs when app is in background) ─────
 const BG_BACKUP_TASK='pruvyou-bg-backup';
 const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
 
 TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
   try{
     const cfg=await ld('pv-bg-config',null);
-    if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.Success;
+    if(!cfg||!cfg.enabled)return BackgroundFetch.BackgroundFetchResult.NoData;
     const now=new Date();
-    const dow=now.getDay(); // 0=Sun..6=Sat
+    const dow=now.getDay();
     const hour=now.getHours();
-    // Check selected days (cfg.days = array of weekday indices 0..6) and hour window
-    if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundTask.BackgroundTaskResult.Success;
-    if(typeof cfg.hour==='number'&&hour<cfg.hour)return BackgroundTask.BackgroundTaskResult.Success;
+    if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundFetch.BackgroundFetchResult.NoData;
+    if(typeof cfg.hour==='number'&&hour<cfg.hour)return BackgroundFetch.BackgroundFetchResult.NoData;
     const todayS=fmtDate(now);
     const last=await ld('pv-drive-lastbackup',null);
-    if(last===todayS)return BackgroundTask.BackgroundTaskResult.Success; // already done today
+    if(last===todayS)return BackgroundFetch.BackgroundFetchResult.NoData;
     const tk=await ld('pv-drive-token',null);
-    if(!tk||!tk.token)return BackgroundTask.BackgroundTaskResult.Success;
-    // Gather data
-    const habits=await ld('pv-habits',[]);
-    const log=await ld('pv-log',{});
-    const projects=await ld('pv-projects',[]);
-    const projLog=await ld('pv-projlog',{});
+    if(!tk||!tk.token)return BackgroundFetch.BackgroundFetchResult.NoData;
+    const habits=await ld('pv-habits',[]);const log=await ld('pv-log',{});
+    const projects=await ld('pv-projects',[]);const projLog=await ld('pv-projlog',{});
     const adHocTasks=await ld('pv-adhoc',{});
     const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:now.toISOString(),app:'PruvYou'},null,2);
     const filename='pruvyou_backup_'+todayS+'.json';
     const auth={Authorization:'Bearer '+tk.token};
-    // upsert today's file
     const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:auth});
-    if(search.status===401)return BackgroundTask.BackgroundTaskResult.Success;
+    if(search.status===401)return BackgroundFetch.BackgroundFetchResult.Failed;
     const {files}=await search.json();
     const fileId=files?.[0]?.id;
     if(!fileId){
@@ -84,17 +79,15 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
     }else{
       await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:data});
     }
-    // prune to 7
     try{
       const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:auth});
       const {files:allFiles}=await all.json();
       if(allFiles&&allFiles.length>7)for(const f of allFiles.slice(7))await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:auth});
     }catch(e){}
     await sv('pv-drive-lastbackup',todayS);
-    return BackgroundTask.BackgroundTaskResult.Success;
-  }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
+    return BackgroundFetch.BackgroundFetchResult.NewData;
+  }catch(e){return BackgroundFetch.BackgroundFetchResult.Failed;}
 });
-
 
 function Ring({size,sw,pct,color,children}){
   const r=(size-sw)/2,circ=2*Math.PI*r,off=circ-(Math.min(100,pct)/100)*circ;
@@ -1206,9 +1199,9 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     setBgEnabled(enabled);setBgHour(hour);setBgDays(days);
     try{
       if(enabled){
-        await BackgroundTask.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60}); // check ~hourly
+        await BackgroundFetch.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60,stopOnTerminate:false,startOnBoot:true});
       }else{
-        await BackgroundTask.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});
+        await BackgroundFetch.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});
       }
     }catch(e){Alert.alert('Background task',e?.message||'Could not update background backup');}
   };
@@ -1216,6 +1209,19 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     const next=bgDays.includes(d)?bgDays.filter(x=>x!==d):[...bgDays,d].sort();
     saveBgConfig(bgEnabled,bgHour,next);
   };
+
+  // Fallback: if app opens and no backup today, do one now
+  useEffect(()=>{
+    if(!loaded||!driveToken)return;
+    (async()=>{
+      const cfg=await ld('pv-bg-config',null);
+      if(!cfg||!cfg.enabled)return;
+      const last=await ld('pv-drive-lastbackup',null);
+      if(last!==fmt(today())&&new Date().getHours()>=cfg.hour){
+        driveWrite(false);
+      }
+    })();
+  },[loaded,driveToken]);
 
   const handleBackup=async()=>{
     const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
@@ -1387,7 +1393,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.9.0</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.9.1</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
