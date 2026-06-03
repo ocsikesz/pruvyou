@@ -58,15 +58,18 @@ export default function App(){
   const [weekOff,setWeekOff]=useState(0);
   const [showAdd,setShowAdd]=useState(false);
   const [editHabit,setEditHabit]=useState(null);
+  const [adHocTasks,setAdHocTasks]=useState({}); // {dateStr:[{id,text,done}]}
 
   useEffect(()=>{(async()=>{
     setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
+    setAdHocTasks(await ld('pv-adhoc',{}));
     setLoaded(true);})();},[]);
   useEffect(()=>{if(loaded)sv('pv-habits',habits);},[habits,loaded]);
   useEffect(()=>{if(loaded)sv('pv-log',log);},[log,loaded]);
   useEffect(()=>{if(loaded)sv('pv-projects',projects);},[projects,loaded]);
   useEffect(()=>{if(loaded)sv('pv-projlog',projLog);},[projLog,loaded]);
+  useEffect(()=>{if(loaded)sv('pv-adhoc',adHocTasks);},[adHocTasks,loaded]);
 
   const toggleDay=useCallback((hid,ds)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     const cur=c[ds][hid];c[ds]={...c[ds],[hid]:{...cur,done:!cur?.done}};return c;});},[]);
@@ -83,30 +86,30 @@ export default function App(){
 
   const setHabitMinutes=useCallback((hid,ds,val,target)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     const v=clamp(val,0,999);c[ds]={...c[ds],[hid]:{...c[ds][hid],done:v>=(target||0),minutes:v}};return c;});},[]);
+  const setAdHocTasksForDay=useCallback((ds,tasks)=>{setAdHocTasks(p=>({...p,[ds]:tasks}));},[]);
   const setProjTasks=useCallback((pid,ds,tasks)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     c[ds]={...c[ds],[pid]:{...c[ds][pid],tasks}};return c;});},[]);
-  const scheduleHabitReminder=useCallback(async(h)=>{
-    if(!h.reminderEnabled||!h.reminderTime)return;
+  const scheduleDailyReminder=useCallback(async(time)=>{
+    if(!time)return;
     try{
       await Notifications.requestPermissionsAsync();
-      // Cancel old notification for this habit
       const scheduled=await Notifications.getAllScheduledNotificationsAsync();
-      for(const n of scheduled){if(n.content.data?.habitId===h.id)await Notifications.cancelScheduledNotificationAsync(n.identifier);}
-      const [hr,min]=h.reminderTime.split(':').map(Number);
+      for(const n of scheduled){if(n.content.data?.type==='daily')await Notifications.cancelScheduledNotificationAsync(n.identifier);}
+      const [hr,min]=time.split(':').map(Number);
       await Notifications.scheduleNotificationAsync({
-        content:{title:'PruvYou Reminder',body:`Don't forget: ${h.icon} ${h.name}`,data:{habitId:h.id}},
+        content:{title:'PruvYou ⏰',body:"Don't forget to log your habits and tasks today!",data:{type:'daily'}},
         trigger:{hour:hr,minute:min,repeats:true},
       });
     }catch(e){console.log('Notification error',e);}
   },[]);
-  const cancelHabitReminder=useCallback(async(habitId)=>{
+  const cancelDailyReminder=useCallback(async()=>{
     try{const scheduled=await Notifications.getAllScheduledNotificationsAsync();
-      for(const n of scheduled){if(n.content.data?.habitId===habitId)await Notifications.cancelScheduledNotificationAsync(n.identifier);}
+      for(const n of scheduled){if(n.content.data?.type==='daily')await Notifications.cancelScheduledNotificationAsync(n.identifier);}
     }catch(e){}
   },[]);
-  const addHabit=(h)=>{const nh={...h,id:Date.now().toString()};setHabits(p=>[...p,nh]);if(nh.reminderEnabled)scheduleHabitReminder(nh);setShowAdd(false);};
-  const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));if(h.reminderEnabled)scheduleHabitReminder(h);else cancelHabitReminder(h.id);setEditHabit(null);};
-  const deleteHabit=(id)=>{cancelHabitReminder(id);setHabits(p=>p.filter(x=>x.id!==id));};
+  const addHabit=(h)=>{const nh={...h,id:Date.now().toString()};setHabits(p=>[...p,nh]);setShowAdd(false);};
+  const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));setEditHabit(null);};
+  const deleteHabit=(id)=>{setHabits(p=>p.filter(x=>x.id!==id));};
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
@@ -125,7 +128,7 @@ export default function App(){
         </View>
         {tab==='home'&&<HomeTab habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} todayStr={todayStr}
-          setNote={setNote} log={log}/>}
+          setNote={setNote} log={log} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}/>}
         {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
           addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit}
           updateHabit={updateHabit} deleteHabit={deleteHabit}
@@ -135,7 +138,7 @@ export default function App(){
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} scheduleHabitReminder={scheduleHabitReminder}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder}/>}
         <View style={{height:80}}/>
       </ScrollView>
 
@@ -221,7 +224,7 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
 // ═══════════════════════════════════════════════════════════════════
 // HOME TAB
 // ═══════════════════════════════════════════════════════════════════
-function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote}){
+function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay}){
   const [selDay,setSelDay]=useState(todayStr); // which day strip is selected
   const [expandedHabit,setExpandedHabit]=useState(null);
 
@@ -302,7 +305,99 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
           color={color} bg={cat?.bg} border={cat?.border}/>}
       </View>);
     })}
+
+    {/* ── AD HOC TASKS ── */}
+    <AdHocPanel ds={selDay} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}/>
   </View>);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AD HOC TASKS PANEL — quick tasks not tied to any habit/project
+// ═══════════════════════════════════════════════════════════════════
+function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
+  const tasks=adHocTasks[ds]||[];
+  const [input,setInput]=useState('');
+  const [show,setShow]=useState(false);
+  const isToday=ds===fmt(today());
+
+  const addTask=()=>{if(!input.trim())return;
+    setAdHocTasksForDay(ds,[...tasks,{id:Date.now().toString(),text:input.trim(),done:false}]);
+    setInput('');};
+  const toggle=(idx)=>{const t=[...tasks];t[idx]={...t[idx],done:!t[idx].done};setAdHocTasksForDay(ds,t);};
+  const del=(idx)=>setAdHocTasksForDay(ds,tasks.filter((_,i)=>i!==idx));
+
+  const doneCnt=tasks.filter(t=>t.done).length;
+  const undone=tasks.filter(t=>!t.done);
+
+  return(
+    <View style={{marginTop:12}}>
+      {/* Header row */}
+      <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+        <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+          <Text style={[s.sectionTitle,{fontSize:14}]}>Quick Tasks</Text>
+          {tasks.length>0&&<View style={{paddingHorizontal:7,paddingVertical:2,borderRadius:8,
+            backgroundColor:doneCnt===tasks.length?brand.green+'20':C.borderLight}}>
+            <Text style={{fontSize:10,fontWeight:'700',color:doneCnt===tasks.length?brand.green:C.textDim}}>
+              {doneCnt}/{tasks.length}</Text>
+          </View>}
+        </View>
+        <TouchableOpacity onPress={()=>setShow(s=>!s)}
+          style={{flexDirection:'row',alignItems:'center',gap:5,paddingHorizontal:10,paddingVertical:6,
+            borderRadius:8,backgroundColor:show?brand.gold+'20':brand.gold,borderWidth:1,borderColor:brand.gold}}>
+          <Text style={{fontSize:14,fontWeight:'800',color:show?brand.gold:'#fff'}}>{show?'✕':'+' }</Text>
+          <Text style={{fontSize:11,fontWeight:'700',color:show?brand.gold:'#fff'}}>Add task</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Add input */}
+      {show&&(
+        <View style={{flexDirection:'row',gap:8,marginBottom:10}}>
+          <TextInput value={input} onChangeText={setInput}
+            placeholder="What do you need to do?" placeholderTextColor={C.textDark}
+            style={[s.input,{flex:1,marginBottom:0,fontSize:13,paddingVertical:10}]}
+            onSubmitEditing={()=>{addTask();}} returnKeyType="done" blurOnSubmit={false} autoFocus/>
+          <TouchableOpacity onPress={addTask}
+            style={{width:44,height:44,borderRadius:10,backgroundColor:brand.gold,alignItems:'center',justifyContent:'center'}}>
+            <Text style={{color:'#fff',fontSize:22,fontWeight:'600',lineHeight:26}}>+</Text>
+          </TouchableOpacity>
+        </View>)}
+
+      {/* Task list */}
+      {tasks.map((t,i)=>(
+        <View key={t.id} style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:6,
+          backgroundColor:C.white,borderRadius:9,padding:10,borderWidth:1,
+          borderColor:t.done?brand.green+'30':C.border,
+          borderLeftWidth:3,borderLeftColor:t.done?brand.green:brand.gold}}>
+          <TouchableOpacity onPress={()=>toggle(i)}
+            style={{width:22,height:22,borderRadius:6,borderWidth:2,
+              borderColor:t.done?brand.green:C.textDark,
+              backgroundColor:t.done?brand.green:'#fff',
+              alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            {t.done&&<Text style={{color:'#fff',fontSize:12,fontWeight:'800'}}>✓</Text>}
+          </TouchableOpacity>
+          <Text style={{flex:1,fontSize:13,color:t.done?C.textDim:C.text,
+            textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
+          <TouchableOpacity onPress={()=>del(i)}
+            style={{width:24,height:24,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',justifyContent:'center'}}>
+            <Text style={{fontSize:12,color:'#C44',fontWeight:'700'}}>✕</Text>
+          </TouchableOpacity>
+        </View>))}
+
+      {/* If today: show undone tasks from yesterday as reminder */}
+      {isToday&&(()=>{
+        const yest=new Date(today());yest.setDate(yest.getDate()-1);
+        const yds=fmt(yest);
+        const yundone=(adHocTasks[yds]||[]).filter(t=>!t.done);
+        if(!yundone.length)return null;
+        return(<View style={{marginTop:4,padding:10,borderRadius:9,backgroundColor:'#FEF8E6',borderWidth:1,borderColor:brand.gold+'40'}}>
+          <Text style={{fontSize:10,fontWeight:'700',color:brand.gold,marginBottom:6}}>⚠️ UNFINISHED FROM YESTERDAY</Text>
+          {yundone.map((t,i)=>(
+            <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:4}}>
+              <View style={{width:14,height:14,borderRadius:3,borderWidth:1.5,borderColor:brand.gold,backgroundColor:'#fff'}}/>
+              <Text style={{fontSize:12,color:C.textMuted}}>{t.text}</Text>
+            </View>))}
+        </View>);})()}
+    </View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -875,6 +970,11 @@ function StatsTab({habits,log,projects,projLog}){
                   <Text style={{flex:1,fontSize:12,color:t.done?C.textDim:C.text,
                     textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
                 </View>))}
+              {/* Notes */}
+              {(()=>{const noteText=projLog[projDetailDay]?.[p.id]?.notes;
+                return noteText?(<View style={{marginLeft:18,marginTop:4,marginBottom:2}}>
+                  <Text style={{fontSize:11,color:brand.blue}}>📝 {noteText}</Text>
+                </View>):null;})()}
             </View>);})}
           {!projects.some(p=>{
             const dm=projLog[projDetailDay]?.[p.id]?.minutes||0;
@@ -913,23 +1013,23 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,scheduleHabitReminder}){
-  const [editReminder,setEditReminder]=useState(null); // habitId
-  const [tempTime,setTempTime]=useState('20:00');
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,scheduleDailyReminder,cancelDailyReminder}){
+  const [reminderEnabled,setReminderEnabled]=useState(false);
+  const [reminderTime,setReminderTime]=useState('20:00');
+  const [reminderSaved,setReminderSaved]=useState(false);
 
-  const saveReminder=(hid,enabled,time)=>{
-    const updated=habits.map(h=>{
-      if(h.id!==hid)return h;
-      const nh={...h,reminderEnabled:enabled,reminderTime:time};
-      if(enabled)scheduleHabitReminder(nh);
-      return nh;
-    });
-    setHabits(updated);
-    setEditReminder(null);
+  React.useEffect(()=>{
+    ld('pv-daily-reminder',null).then(r=>{if(r){setReminderEnabled(r.enabled);setReminderTime(r.time);setReminderSaved(r.enabled);}});
+  },[]);
+
+  const saveGlobalReminder=async(enabled,time)=>{
+    await sv('pv-daily-reminder',{enabled,time});
+    setReminderEnabled(enabled);setReminderTime(time);setReminderSaved(enabled);
+    if(enabled)scheduleDailyReminder(time);else cancelDailyReminder();
   };
 
   const handleBackup=async()=>{
-    const data=JSON.stringify({habits,log,projects,projLog,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
+    const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
     const path=FileSystem.cacheDirectory+'pruvyou_backup_'+fmt(today())+'.json';
     await FileSystem.writeAsStringAsync(path,data);
     if(await Sharing.isAvailableAsync())await Sharing.shareAsync(path,{mimeType:'application/json',dialogTitle:'Backup PruvYou'});
@@ -945,44 +1045,34 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     }catch{Alert.alert('Error','Could not read file');}};
 
   return(<View>
-    {/* Reminders */}
+    {/* Reminder */}
     <View style={s.statsCard}>
-      <Text style={s.statsTitle}>🔔 Reminders</Text>
-      <Text style={{fontSize:11,color:C.textDim,marginBottom:12}}>Set a daily reminder per habit to help you remember to log.</Text>
-      {!habits.length&&<Text style={{fontSize:11,color:C.textDim,textAlign:'center',paddingVertical:8}}>No habits yet</Text>}
-      {habits.map(h=>{
-        const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.blue;
-        const isEditing=editReminder===h.id;
-        const hasReminder=h.reminderEnabled&&h.reminderTime;
-        return(<View key={h.id} style={{marginBottom:8}}>
-          <TouchableOpacity onPress={()=>{setEditReminder(isEditing?null:h.id);setTempTime(h.reminderTime||'20:00');}}
-            style={{flexDirection:'row',alignItems:'center',padding:12,borderRadius:10,
-              backgroundColor:hasReminder?color+'12':C.bg,borderWidth:1,borderColor:hasReminder?color+'40':C.border}}>
-            <Text style={{fontSize:18,marginRight:10}}>{h.icon}</Text>
-            <View style={{flex:1}}>
-              <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.name}</Text>
-              <Text style={{fontSize:10,color:hasReminder?color:C.textDim}}>
-                {hasReminder?`🔔 Daily at ${h.reminderTime}`:'No reminder'}</Text>
-            </View>
-            {hasReminder&&<View style={{width:8,height:8,borderRadius:4,backgroundColor:color,marginRight:8}}/>}
-            <Text style={{fontSize:13,color:C.textDark}}>{isEditing?'▾':'▸'}</Text>
-          </TouchableOpacity>
-          {isEditing&&(
-            <View style={{backgroundColor:'#fff',borderRadius:10,padding:14,marginTop:4,borderWidth:1,borderColor:color+'30'}}>
-              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:10}}>REMINDER TIME</Text>
-              <TimePicker value={tempTime} onChange={setTempTime} color={color}/>
-              <Text style={{fontSize:10,color:C.textDim,textAlign:'center',marginTop:6,marginBottom:12}}>
-                Daily at {tempTime}</Text>
-              <View style={{flexDirection:'row',gap:8}}>
-                <TouchableOpacity onPress={()=>saveReminder(h.id,false,null)}
-                  style={{flex:1,padding:10,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
-                  <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🔕 Remove</Text></TouchableOpacity>
-                <TouchableOpacity onPress={()=>saveReminder(h.id,true,tempTime)}
-                  style={{flex:1,padding:10,borderRadius:8,backgroundColor:color,alignItems:'center'}}>
-                  <Text style={{fontSize:12,fontWeight:'700',color:'#fff'}}>🔔 Set reminder</Text></TouchableOpacity>
-              </View>
-            </View>)}
-        </View>);})}
+      <Text style={s.statsTitle}>🔔 Daily Reminder</Text>
+      <Text style={{fontSize:11,color:C.textDim,marginBottom:14}}>Get one daily notification to remember to log your habits and tasks.</Text>
+      <View style={{flexDirection:'row',alignItems:'center',gap:12,marginBottom:14,padding:12,
+        borderRadius:10,backgroundColor:reminderSaved?brand.blue+'10':C.bg,borderWidth:1,borderColor:reminderSaved?brand.blue+'40':C.border}}>
+        <Text style={{fontSize:28}}>⏰</Text>
+        <View style={{flex:1}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:C.text}}>Daily reminder</Text>
+          <Text style={{fontSize:11,color:reminderSaved?brand.blue:C.textDim}}>
+            {reminderSaved?`🔔 Every day at ${reminderTime}`:'Not set'}</Text>
+        </View>
+        {reminderSaved&&<View style={{width:8,height:8,borderRadius:4,backgroundColor:brand.blue}}/>}
+      </View>
+      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>REMINDER TIME</Text>
+      <TimePicker value={reminderTime} onChange={setReminderTime} color={brand.blue}/>
+      <Text style={{fontSize:11,color:C.textDim,textAlign:'center',marginTop:6,marginBottom:14}}>Every day at {reminderTime}</Text>
+      <View style={{flexDirection:'row',gap:8}}>
+        {reminderSaved&&(
+          <TouchableOpacity onPress={()=>saveGlobalReminder(false,reminderTime)}
+            style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
+            <Text style={{fontSize:13,fontWeight:'600',color:'#C44'}}>🔕 Remove</Text>
+          </TouchableOpacity>)}
+        <TouchableOpacity onPress={()=>saveGlobalReminder(true,reminderTime)}
+          style={{flex:1,padding:11,borderRadius:9,backgroundColor:brand.blue,alignItems:'center'}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>🔔 {reminderSaved?'Update':'Set reminder'}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
 
     {/* Backup */}
