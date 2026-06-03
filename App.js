@@ -1125,12 +1125,27 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   };
 
   const handleBackup=async()=>{
+    const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
+    const filename='pruvyou_backup_'+fmt(today())+'.json';
+    // On Android: let user pick a folder (Downloads, Drive, OneDrive sync folder, etc.)
+    if(Platform.OS==='android'&&FileSystem.StorageAccessFramework){
+      try{
+        const perm=await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if(perm.granted){
+          const uri=await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri,filename,'application/json');
+          await FileSystem.writeAsStringAsync(uri,data,{encoding:FileSystem.EncodingType.UTF8});
+          Alert.alert('✅ Backup saved','Saved as '+filename+'. You can pick a Drive or OneDrive synced folder to keep it in the cloud.');
+          return;
+        }
+      }catch(e){/* fall through to share */}
+    }
+    // Fallback: share sheet
     try{
-      const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
-      const path=FileSystem.cacheDirectory+'pruvyou_backup_'+fmt(today())+'.json';
+      const path=FileSystem.cacheDirectory+filename;
       await FileSystem.writeAsStringAsync(path,data);
+      const can=await Sharing.isAvailableAsync().catch(()=>true);
       await Sharing.shareAsync(path,{mimeType:'application/json',dialogTitle:'Save PruvYou Backup',UTI:'public.json'});
-    }catch(e){Alert.alert('Backup failed',e?.message||'Could not share file');}
+    }catch(e){Alert.alert('Backup failed',e?.message||'Could not save file');}
   };
   const handleRestore=async()=>{
     try{const result=await DocumentPicker.getDocumentAsync({type:'application/json'});if(result.canceled)return;
@@ -1178,8 +1193,8 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     <View style={s.statsCard}>
       <Text style={s.statsTitle}>☁️ Backup & Sync</Text>
 
-      {/* Google Drive section */}
-      {!driveToken?(
+      {/* Google Drive section — temporarily disabled until OAuth verified */}
+      {false&&(!driveToken?(
         <TouchableOpacity onPress={()=>promptAsync()}
           style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:12,
             backgroundColor:'#fff',borderWidth:2,borderColor:'#4285F4',marginBottom:10}}>
@@ -1215,17 +1230,17 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
               <Text style={{fontSize:13,fontWeight:'600',color:'#4285F4'}}>📥 Restaurează</Text>
             </TouchableOpacity>
           </View>
-        </View>)}
+        </View>))}
 
-      {/* Local backup fallback */}
+      <Text style={{fontSize:11,color:C.textDim,marginBottom:10}}>Save a backup file to your device, Google Drive, or OneDrive folder. Restore it anytime.</Text>
       <View style={{flexDirection:'row',gap:8}}>
         <TouchableOpacity onPress={handleBackup}
-          style={{flex:1,padding:11,borderRadius:9,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border}}>
-          <Text style={{fontSize:12,fontWeight:'600',color:C.textMuted}}>📤 Export file</Text>
+          style={{flex:1,padding:13,borderRadius:10,backgroundColor:brand.blue+'12',alignItems:'center',borderWidth:1,borderColor:brand.blue+'40'}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:brand.blue}}>📤 Save backup</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleRestore}
-          style={{flex:1,padding:11,borderRadius:9,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border}}>
-          <Text style={{fontSize:12,fontWeight:'600',color:C.textMuted}}>📥 Import file</Text>
+          style={{flex:1,padding:13,borderRadius:10,backgroundColor:brand.green+'12',alignItems:'center',borderWidth:1,borderColor:brand.green+'40'}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:brand.green}}>📥 Restore backup</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -1238,7 +1253,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.2.0</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.6.0</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
