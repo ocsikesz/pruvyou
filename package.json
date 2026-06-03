@@ -29,7 +29,9 @@
     "expo-background-task": "~1.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.0"
+    "@babel/core": "^7.25.0",
+    "@react-native-community/cli": "18.0.0",
+    "@react-native-community/cli-platform-android": "18.0.0"
   },
   "private": true
 }
