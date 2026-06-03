@@ -21,7 +21,7 @@ const CATS=[
   {id:'work',name:'Work & Productivity',icon:'🎯',color:'#E8956B',bg:C.goldBg,border:C.goldBorder},
 ];
 const compColor=(r)=>r>=1?brand.green:r>=0.7?brand.gold:r>=0.4?'#E8956B':C.textDark;
-const fmt=(d)=>d.toISOString().split('T')[0];
+const fmt=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
 const today=()=>new Date();
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 function getWeekDates(off=0){const d=today();const day=d.getDay()===0?6:d.getDay()-1;
@@ -78,6 +78,7 @@ export default function App(){
     c[ds]={...c[ds],[hid]:{...c[ds][hid],notes:note}};return c;});},[]);
   const addProjMinutes=useCallback((pid,ds,delta)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     const cur=c[ds][pid]?.minutes||0;c[ds]={...c[ds],[pid]:{...c[ds][pid],minutes:clamp(cur+delta,0,999)}};return c;});},[]);
+  const setProjMinutes=useCallback((pid,ds,val)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};c[ds]={...c[ds],[pid]:{...c[ds][pid],minutes:clamp(val,0,999)}};return c;});},[]);
   const setProjNote=useCallback((pid,ds,note)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     c[ds]={...c[ds],[pid]:{...c[ds][pid],notes:note}};return c;});},[]);
 
@@ -128,7 +129,7 @@ export default function App(){
       {/* Note Modal */}
       {noteModal&&(<Modal transparent animationType="slide" visible={!!noteModal} onRequestClose={()=>setNoteModal(null)}>
         <NoteEditor modal={noteModal} log={log} projLog={projLog} setNote={setNote} setProjNote={setProjNote}
-          habits={habits} projects={projects} onClose={()=>setNoteModal(null)}/>
+          habits={habits} projects={projects} setProjMinutes={setProjMinutes} addProjMinutes={addProjMinutes} onClose={()=>setNoteModal(null)}/>
       </Modal>)}
 
       {/* Day Editor Modal */}
@@ -144,34 +145,57 @@ export default function App(){
 // ═══════════════════════════════════════════════════════════════════
 // NOTE EDITOR MODAL
 // ═══════════════════════════════════════════════════════════════════
-function NoteEditor({modal,log,projLog,setNote,setProjNote,habits,projects,onClose}){
+function NoteEditor({modal,log,projLog,setNote,setProjNote,setProjMinutes,addProjMinutes,habits,projects,onClose}){
   const isProj=modal.type==='project';
   const item=isProj?projects.find(p=>p.id===modal.id):habits.find(h=>h.id===modal.id);
-  const existing=isProj?(projLog[modal.dateStr]?.[modal.id]?.notes||''):(log[modal.dateStr]?.[modal.id]?.notes||'');
-  const [text,setText]=useState(existing);
-  const d=new Date(modal.dateStr+'T12:00:00');
+  const existingNote=isProj?(projLog[modal.dateStr]?.[modal.id]?.notes||''):(log[modal.dateStr]?.[modal.id]?.notes||'');
+  const existingMins=isProj?(projLog[modal.dateStr]?.[modal.id]?.minutes||0):0;
+  const [text,setText]=useState(existingNote);
+  const [mins,setMins]=useState(String(existingMins));
+  const [ds]=useState(modal.dateStr);
+  const dateObj=new Date(ds.split('-')[0],parseInt(ds.split('-')[1])-1,ds.split('-')[2]);
   return(
     <View style={s.modalBg}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={s.modalBox}>
       <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
         <View><Text style={{fontSize:15,fontWeight:'700',color:C.text}}>{item?.icon||'📝'} {item?.name||'Note'}</Text>
-          <Text style={{fontSize:11,color:C.textDim}}>{d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text></View>
+          <Text style={{fontSize:11,color:C.textDim}}>{dateObj.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text></View>
         <TouchableOpacity onPress={onClose} style={{padding:8}}><Text style={{fontSize:20,color:C.textDim}}>✕</Text></TouchableOpacity>
       </View>
+      {isProj&&(<>
+        <Text style={s.label}>TIME LOGGED (minutes)</Text>
+        <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:12}}>
+          <TouchableOpacity onPress={()=>setMins(String(Math.max(0,(parseInt(mins)||0)-15)))}
+            style={{width:36,height:36,borderRadius:18,backgroundColor:'#FEE',borderWidth:1,borderColor:'#FCC',alignItems:'center',justifyContent:'center'}}>
+            <Text style={{fontSize:18,fontWeight:'800',color:'#C44'}}>−</Text></TouchableOpacity>
+          <TextInput value={mins} onChangeText={v=>setMins(v.replace(/[^0-9]/g,''))}
+            keyboardType="numeric" style={[s.input,{flex:1,textAlign:'center',marginBottom:0,fontSize:20,fontWeight:'700'}]}/>
+          <TouchableOpacity onPress={()=>setMins(String(Math.min(999,(parseInt(mins)||0)+15)))}
+            style={{width:36,height:36,borderRadius:18,backgroundColor:item?.color+'20'||'#E6EFF8',borderWidth:1,borderColor:item?.color+'40'||'#B0CDE8',alignItems:'center',justifyContent:'center'}}>
+            <Text style={{fontSize:18,fontWeight:'800',color:item?.color||brand.blue}}>+</Text></TouchableOpacity>
+        </View>
+        <View style={{flexDirection:'row',gap:6,marginBottom:12}}>
+          {[0,15,30,60,90,120].map(v=>(<TouchableOpacity key={v} onPress={()=>setMins(String(v))}
+            style={{flex:1,padding:6,borderRadius:8,backgroundColor:(parseInt(mins)||0)===v?(item?.color||brand.blue)+'20':C.bg,
+              borderWidth:1,borderColor:(parseInt(mins)||0)===v?(item?.color||brand.blue)+'60':C.border,alignItems:'center'}}>
+            <Text style={{fontSize:10,fontWeight:'700',color:(parseInt(mins)||0)===v?(item?.color||brand.blue):C.textDim}}>{v===0?'0':v+'m'}</Text>
+          </TouchableOpacity>))}</View>
+      </>)}
+      <Text style={s.label}>NOTES</Text>
       <TextInput value={text} onChangeText={setText} placeholder="Add notes for this day..."
-        placeholderTextColor={C.textDark} style={[s.input,{height:120,textAlignVertical:'top'}]} multiline/>
+        placeholderTextColor={C.textDark} style={[s.input,{height:80,textAlignVertical:'top'}]} multiline/>
       <TouchableOpacity onPress={()=>{
-        if(isProj) setProjNote(modal.id,modal.dateStr,text);
-        else setNote(modal.id,modal.dateStr,text);
+        if(isProj){setProjMinutes(modal.id,ds,parseInt(mins)||0);setProjNote(modal.id,ds,text);}
+        else setNote(modal.id,ds,text);
         onClose();
-      }} style={{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center'}}>
-        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>Save Note</Text>
+      }} style={{padding:14,borderRadius:12,backgroundColor:item?.color||brand.blue,alignItems:'center'}}>
+        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>Save</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView></View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
 function DayEditor({dateStr,dayIndex,habits,log,toggleDay,addMinutes,setNoteModal,onClose}){
-  const d=new Date(dateStr+'T12:00:00');
+  const d=new Date(dateStr.split('-')[0],parseInt(dateStr.split('-')[1])-1,dateStr.split('-')[2]);
   const active=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIndex)));
   return(<View>
     <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
@@ -560,7 +584,7 @@ function StatsTab({habits,log,projects,projLog}){
             <Text style={{fontSize:8,color:C.textDim}}>{l}</Text></View>))}</View>
 
       {/* Detail for selected day */}
-      {detailDay&&(()=>{const dayLog=log[detailDay]||{};const d=new Date(detailDay+'T12:00:00');
+      {detailDay&&(()=>{const dayLog=log[detailDay]||{};const d=new Date(detailDay.split('-')[0],parseInt(detailDay.split('-')[1])-1,detailDay.split('-')[2]);
         const hasData=habits.some(h=>dayLog[h.id]?.done||dayLog[h.id]?.minutes||dayLog[h.id]?.notes);
         return(<View style={{marginTop:10,padding:12,backgroundColor:C.bg,borderRadius:10}}>
           <Text style={{fontSize:13,fontWeight:'700',color:C.text,marginBottom:6}}>
