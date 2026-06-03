@@ -6,16 +6,11 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
-WebBrowser.maybeCompleteAuthSession();
+// Google Drive OAuth - coming soon
 
-// ─── Google Drive OAuth ───────────────────────────────────────────
-// Replace with your Android OAuth 2.0 Client ID from Google Cloud Console
 const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const BACKUP_FILENAME='pruvyou_backup.json';
-// ─────────────────────────────────────────────────────────────────
 const brand={blue:'#1A4F8A',green:'#34C79F',gold:'#F7C602'};
 const C={bg:'#F5F7FA',white:'#FFFFFF',border:'#E0E4EA',borderLight:'#EDF0F5',
   text:'#1A2E44',textMuted:'#4D5E74',textDim:'#7889A0',textDark:'#A0AEBC',textLight:'#B0BACA',
@@ -1109,44 +1104,14 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     <View style={s.statsCard}>
       <Text style={s.statsTitle}>☁️ Backup & Sync</Text>
 
-      {/* Google Drive section */}
-      {!driveToken?(
-        <TouchableOpacity onPress={()=>promptAsync()}
-          style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:12,
-            backgroundColor:'#fff',borderWidth:2,borderColor:'#4285F4',marginBottom:10}}>
-          <Text style={{fontSize:22}}>🔵</Text>
-          <View style={{flex:1}}>
-            <Text style={{fontSize:14,fontWeight:'700',color:'#4285F4'}}>Connect Google Drive</Text>
-            <Text style={{fontSize:11,color:C.textDim}}>Auto-backup to your Drive account</Text>
-          </View>
-          <Text style={{fontSize:16,color:'#4285F4'}}>▸</Text>
-        </TouchableOpacity>
-      ):(
-        <View style={{padding:12,borderRadius:12,backgroundColor:'#E8F5E9',borderWidth:1,borderColor:'#81C784',marginBottom:10}}>
-          <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:10}}>
-            <Text style={{fontSize:22}}>✅</Text>
-            <View style={{flex:1}}>
-              <Text style={{fontSize:13,fontWeight:'700',color:'#2E7D32'}}>Google Drive connected</Text>
-              {driveUser?<Text style={{fontSize:11,color:'#388E3C'}}>{driveUser}</Text>:null}
-            </View>
-            <TouchableOpacity onPress={signOutDrive} style={{padding:6,borderRadius:6,backgroundColor:'#FEE',borderWidth:1,borderColor:'#FCC'}}>
-              <Text style={{fontSize:11,color:'#C44',fontWeight:'600'}}>Sign out</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={{flexDirection:'row',gap:8}}>
-            <TouchableOpacity onPress={driveBackup}
-              style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#4285F4',alignItems:'center',
-                opacity:driveStatus==='syncing'?0.6:1}}>
-              <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>
-                {driveStatus==='syncing'?'Saving...':driveStatus==='ok'?'✅ Saved':'☁️ Backup now'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={driveRestore}
-              style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#fff',alignItems:'center',
-                borderWidth:1,borderColor:'#4285F4',opacity:driveStatus==='syncing'?0.6:1}}>
-              <Text style={{fontSize:13,fontWeight:'600',color:'#4285F4'}}>📥 Restore</Text>
-            </TouchableOpacity>
-          </View>
-        </View>)}
+      {/* Google Drive section - coming soon */}
+      <View style={{padding:12,borderRadius:12,backgroundColor:'#E8F0FE',borderWidth:1,borderColor:'#B3C8F5',marginBottom:10,flexDirection:'row',alignItems:'center',gap:12}}>
+        <Text style={{fontSize:22}}>🔵</Text>
+        <View style={{flex:1}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:'#1A4F8A'}}>Google Drive</Text>
+          <Text style={{fontSize:11,color:C.textDim}}>Coming in next update</Text>
+        </View>
+      </View>
 
       {/* Local backup fallback */}
       <View style={{flexDirection:'row',gap:8}}>
