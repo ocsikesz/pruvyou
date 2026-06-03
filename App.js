@@ -143,7 +143,7 @@ export default function App(){
       const token=response.params.access_token;
       fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json',{headers:{Authorization:'Bearer '+token}})
         .then(r=>r.json())
-        .then(u=>{setDriveToken(token);setDriveUser(u.email||'');sv('pv-drive-token',{token,email:u.email||'']);})
+        .then(u=>{setDriveToken(token);setDriveUser(u.email||'');sv('pv-drive-token',{token,email:u.email||''});})
         .catch(()=>{setDriveToken(token);sv('pv-drive-token',{token,email:''});});
     }
   },[response]);

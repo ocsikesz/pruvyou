@@ -57,7 +57,8 @@ jobs:
             --dev false \
             --entry-file index.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res
+            --assets-dest android/app/src/main/res \
+            --verbose 2>&1 | tail -30
 
       - name: Setup release keystore
         run: |
