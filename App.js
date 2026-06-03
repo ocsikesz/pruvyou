@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Notifications from 'expo-notifications';
 
 const brand={blue:'#1A4F8A',green:'#34C79F',gold:'#F7C602'};
 const C={bg:'#F5F7FA',white:'#FFFFFF',border:'#E0E4EA',borderLight:'#EDF0F5',
@@ -84,9 +85,28 @@ export default function App(){
     const v=clamp(val,0,999);c[ds]={...c[ds],[hid]:{...c[ds][hid],done:v>=(target||0),minutes:v}};return c;});},[]);
   const setProjTasks=useCallback((pid,ds,tasks)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     c[ds]={...c[ds],[pid]:{...c[ds][pid],tasks}};return c;});},[]);
-  const addHabit=(h)=>{setHabits(p=>[...p,{...h,id:Date.now().toString()}]);setShowAdd(false);};
-  const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));setEditHabit(null);};
-  const deleteHabit=(id)=>setHabits(p=>p.filter(x=>x.id!==id));
+  const scheduleHabitReminder=useCallback(async(h)=>{
+    if(!h.reminderEnabled||!h.reminderTime)return;
+    try{
+      await Notifications.requestPermissionsAsync();
+      // Cancel old notification for this habit
+      const scheduled=await Notifications.getAllScheduledNotificationsAsync();
+      for(const n of scheduled){if(n.content.data?.habitId===h.id)await Notifications.cancelScheduledNotificationAsync(n.identifier);}
+      const [hr,min]=h.reminderTime.split(':').map(Number);
+      await Notifications.scheduleNotificationAsync({
+        content:{title:'PruvYou Reminder',body:`Don't forget: ${h.icon} ${h.name}`,data:{habitId:h.id}},
+        trigger:{hour:hr,minute:min,repeats:true},
+      });
+    }catch(e){console.log('Notification error',e);}
+  },[]);
+  const cancelHabitReminder=useCallback(async(habitId)=>{
+    try{const scheduled=await Notifications.getAllScheduledNotificationsAsync();
+      for(const n of scheduled){if(n.content.data?.habitId===habitId)await Notifications.cancelScheduledNotificationAsync(n.identifier);}
+    }catch(e){}
+  },[]);
+  const addHabit=(h)=>{const nh={...h,id:Date.now().toString()};setHabits(p=>[...p,nh]);if(nh.reminderEnabled)scheduleHabitReminder(nh);setShowAdd(false);};
+  const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));if(h.reminderEnabled)scheduleHabitReminder(h);else cancelHabitReminder(h.id);setEditHabit(null);};
+  const deleteHabit=(id)=>{cancelHabitReminder(id);setHabits(p=>p.filter(x=>x.id!==id));};
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
@@ -115,7 +135,7 @@ export default function App(){
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} scheduleHabitReminder={scheduleHabitReminder}/>}
         <View style={{height:80}}/>
       </ScrollView>
 
@@ -199,24 +219,22 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// HOME TAB — thin habit cards with progress
+// HOME TAB
 // ═══════════════════════════════════════════════════════════════════
 function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote}){
-  const [expanded,setExpanded]=useState(null);
-  const todayDayIdx=today().getDay()===0?6:today().getDay()-1;
-  const dailyH=habits.filter(h=>h.frequency==='daily');
-  const weeklyToday=habits.filter(h=>h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx));
-  // Also include habits done/logged today but not scheduled for today
-  const extraDoneToday=habits.filter(h=>{
-    if(h.frequency==='daily') return false;
-    if(h.frequency==='weekly'&&(h.selectedDays||[]).includes(todayDayIdx)) return false;
-    const entry=log[todayStr]?.[h.id];
-    return entry?.done || (entry?.minutes && entry.minutes>0);
-  });
-  const todayH=[...dailyH,...weeklyToday,...extraDoneToday];
-  const doneD=dailyH.filter(h=>log[todayStr]?.[h.id]?.done).length;
-  const doneW=weeklyToday.filter(h=>log[todayStr]?.[h.id]?.done).length;
-  const dPct=dailyH.length>0?Math.round((doneD/dailyH.length)*100):0;
+  const [selDay,setSelDay]=useState(todayStr); // which day strip is selected
+  const [expandedHabit,setExpandedHabit]=useState(null);
+
+  const selDate=new Date(selDay.split('-')[0],parseInt(selDay.split('-')[1])-1,selDay.split('-')[2]);
+  const selDayIdx=selDate.getDay()===0?6:selDate.getDay()-1;
+  const isToday=selDay===todayStr;
+
+  // Habits for selected day
+  const selHabits=habits.filter(h=>
+    h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(selDayIdx))||
+    (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)
+  );
+  const doneCount=selHabits.filter(h=>log[selDay]?.[h.id]?.done).length;
 
   if(!habits.length)return<View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>🌱</Text>
     <Text style={s.emptyTitle}>No habits yet</Text><Text style={s.emptySub}>Go to Habits tab to add your first</Text></View>;
@@ -226,41 +244,46 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
 
     {/* Week nav */}
     <View style={s.weekNav}>
-      <TouchableOpacity onPress={()=>setWeekOff(w=>w-1)} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+      <TouchableOpacity onPress={()=>{setWeekOff(w=>w-1);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
       <Text style={s.weekLabel}>{weekOff===0?'This week':
         `${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}</Text>
       <TouchableOpacity onPress={()=>setWeekOff(w=>Math.min(0,w+1))} style={[s.navBtn,weekOff>=0&&{opacity:.3}]} disabled={weekOff>=0}>
         <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
 
-    {/* 7 Day Cards */}
+    {/* 7 Day Cards — tap to select day */}
     <View style={s.cardsRow}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
+      const isSel=ds===selDay;
       const act=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(i)));
       const total=act.length;const done=act.filter(h=>log[ds]?.[h.id]?.done).length;
       const pct=total>0?Math.round((done/total)*100):0;const fill=compColor(done/Math.max(1,total));
-      return(<TouchableOpacity key={i} activeOpacity={0.7} onPress={()=>{if(!isFut)setExpanded(null);}}
-        style={[s.dayCard,isT&&{borderColor:brand.gold,borderWidth:2},isFut&&{opacity:.35}]}>
+      return(<TouchableOpacity key={i} activeOpacity={0.7}
+        onPress={()=>{if(!isFut){setSelDay(ds);setExpandedHabit(null);}}}
+        style={[s.dayCard,isT&&{borderColor:brand.gold,borderWidth:2},isSel&&!isT&&{borderColor:brand.blue,borderWidth:2},isFut&&{opacity:.35}]}>
         <View style={s.dcProgress}><View style={s.dcTrack}><View style={[s.dcFill,{height:`${pct}%`,backgroundColor:fill}]}/></View>
           <View style={s.dcOverlay}>{total>0&&<Text style={[s.dcCount,{color:fill}]}>{done}/{total}</Text>}
             <Text style={[s.dcPct,{color:pct>45?'#fff':C.textMuted}]}>{total>0?`${pct}%`:'—'}</Text></View></View>
-        <View style={[s.dcLabel,isT&&{backgroundColor:brand.gold+'18'}]}>
-          <Text style={[s.dcDay,isT&&{color:brand.gold}]}>{DAYS[i]}</Text>
-          <Text style={[s.dcNum,isT&&{color:brand.gold}]}>{d.getDate()}</Text></View>
+        <View style={[s.dcLabel,isT&&{backgroundColor:brand.gold+'18'},isSel&&!isT&&{backgroundColor:brand.blue+'12'}]}>
+          <Text style={[s.dcDay,isT&&{color:brand.gold},isSel&&!isT&&{color:brand.blue}]}>{DAYS[i]}</Text>
+          <Text style={[s.dcNum,isT&&{color:brand.gold},isSel&&!isT&&{color:brand.blue}]}>{d.getDate()}</Text></View>
       </TouchableOpacity>);})}</View>
 
-    {/* Today header */}
+    {/* Selected day header */}
     <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-      <Text style={s.sectionTitle}>Today</Text>
-      <View style={{flexDirection:'row',gap:8}}>
-        <Text style={{fontSize:18,fontWeight:'800',color:compColor(dPct/100)}}>{doneD}/{dailyH.length}</Text>
-        {weeklyToday.length>0&&<Text style={{fontSize:14,fontWeight:'700',color:brand.blue}}>+{doneW}/{weeklyToday.length}</Text>}
-      </View></View>
+      <View>
+        <Text style={s.sectionTitle}>{isToday?'Today':selDate.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'short'})}</Text>
+        {!isToday&&<Text style={{fontSize:10,color:C.textDim}}>Tap today to return</Text>}
+      </View>
+      <Text style={{fontSize:15,fontWeight:'800',color:doneCount===selHabits.length&&selHabits.length>0?brand.green:C.textMuted}}>
+        {doneCount}/{selHabits.length}</Text>
+    </View>
 
-    {/* Habit cards — tap to expand */}
-    {todayH.map(h=>{const entry=log[todayStr]?.[h.id];const done=!!entry?.done;
+    {/* Habit cards for selected day — tap to expand */}
+    {!selHabits.length&&<Text style={{color:C.textDim,textAlign:'center',paddingVertical:20,fontSize:12}}>No habits scheduled for this day</Text>}
+    {selHabits.map(h=>{const entry=log[selDay]?.[h.id];const done=!!entry?.done;
       const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.green;
-      const isExp=expanded===h.id;
+      const isExp=expandedHabit===h.id;
       return(<View key={h.id}>
-        <TouchableOpacity onPress={()=>setExpanded(isExp?null:h.id)} activeOpacity={0.7}
+        <TouchableOpacity onPress={()=>setExpandedHabit(isExp?null:h.id)} activeOpacity={0.7}
           style={[s.thinCard,{borderLeftWidth:3,borderLeftColor:color},done&&{backgroundColor:cat?.bg||C.greenBg}]}>
           <View style={[s.thinCheck,done&&{backgroundColor:color,borderColor:color}]}>
             {done&&<Text style={{color:'#fff',fontSize:11,fontWeight:'700'}}>✓</Text>}</View>
@@ -274,7 +297,7 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
           </View>
           <Text style={{fontSize:14,color:C.textDark,paddingHorizontal:6}}>{isExp?'▾':'▸'}</Text>
         </TouchableOpacity>
-        {isExp&&<HabitDayPanel h={h} ds={todayStr} log={log} toggleDay={toggleDay}
+        {isExp&&<HabitDayPanel h={h} ds={selDay} log={log} toggleDay={toggleDay}
           addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} setNote={setNote}
           color={color} bg={cat?.bg} border={cat?.border}/>}
       </View>);
@@ -567,17 +590,20 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STATS TAB — Proper monthly calendar + project status
+// STATS TAB — week view default, expandable to month
 // ═══════════════════════════════════════════════════════════════════
 function StatsTab({habits,log,projects,projLog}){
+  const [weekOff,setWeekOff]=useState(0);
+  const [expandHabits,setExpandHabits]=useState(false);
+  const [expandProjects,setExpandProjects]=useState(false);
   const [selMonth,setSelMonth]=useState(today().getMonth());
   const [selYear,setSelYear]=useState(today().getFullYear());
   const [detailDay,setDetailDay]=useState(null);
+  const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const monthDates=useMemo(()=>getMonthDates(selYear,selMonth),[selYear,selMonth]);
   const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const todayStr=fmt(today());
 
-  // Calendar grid: proper rows starting on correct weekday
   const calGrid=useMemo(()=>{
     const first=monthDates[0].getDay();const startPad=(first===0?6:first-1);
     const cells=[...Array(startPad).fill(null),...monthDates];
@@ -590,96 +616,174 @@ function StatsTab({habits,log,projects,projLog}){
   if(!habits.length&&!projects.length)return<View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>📊</Text>
     <Text style={s.emptySub}>Add habits or projects to see stats</Text></View>;
 
+  const HabitDayCell=({d,ds,size=32})=>{
+    const dayLog=log[ds]||{};const isToday=ds===todayStr;
+    const dayIdx=d.getDay()===0?6:d.getDay()-1;
+    const active=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx)));
+    const done=active.filter(h=>dayLog[h.id]?.done).length;
+    const ratio=active.length>0?done/active.length:0;
+    const isSel=detailDay===ds;
+    return(<TouchableOpacity onPress={()=>setDetailDay(isSel?null:ds)}
+      style={{flex:1,height:size,borderRadius:6,justifyContent:'center',alignItems:'center',
+        backgroundColor:ratio>=1?brand.green+'30':ratio>=0.5?brand.gold+'25':ratio>0?'#E8956B20':C.bg,
+        borderWidth:isToday?2:(isSel?2:1),borderColor:isToday?brand.gold:(isSel?brand.blue:C.borderLight)}}>
+      <Text style={{fontSize:9,fontWeight:'700',color:ratio>=0.5?compColor(ratio):C.textDim}}>{d.getDate()}</Text>
+      {ratio>=1&&<Text style={{fontSize:6}}>✓</Text>}
+    </TouchableOpacity>);
+  };
+
   return(<View>
-    {/* Month selector */}
-    <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-      <TouchableOpacity onPress={()=>{if(selMonth===0){setSelMonth(11);setSelYear(y=>y-1);}else setSelMonth(m=>m-1);}} style={s.navBtn}>
-        <Text style={s.navBtnT}>◂</Text></TouchableOpacity>
-      <Text style={{fontSize:16,fontWeight:'700',color:C.text}}>{MN[selMonth]} {selYear}</Text>
-      <TouchableOpacity onPress={()=>{if(selMonth===11){setSelMonth(0);setSelYear(y=>y+1);}else setSelMonth(m=>m+1);}} style={s.navBtn}>
-        <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
-
-    {/* Habit Calendar */}
+    {/* ── HABITS ── */}
     {habits.length>0&&(<View style={s.statsCard}>
-      <Text style={s.statsTitle}>📅 Habit Completion</Text>
-      {/* Day headers */}
-      <View style={{flexDirection:'row',marginBottom:6}}>
-        {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
-      {/* Calendar rows */}
-      {calGrid.map((row,ri)=>(
-        <View key={ri} style={{flexDirection:'row',gap:3,marginBottom:3}}>
-          {row.map((d,ci)=>{
-            if(!d) return <View key={ci} style={{flex:1,height:32}}/>;
-            const ds=fmt(d);const dayLog=log[ds]||{};const isToday=ds===todayStr;
-            const dayIdx=d.getDay()===0?6:d.getDay()-1;
-            const active=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx)));
-            const done=active.filter(h=>dayLog[h.id]?.done).length;
-            const ratio=active.length>0?done/active.length:0;
-            const isSel=detailDay===ds;
-            return(<TouchableOpacity key={ci} onPress={()=>setDetailDay(isSel?null:ds)}
-              style={{flex:1,height:32,borderRadius:6,justifyContent:'center',alignItems:'center',
-                backgroundColor:ratio>=1?brand.green+(isSel?'60':'30'):ratio>=0.5?brand.gold+(isSel?'60':'25'):ratio>0?'#E8956B20':C.bg,
-                borderWidth:isToday?2:(isSel?2:1),borderColor:isToday?brand.gold:(isSel?brand.blue:C.borderLight)}}>
-              <Text style={{fontSize:9,fontWeight:'700',color:ratio>=0.5?(isSel?'#fff':compColor(ratio)):C.textDim}}>{d.getDate()}</Text>
-              {ratio>=1&&<Text style={{fontSize:6}}>✓</Text>}
-            </TouchableOpacity>);
-          })}</View>))}
+      <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <Text style={s.statsTitle}>📅 Habit Completion</Text>
+        <TouchableOpacity onPress={()=>{setExpandHabits(e=>!e);setDetailDay(null);}}
+          style={{paddingHorizontal:10,paddingVertical:4,borderRadius:8,backgroundColor:expandHabits?brand.blue+'15':C.bg,borderWidth:1,borderColor:expandHabits?brand.blue:C.border}}>
+          <Text style={{fontSize:10,fontWeight:'700',color:expandHabits?brand.blue:C.textDim}}>{expandHabits?'Week view':'Month view'}</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Legend */}
-      <View style={{flexDirection:'row',justifyContent:'center',gap:12,marginTop:8}}>
-        {[{c:brand.green+'30',l:'100%'},{c:brand.gold+'25',l:'50%+'},{c:'#E8956B20',l:'<50%'},{c:C.bg,l:'0%'}].map(({c,l})=>(
-          <View key={l} style={{flexDirection:'row',alignItems:'center',gap:4}}>
-            <View style={{width:12,height:12,borderRadius:3,backgroundColor:c,borderWidth:1,borderColor:C.border}}/>
-            <Text style={{fontSize:8,color:C.textDim}}>{l}</Text></View>))}</View>
+      {!expandHabits&&(<>
+        {/* Week nav */}
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <TouchableOpacity onPress={()=>setWeekOff(w=>w-1)} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+          <Text style={{fontSize:11,fontWeight:'600',color:C.textDim}}>
+            {weekOff===0?'This week':`${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}
+          </Text>
+          <TouchableOpacity onPress={()=>setWeekOff(w=>Math.min(0,w+1))} style={[s.navBtn,weekOff>=0&&{opacity:.3}]} disabled={weekOff>=0}><Text style={s.navBtnT}>▸</Text></TouchableOpacity>
+        </View>
+        <View style={{flexDirection:'row',marginBottom:4}}>
+          {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
+        <View style={{flexDirection:'row',gap:3,marginBottom:3}}>
+          {weekDates.map((d,i)=><HabitDayCell key={i} d={d} ds={fmt(d)} size={36}/>)}
+        </View>
+      </>)}
+
+      {expandHabits&&(<>
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <TouchableOpacity onPress={()=>{if(selMonth===0){setSelMonth(11);setSelYear(y=>y-1);}else setSelMonth(m=>m-1);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+          <Text style={{fontSize:14,fontWeight:'700',color:C.text}}>{MN[selMonth]} {selYear}</Text>
+          <TouchableOpacity onPress={()=>{if(selMonth===11){setSelMonth(0);setSelYear(y=>y+1);}else setSelMonth(m=>m+1);}} style={s.navBtn}><Text style={s.navBtnT}>▸</Text></TouchableOpacity>
+        </View>
+        <View style={{flexDirection:'row',marginBottom:4}}>
+          {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
+        {calGrid.map((row,ri)=>(
+          <View key={ri} style={{flexDirection:'row',gap:3,marginBottom:3}}>
+            {row.map((d,ci)=>!d?<View key={ci} style={{flex:1,height:32}}/>:<HabitDayCell key={ci} d={d} ds={fmt(d)}/>)}
+          </View>))}
+        <View style={{flexDirection:'row',justifyContent:'center',gap:12,marginTop:8}}>
+          {[{c:brand.green+'30',l:'100%'},{c:brand.gold+'25',l:'50%+'},{c:'#E8956B20',l:'<50%'},{c:C.bg,l:'0%'}].map(({c,l})=>(
+            <View key={l} style={{flexDirection:'row',alignItems:'center',gap:4}}>
+              <View style={{width:12,height:12,borderRadius:3,backgroundColor:c,borderWidth:1,borderColor:C.border}}/>
+              <Text style={{fontSize:8,color:C.textDim}}>{l}</Text></View>))}
+        </View>
+      </>)}
 
       {/* Detail for selected day */}
-      {detailDay&&(()=>{const dayLog=log[detailDay]||{};const d=new Date(detailDay.split('-')[0],parseInt(detailDay.split('-')[1])-1,detailDay.split('-')[2]);
-        const hasData=habits.some(h=>dayLog[h.id]?.done||dayLog[h.id]?.minutes||dayLog[h.id]?.notes);
+      {detailDay&&(()=>{const dayLog=log[detailDay]||{};const dp=detailDay.split('-');const d=new Date(dp[0],parseInt(dp[1])-1,dp[2]);
         return(<View style={{marginTop:10,padding:12,backgroundColor:C.bg,borderRadius:10}}>
           <Text style={{fontSize:13,fontWeight:'700',color:C.text,marginBottom:6}}>
             {d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text>
-          {!hasData&&<Text style={{fontSize:11,color:C.textDim}}>No data for this day</Text>}
-          {habits.map(h=>{const entry=dayLog[h.id];if(!entry?.done&&!entry?.minutes&&!entry?.notes)return null;
+          {!habits.some(h=>dayLog[h.id]?.done||dayLog[h.id]?.minutes||dayLog[h.id]?.notes)&&
+            <Text style={{fontSize:11,color:C.textDim}}>No data for this day</Text>}
+          {habits.map(h=>{const e=dayLog[h.id];if(!e?.done&&!e?.minutes&&!e?.notes)return null;
             return(<View key={h.id} style={{marginBottom:6}}>
               <View style={{flexDirection:'row',alignItems:'center',gap:6}}>
-                <Text style={{fontSize:11,color:entry?.done?brand.green:C.textDim}}>{entry?.done?'✓':'○'}</Text>
+                <Text style={{fontSize:11,color:e?.done?brand.green:C.textDim}}>{e?.done?'✓':'○'}</Text>
                 <Text style={{fontSize:12,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
-                {h.type==='timer'&&<Text style={{fontSize:10,color:C.textDim}}>{entry?.minutes||0}m</Text>}
+                {h.type==='timer'&&<Text style={{fontSize:10,color:C.textDim}}>{e?.minutes||0}m</Text>}
               </View>
-              {entry?.notes&&<Text style={{fontSize:10,color:brand.blue,marginLeft:20,marginTop:2}}>📝 {entry.notes}</Text>}
-            </View>);})}</View>);})()}
+              {e?.notes&&<Text style={{fontSize:10,color:brand.blue,marginLeft:20,marginTop:2}}>📝 {e.notes}</Text>}
+            </View>);})}
+        </View>)})()}
     </View>)}
 
-    {/* Project status */}
+    {/* ── PROJECTS ── */}
     {projects.length>0&&(<View style={s.statsCard}>
-      <Text style={s.statsTitle}>📁 Project Status</Text>
+      <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <Text style={s.statsTitle}>📁 Project Status</Text>
+        <TouchableOpacity onPress={()=>setExpandProjects(e=>!e)}
+          style={{paddingHorizontal:10,paddingVertical:4,borderRadius:8,backgroundColor:expandProjects?brand.blue+'15':C.bg,borderWidth:1,borderColor:expandProjects?brand.blue:C.border}}>
+          <Text style={{fontSize:10,fontWeight:'700',color:expandProjects?brand.blue:C.textDim}}>{expandProjects?'Week view':'Month view'}</Text>
+        </TouchableOpacity>
+      </View>
       {projects.map(p=>{
         const totalMins=Object.values(projLog).reduce((sum,day)=>sum+(day[p.id]?.minutes||0),0);
-        const totalHrs=Math.round(totalMins/60*10)/10;
-        const monthMins=monthDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
+        const viewDates=expandProjects?monthDates:weekDates;
+        const viewMins=viewDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
         return(<View key={p.id} style={{marginBottom:14}}>
           <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:6}}>
             <View style={{width:10,height:10,borderRadius:5,backgroundColor:p.color}}/>
             <Text style={{fontSize:13,fontWeight:'600',color:C.text,flex:1}}>{p.name}</Text>
-            <Text style={{fontSize:14,fontWeight:'800',color:p.color}}>{totalHrs}h</Text></View>
-          {/* Mini calendar bars */}
-          <View style={{flexDirection:'row',gap:1,height:24,alignItems:'flex-end'}}>
-            {monthDates.map((d,i)=>{const dm=projLog[fmt(d)]?.[p.id]?.minutes||0;
-              return(<View key={i} style={{flex:1,height:dm>0?clamp(dm/120*24,3,24):2,
-                backgroundColor:dm>0?p.color:C.borderLight,borderRadius:1}}>
-                {dm>60&&<Text style={{fontSize:4,color:'#fff',textAlign:'center'}}>{dm}</Text>}
-              </View>);})}
+            <Text style={{fontSize:14,fontWeight:'800',color:p.color}}>{Math.round(totalMins/60*10)/10}h</Text>
           </View>
-          <Text style={{fontSize:9,color:C.textDim,marginTop:3}}>{monthMins}m in {MN[selMonth]} · {Math.round(monthMins/60*10)/10}h</Text>
+          {!expandProjects&&(<>
+            <View style={{flexDirection:'row',marginBottom:4}}>
+              {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:8,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
+            <View style={{flexDirection:'row',gap:3}}>
+              {weekDates.map((d,i)=>{const dm=projLog[fmt(d)]?.[p.id]?.minutes||0;const isToday=fmt(d)===todayStr;
+                return(<View key={i} style={{flex:1,alignItems:'center',gap:2}}>
+                  <View style={{width:'100%',height:28,borderRadius:6,justifyContent:'flex-end',
+                    backgroundColor:dm>0?p.color+'25':C.borderLight,borderWidth:isToday?2:1,borderColor:isToday?brand.gold:(dm>0?p.color+'50':C.borderLight)}}>
+                    {dm>0&&<View style={{width:'100%',height:`${Math.min(100,dm/120*100)}%`,backgroundColor:p.color,borderRadius:5}}/>}
+                  </View>
+                  <Text style={{fontSize:8,fontWeight:'700',color:dm>0?p.color:C.textDim}}>{dm>0?dm+'m':'—'}</Text>
+                </View>);})}</View>
+          </>)}
+          {expandProjects&&(<>
+            <View style={{flexDirection:'row',gap:1,height:24,alignItems:'flex-end',marginBottom:2}}>
+              {monthDates.map((d,i)=>{const dm=projLog[fmt(d)]?.[p.id]?.minutes||0;
+                return(<View key={i} style={{flex:1,height:dm>0?clamp(dm/120*24,3,24):2,
+                  backgroundColor:dm>0?p.color:C.borderLight,borderRadius:1}}/> );})}</View>
+          </>)}
+          <Text style={{fontSize:9,color:C.textDim,marginTop:2}}>{viewMins}m this {expandProjects?'month':'week'} · {Math.round(viewMins/60*10)/10}h</Text>
         </View>);})}
     </View>)}
   </View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// TIME PICKER — simple HH:MM picker
+// ═══════════════════════════════════════════════════════════════════
+function TimePicker({value,onChange,color}){
+  const [h,setH]=useState(value?parseInt(value.split(':')[0]):20);
+  const [m,setM]=useState(value?parseInt(value.split(':')[1]):0);
+  const pad=n=>String(n).padStart(2,'0');
+  const update=(nh,nm)=>{setH(nh);setM(nm);onChange(`${pad(nh)}:${pad(nm)}`);};
+  return(
+    <View style={{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:4}}>
+      <TouchableOpacity onPress={()=>update((h+23)%24,m)} style={{padding:6}}><Text style={{color:C.textDim,fontSize:16}}>▲</Text></TouchableOpacity>
+      <View style={{width:44,height:36,borderRadius:8,backgroundColor:color+'15',borderWidth:1,borderColor:color+'40',alignItems:'center',justifyContent:'center'}}>
+        <Text style={{fontSize:16,fontWeight:'800',color}}>{pad(h)}</Text></View>
+      <Text style={{fontSize:18,fontWeight:'700',color:C.textDim}}>:</Text>
+      <View style={{width:44,height:36,borderRadius:8,backgroundColor:color+'15',borderWidth:1,borderColor:color+'40',alignItems:'center',justifyContent:'center'}}>
+        <Text style={{fontSize:16,fontWeight:'800',color}}>{pad(m)}</Text></View>
+      <TouchableOpacity onPress={()=>update(h,(m+55)%60)} style={{padding:6}}><Text style={{color:C.textDim,fontSize:16}}>▲</Text></TouchableOpacity>
+      <View style={{width:2,height:36}}/>
+      <TouchableOpacity onPress={()=>update((h+1)%24,m)} style={{padding:6}}><Text style={{color:C.textDim,fontSize:16}}>▼</Text></TouchableOpacity>
+      <View style={{width:44}}/>
+      <TouchableOpacity onPress={()=>update(h,(m+5)%60)} style={{padding:6}}><Text style={{color:C.textDim,fontSize:16}}>▼</Text></TouchableOpacity>
+    </View>);
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,scheduleHabitReminder}){
+  const [editReminder,setEditReminder]=useState(null); // habitId
+  const [tempTime,setTempTime]=useState('20:00');
+
+  const saveReminder=(hid,enabled,time)=>{
+    const updated=habits.map(h=>{
+      if(h.id!==hid)return h;
+      const nh={...h,reminderEnabled:enabled,reminderTime:time};
+      if(enabled)scheduleHabitReminder(nh);
+      return nh;
+    });
+    setHabits(updated);
+    setEditReminder(null);
+  };
+
   const handleBackup=async()=>{
     const data=JSON.stringify({habits,log,projects,projLog,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
     const path=FileSystem.cacheDirectory+'pruvyou_backup_'+fmt(today())+'.json';
@@ -688,19 +792,62 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   };
   const handleRestore=async()=>{
     try{const result=await DocumentPicker.getDocumentAsync({type:'application/json'});if(result.canceled)return;
-      const content=await FileSystem.readAsStringAsync(result.assets[0].uri);const data=JSON.parse(content);
+      const fc=await FileSystem.readAsStringAsync(result.assets[0].uri);const data=JSON.parse(fc);
       if(data.app==='PruvYou'){Alert.alert('Restore','Found '+data.habits?.length+' habits, '+(data.projects?.length||0)+' projects. Restore?',[
         {text:'Cancel',style:'cancel'},{text:'Restore',onPress:()=>{
           if(data.habits)setHabits(data.habits);if(data.log)setLog(data.log);
           if(data.projects)setProjects(data.projects);if(data.projLog)setProjLog(data.projLog);
           Alert.alert('Done','Data restored!');}}]);}
     }catch{Alert.alert('Error','Could not read file');}};
+
   return(<View>
+    {/* Reminders */}
+    <View style={s.statsCard}>
+      <Text style={s.statsTitle}>🔔 Reminders</Text>
+      <Text style={{fontSize:11,color:C.textDim,marginBottom:12}}>Set a daily reminder per habit to help you remember to log.</Text>
+      {!habits.length&&<Text style={{fontSize:11,color:C.textDim,textAlign:'center',paddingVertical:8}}>No habits yet</Text>}
+      {habits.map(h=>{
+        const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.blue;
+        const isEditing=editReminder===h.id;
+        const hasReminder=h.reminderEnabled&&h.reminderTime;
+        return(<View key={h.id} style={{marginBottom:8}}>
+          <TouchableOpacity onPress={()=>{setEditReminder(isEditing?null:h.id);setTempTime(h.reminderTime||'20:00');}}
+            style={{flexDirection:'row',alignItems:'center',padding:12,borderRadius:10,
+              backgroundColor:hasReminder?color+'12':C.bg,borderWidth:1,borderColor:hasReminder?color+'40':C.border}}>
+            <Text style={{fontSize:18,marginRight:10}}>{h.icon}</Text>
+            <View style={{flex:1}}>
+              <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.name}</Text>
+              <Text style={{fontSize:10,color:hasReminder?color:C.textDim}}>
+                {hasReminder?`🔔 Daily at ${h.reminderTime}`:'No reminder'}</Text>
+            </View>
+            {hasReminder&&<View style={{width:8,height:8,borderRadius:4,backgroundColor:color,marginRight:8}}/>}
+            <Text style={{fontSize:13,color:C.textDark}}>{isEditing?'▾':'▸'}</Text>
+          </TouchableOpacity>
+          {isEditing&&(
+            <View style={{backgroundColor:'#fff',borderRadius:10,padding:14,marginTop:4,borderWidth:1,borderColor:color+'30'}}>
+              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:10}}>REMINDER TIME</Text>
+              <TimePicker value={tempTime} onChange={setTempTime} color={color}/>
+              <Text style={{fontSize:10,color:C.textDim,textAlign:'center',marginTop:6,marginBottom:12}}>
+                Daily at {tempTime}</Text>
+              <View style={{flexDirection:'row',gap:8}}>
+                <TouchableOpacity onPress={()=>saveReminder(h.id,false,null)}
+                  style={{flex:1,padding:10,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC'}}>
+                  <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🔕 Remove</Text></TouchableOpacity>
+                <TouchableOpacity onPress={()=>saveReminder(h.id,true,tempTime)}
+                  style={{flex:1,padding:10,borderRadius:8,backgroundColor:color,alignItems:'center'}}>
+                  <Text style={{fontSize:12,fontWeight:'700',color:'#fff'}}>🔔 Set reminder</Text></TouchableOpacity>
+              </View>
+            </View>)}
+        </View>);})}
+    </View>
+
+    {/* Backup */}
     <View style={s.statsCard}><Text style={s.statsTitle}>☁️ Backup & Sync</Text>
       <TouchableOpacity onPress={handleBackup} style={{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center',marginBottom:8}}>
         <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>📤 Backup to Google Drive</Text></TouchableOpacity>
       <TouchableOpacity onPress={handleRestore} style={{padding:14,borderRadius:12,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border}}>
         <Text style={{fontSize:14,fontWeight:'600',color:C.textMuted}}>📥 Restore from file</Text></TouchableOpacity></View>
+
     <View style={s.statsCard}><Text style={s.statsTitle}>📊 Your Data</Text>
       <View style={{flexDirection:'row',justifyContent:'space-around'}}>
         <View style={{alignItems:'center'}}><Text style={{fontSize:24,fontWeight:'800',color:brand.blue}}>{habits.length}</Text><Text style={{fontSize:10,color:C.textDim}}>habits</Text></View>
@@ -709,7 +856,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.1.0</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.2.0</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
