@@ -2,7 +2,7 @@
   "expo": {
     "name": "PruvYou",
     "slug": "pruvyou",
-    "version": "1.5",
+    "version": "1.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -53,6 +53,7 @@
         }
       ]
     ],
-    "scheme": "com.ocsikesz.pruvyou"
+    "scheme": "com.ocsikesz.pruvyou",
+    "sdkVersion": "52.0.0"
   }
 }

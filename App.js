@@ -6,7 +6,10 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
-// Google Drive OAuth - coming soon
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
@@ -62,6 +65,10 @@ export default function App(){
   const [weekOff,setWeekOff]=useState(0);
   const [showAdd,setShowAdd]=useState(false);
   const [editHabit,setEditHabit]=useState(null);
+  // Google Drive state — lives in App so hooks work correctly
+  const [driveToken,setDriveToken]=useState(null);
+  const [driveUser,setDriveUser]=useState(null);
+  const [driveStatus,setDriveStatus]=useState('');
   const [adHocTasks,setAdHocTasks]=useState({}); // {dateStr:[{id,text,done}]}
 
   useEffect(()=>{(async()=>{
@@ -117,6 +124,73 @@ export default function App(){
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
+  // ── Google Drive OAuth (SDK 52) ──
+  const discovery=AuthSession.useAutoDiscovery('https://accounts.google.com');
+  const redirectUri=AuthSession.makeRedirectUri({scheme:'com.ocsikesz.pruvyou',path:'oauth2redirect'});
+  const [request,response,promptAsync]=AuthSession.useAuthRequest({
+    clientId:GOOGLE_CLIENT_ID,
+    scopes:[DRIVE_SCOPE,'email','profile'],
+    redirectUri,
+    responseType:AuthSession.ResponseType.Token,
+  },discovery);
+
+  useEffect(()=>{
+    ld('pv-drive-token',null).then(t=>{if(t){setDriveToken(t.token);setDriveUser(t.email);}});
+  },[]);
+
+  useEffect(()=>{
+    if(response?.type==='success'){
+      const token=response.params.access_token;
+      fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json',{headers:{Authorization:'Bearer '+token}})
+        .then(r=>r.json())
+        .then(u=>{setDriveToken(token);setDriveUser(u.email||'');sv('pv-drive-token',{token,email:u.email||'']);})
+        .catch(()=>{setDriveToken(token);sv('pv-drive-token',{token,email:''});});
+    }
+  },[response]);
+
+  const signOutDrive=async()=>{setDriveToken(null);setDriveUser(null);setDriveStatus('');await sv('pv-drive-token',null);};
+
+  const driveBackup=useCallback(async()=>{
+    if(!driveToken){Alert.alert('Not connected','Connect Google Drive first.');return;}
+    try{
+      setDriveStatus('syncing');
+      const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
+      const search=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D''+BACKUP_FILENAME+''%20and%20trashed%3Dfalse&fields=files(id)',{headers:{Authorization:'Bearer '+driveToken}});
+      const {files}=await search.json();
+      const fileId=files?.[0]?.id;
+      if(!fileId){
+        const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:JSON.stringify({name:BACKUP_FILENAME,mimeType:'application/json'})});
+        const {id}=await meta.json();
+        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
+      }else{
+        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
+      }
+      setDriveStatus('ok');
+      Alert.alert('✅ Saved','Backup saved to Google Drive!');
+    }catch(e){setDriveStatus('error');Alert.alert('Backup failed',e?.message||'Drive error');}
+  },[driveToken,habits,log,projects,projLog,adHocTasks]);
+
+  const driveRestore=useCallback(async()=>{
+    if(!driveToken){Alert.alert('Not connected','Connect Google Drive first.');return;}
+    try{
+      setDriveStatus('syncing');
+      const search=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D''+BACKUP_FILENAME+''%20and%20trashed%3Dfalse&fields=files(id)',{headers:{Authorization:'Bearer '+driveToken}});
+      const {files}=await search.json();
+      if(!files?.length){setDriveStatus('');Alert.alert('No backup','No backup found in your Drive.');return;}
+      const res=await fetch('https://www.googleapis.com/drive/v3/files/'+files[0].id+'?alt=media',{headers:{Authorization:'Bearer '+driveToken}});
+      const d=JSON.parse(await res.text());
+      if(d.app==='PruvYou'){
+        Alert.alert('Restore','Found '+d.habits?.length+' habits. Restore?',[
+          {text:'Cancel',style:'cancel',onPress:()=>setDriveStatus('')},
+          {text:'Restore',onPress:()=>{
+            if(d.habits)setHabits(d.habits);if(d.log)setLog(d.log);
+            if(d.projects)setProjects(d.projects);if(d.projLog)setProjLog(d.projLog);
+            if(d.adHocTasks)setAdHocTasks(d.adHocTasks);
+            setDriveStatus('ok');Alert.alert('Done','Restored from Drive!');}}]);
+      }else{setDriveStatus('error');Alert.alert('Error','Not a valid PruvYou backup');}
+    }catch(e){setDriveStatus('error');Alert.alert('Restore failed',e?.message||'Drive error');}
+  },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
+
   if(!loaded)return<SafeAreaView style={s.root}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView>;
 
@@ -142,7 +216,7 @@ export default function App(){
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} promptAsync={promptAsync} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore}/>}
         <View style={{height:80}}/>
       </ScrollView>
 
@@ -1035,7 +1109,7 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,promptAsync,signOutDrive,driveBackup,driveRestore}){
   const [reminderEnabled,setReminderEnabled]=useState(false);
   const [reminderTime,setReminderTime]=useState('20:00');
   const [reminderSaved,setReminderSaved]=useState(false);
@@ -1104,14 +1178,44 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     <View style={s.statsCard}>
       <Text style={s.statsTitle}>☁️ Backup & Sync</Text>
 
-      {/* Google Drive section - coming soon */}
-      <View style={{padding:12,borderRadius:12,backgroundColor:'#E8F0FE',borderWidth:1,borderColor:'#B3C8F5',marginBottom:10,flexDirection:'row',alignItems:'center',gap:12}}>
-        <Text style={{fontSize:22}}>🔵</Text>
-        <View style={{flex:1}}>
-          <Text style={{fontSize:13,fontWeight:'700',color:'#1A4F8A'}}>Google Drive</Text>
-          <Text style={{fontSize:11,color:C.textDim}}>Coming in next update</Text>
-        </View>
-      </View>
+      {/* Google Drive section */}
+      {!driveToken?(
+        <TouchableOpacity onPress={()=>promptAsync()}
+          style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:12,
+            backgroundColor:'#fff',borderWidth:2,borderColor:'#4285F4',marginBottom:10}}>
+          <Text style={{fontSize:22}}>🔵</Text>
+          <View style={{flex:1}}>
+            <Text style={{fontSize:14,fontWeight:'700',color:'#4285F4'}}>Connect Google Drive</Text>
+            <Text style={{fontSize:11,color:C.textDim}}>Backup automat în contul tău Drive</Text>
+          </View>
+          <Text style={{fontSize:16,color:'#4285F4'}}>▸</Text>
+        </TouchableOpacity>
+      ):(
+        <View style={{padding:12,borderRadius:12,backgroundColor:'#E8F5E9',borderWidth:1,borderColor:'#81C784',marginBottom:10}}>
+          <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:10}}>
+            <Text style={{fontSize:22}}>✅</Text>
+            <View style={{flex:1}}>
+              <Text style={{fontSize:13,fontWeight:'700',color:'#2E7D32'}}>Google Drive conectat</Text>
+              {driveUser?<Text style={{fontSize:11,color:'#388E3C'}}>{driveUser}</Text>:null}
+            </View>
+            <TouchableOpacity onPress={signOutDrive} style={{padding:6,borderRadius:6,backgroundColor:'#FEE',borderWidth:1,borderColor:'#FCC'}}>
+              <Text style={{fontSize:11,color:'#C44',fontWeight:'600'}}>Sign out</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{flexDirection:'row',gap:8}}>
+            <TouchableOpacity onPress={driveBackup}
+              style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#4285F4',alignItems:'center',
+                opacity:driveStatus==='syncing'?0.6:1}}>
+              <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>
+                {driveStatus==='syncing'?'Se salvează...':driveStatus==='ok'?'✅ Salvat':'☁️ Backup acum'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={driveRestore}
+              style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#fff',alignItems:'center',
+                borderWidth:1,borderColor:'#4285F4',opacity:driveStatus==='syncing'?0.6:1}}>
+              <Text style={{fontSize:13,fontWeight:'600',color:'#4285F4'}}>📥 Restaurează</Text>
+            </TouchableOpacity>
+          </View>
+        </View>)}
 
       {/* Local backup fallback */}
       <View style={{flexDirection:'row',gap:8}}>
