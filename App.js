@@ -148,37 +148,57 @@ export default function App(){
 
   const signOutDrive=async()=>{setDriveToken(null);setDriveUser(null);setDriveStatus('');await sv('pv-drive-token',null);};
 
-  const driveBackup=useCallback(async()=>{
-    if(!driveToken){Alert.alert('Not connected','Connect Google Drive first.');return;}
+  // ── Helper: write data to Drive as a dated file + prune to 7 ──
+  const driveWrite=useCallback(async(showAlert)=>{
+    if(!driveToken)return false;
     try{
       setDriveStatus('syncing');
       const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
-      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${BACKUP_FILENAME}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
+      const filename='pruvyou_backup_'+fmt(today())+'.json';
+      // Find today's file if it already exists
+      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
+      if(search.status===401){setDriveStatus('error');if(showAlert)Alert.alert('Session expired','Please reconnect Google Drive.');return false;}
       const {files}=await search.json();
       const fileId=files?.[0]?.id;
       if(!fileId){
-        const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:JSON.stringify({name:BACKUP_FILENAME,mimeType:'application/json'})});
+        const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
         const {id}=await meta.json();
         await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
       }else{
         await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
       }
-      setDriveStatus('ok');
-      Alert.alert('✅ Saved','Backup saved to Google Drive!');
-    }catch(e){setDriveStatus('error');Alert.alert('Backup failed',e?.message||'Drive error');}
+      // Prune: keep only the 7 most recent pruvyou_backup_*.json files
+      try{
+        const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:{Authorization:'Bearer '+driveToken}});
+        const {files:allFiles}=await all.json();
+        if(allFiles&&allFiles.length>7){
+          const toDelete=allFiles.slice(7); // sorted desc by name(date) -> oldest are last
+          for(const f of toDelete){
+            await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:{Authorization:'Bearer '+driveToken}});
+          }
+        }
+      }catch(e){/* prune best-effort */}
+      setDriveStatus('ok');await sv('pv-drive-lastbackup',fmt(today()));
+      if(showAlert)Alert.alert('✅ Saved','Backup saved to Google Drive as '+filename);
+      return true;
+    }catch(e){setDriveStatus('error');if(showAlert)Alert.alert('Backup failed',e?.message||'Drive error');return false;}
   },[driveToken,habits,log,projects,projLog,adHocTasks]);
+
+  const driveBackup=useCallback(()=>driveWrite(true),[driveWrite]);
 
   const driveRestore=useCallback(async()=>{
     if(!driveToken){Alert.alert('Not connected','Connect Google Drive first.');return;}
     try{
       setDriveStatus('syncing');
-      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${BACKUP_FILENAME}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
+      // Get the most recent dated backup
+      const search=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:{Authorization:'Bearer '+driveToken}});
       const {files}=await search.json();
       if(!files?.length){setDriveStatus('');Alert.alert('No backup','No backup found in your Drive.');return;}
-      const res=await fetch('https://www.googleapis.com/drive/v3/files/'+files[0].id+'?alt=media',{headers:{Authorization:'Bearer '+driveToken}});
+      const newest=files[0];
+      const res=await fetch('https://www.googleapis.com/drive/v3/files/'+newest.id+'?alt=media',{headers:{Authorization:'Bearer '+driveToken}});
       const d=JSON.parse(await res.text());
       if(d.app==='PruvYou'){
-        Alert.alert('Restore','Found '+d.habits?.length+' habits. Restore?',[
+        Alert.alert('Restore','From '+newest.name.replace('pruvyou_backup_','').replace('.json','')+': '+d.habits?.length+' habits, '+(d.projects?.length||0)+' projects. Restore?',[
           {text:'Cancel',style:'cancel',onPress:()=>setDriveStatus('')},
           {text:'Restore',onPress:()=>{
             if(d.habits)setHabits(d.habits);if(d.log)setLog(d.log);
@@ -189,33 +209,19 @@ export default function App(){
     }catch(e){setDriveStatus('error');Alert.alert('Restore failed',e?.message||'Drive error');}
   },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
 
-  // ── Silent auto-backup to Drive (no alerts) ──
-  const driveAutoBackup=useCallback(async()=>{
-    if(!driveToken)return;
-    try{
-      setDriveStatus('syncing');
-      const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
-      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${BACKUP_FILENAME}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
-      const {files}=await search.json();
-      const fileId=files?.[0]?.id;
-      if(!fileId){
-        const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:JSON.stringify({name:BACKUP_FILENAME,mimeType:'application/json'})});
-        const {id}=await meta.json();
-        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
-      }else{
-        const r=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
-        if(r.status===401){setDriveStatus('error');return;} // token expired
-      }
-      setDriveStatus('ok');await sv('pv-drive-lastsync',new Date().toISOString());
-    }catch(e){setDriveStatus('error');}
-  },[driveToken,habits,log,projects,projLog,adHocTasks]);
-
-  // Debounced auto-backup: 4s after last data change
+  // ── Nightly auto-backup: once per day, after 2 AM, on app open ──
   useEffect(()=>{
     if(!loaded||!driveToken)return;
-    const t=setTimeout(()=>{driveAutoBackup();},4000);
-    return ()=>clearTimeout(t);
-  },[habits,log,projects,projLog,adHocTasks,driveToken,loaded]);
+    (async()=>{
+      const last=await ld('pv-drive-lastbackup',null);
+      const todayS=fmt(today());
+      const hour=new Date().getHours();
+      // Run if: never backed up, OR last backup was a previous day AND it's past 2 AM
+      if(last!==todayS&&hour>=2){
+        driveWrite(false);
+      }
+    })();
+  },[loaded,driveToken]);
 
   if(!loaded)return<SafeAreaView style={s.root}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView>;
@@ -1247,7 +1253,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
           <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10,paddingHorizontal:4}}>
             <View style={{width:6,height:6,borderRadius:3,backgroundColor:driveStatus==='error'?'#C44':'#34C79F'}}/>
             <Text style={{fontSize:11,color:'#388E3C'}}>
-              {driveStatus==='error'?'Auto-backup paused':'Auto-backup on — saves a few seconds after each change'}</Text>
+              {driveStatus==='error'?'Auto-backup paused — reconnect':'Auto-backup nightly · keeps last 7 days'}</Text>
           </View>
           <View style={{flexDirection:'row',gap:8}}>
             <TouchableOpacity onPress={driveBackup}
@@ -1286,7 +1292,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.7.3</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.8.0</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
