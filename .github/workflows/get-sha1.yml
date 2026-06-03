@@ -5,9 +5,16 @@ jobs:
   sha1:
     runs-on: ubuntu-latest
     steps:
-      - name: Print debug SHA1
+      - name: Generate keystore and print SHA1
         run: |
-          keytool -keystore ~/.android/debug.keystore -list -v \
-            -alias androiddebugkey -storepass android 2>/dev/null | grep "SHA1:"
-          echo "---"
-          echo "Package: com.ocsikesz.pruvyou"
+          keytool -genkeypair -v \
+            -keystore pruvyou.keystore \
+            -alias upload \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass pruvyou123 -keypass pruvyou123 \
+            -dname "CN=PruvYou, OU=Mobile, O=PruvYou, L=Bucuresti, S=Bucuresti, C=RO"
+          echo "=== SHA1 ==="
+          keytool -keystore pruvyou.keystore -list -v \
+            -alias upload -storepass pruvyou123 2>/dev/null | grep "SHA1:"
+          echo "=== BASE64 (salveaza asta!) ==="
+          base64 -w 0 pruvyou.keystore
