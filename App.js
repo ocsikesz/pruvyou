@@ -419,76 +419,112 @@ function HabitForm({habit,onSave,onCancel}){
 // ═══════════════════════════════════════════════════════════════════
 // PROJECT DAY PANEL — inline panel for a selected day in project
 // ═══════════════════════════════════════════════════════════════════
-function ProjDayPanel({pid,ds,dm,dn,tasks,color,addProjMinutes,setProjMinutes,setProjNote,setProjTasks,onDelete}){
-  const [note,setNoteLocal]=useState(dn);
-  const [savedNote,setSavedNote]=useState(dn);
-  const [taskInput,setTaskInput]=useState('');
+function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTasks,onDelete}){
+  // Read live from projLog so updates reflect immediately
+  const dayData=projLog[ds]?.[pid]||{};
+  const dm=dayData.minutes||0;
+  const tasks=dayData.tasks||[];
+  const [note,setNoteLocal]=React.useState(dayData.notes||'');
+  const [savedNote,setSavedNote]=React.useState(dayData.notes||'');
+  const [taskInput,setTaskInput]=React.useState('');
   const dateObj=new Date(ds.split('-')[0],parseInt(ds.split('-')[1])-1,ds.split('-')[2]);
+
+  // Sync note if day or project changes
+  React.useEffect(()=>{
+    const n=projLog[ds]?.[pid]?.notes||'';
+    setNoteLocal(n);setSavedNote(n);
+  },[ds,pid]);
+
   const toggleTask=(idx)=>{const t=[...tasks];t[idx]={...t[idx],done:!t[idx].done};setProjTasks(pid,ds,t);};
-  const addTask=()=>{if(!taskInput.trim())return;setProjTasks(pid,ds,[...tasks,{text:taskInput.trim(),done:false,id:Date.now().toString()}]);setTaskInput('');};
-  const deleteTask=(idx)=>{const t=tasks.filter((_,i)=>i!==idx);setProjTasks(pid,ds,t);};
+  const addTask=()=>{if(!taskInput.trim())return;
+    setProjTasks(pid,ds,[...tasks,{text:taskInput.trim(),done:false,id:Date.now().toString()}]);
+    setTaskInput('');};
+  const deleteTask=(idx)=>setProjTasks(pid,ds,tasks.filter((_,i)=>i!==idx));
+
   return(
     <View style={{backgroundColor:color+'08',borderRadius:10,padding:12,marginTop:4,marginBottom:6,borderWidth:1,borderColor:color+'30'}}>
-      <Text style={{fontSize:11,fontWeight:'700',color,marginBottom:8}}>
-        {dateObj.toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short'})}</Text>
-      {/* Time */}
-      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6}}>TIME LOGGED</Text>
+      <Text style={{fontSize:11,fontWeight:'700',color,marginBottom:10}}>
+        {dateObj.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text>
+
+      {/* ── TIME ── */}
+      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>TIME LOGGED</Text>
       <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8}}>
         <TouchableOpacity onPress={()=>setProjMinutes(pid,ds,Math.max(0,dm-15))}
-          style={{width:40,height:40,borderRadius:20,backgroundColor:'#FEE',borderWidth:1,borderColor:'#FCC',alignItems:'center',justifyContent:'center'}}>
-          <Text style={{fontSize:20,fontWeight:'800',color:'#C44'}}>−</Text></TouchableOpacity>
+          style={{width:44,height:44,borderRadius:22,backgroundColor:'#FEE',borderWidth:1,borderColor:'#FCC',alignItems:'center',justifyContent:'center'}}>
+          <Text style={{fontSize:22,fontWeight:'800',color:'#C44'}}>−</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={()=>setProjMinutes(pid,ds,0)}
-          style={{flex:1,height:40,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center',justifyContent:'center'}}>
-          <Text style={{fontSize:16,fontWeight:'800',color:dm>0?color:C.textDim}}>{dm}m</Text></TouchableOpacity>
+          style={{flex:1,height:44,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center',justifyContent:'center'}}>
+          <Text style={{fontSize:20,fontWeight:'800',color:dm>0?color:C.textDim}}>{dm}m</Text>
+          {dm>0&&<Text style={{fontSize:8,color:C.textDim}}>tap to reset</Text>}
+        </TouchableOpacity>
         <TouchableOpacity onPress={()=>setProjMinutes(pid,ds,dm+15)}
-          style={{width:40,height:40,borderRadius:20,backgroundColor:color+'20',borderWidth:1,borderColor:color+'40',alignItems:'center',justifyContent:'center'}}>
-          <Text style={{fontSize:20,fontWeight:'800',color}}>+</Text></TouchableOpacity>
-      </View>
-      <View style={{flexDirection:'row',gap:5,marginBottom:12}}>
-        {[0,15,30,60,90,120].map(v=>(<TouchableOpacity key={v} onPress={()=>setProjMinutes(pid,ds,v)}
-          style={{flex:1,padding:5,borderRadius:7,backgroundColor:dm===v?color+'25':C.bg,borderWidth:1,borderColor:dm===v?color+'60':C.border,alignItems:'center'}}>
-          <Text style={{fontSize:9,fontWeight:'700',color:dm===v?color:C.textDim}}>{v===0?'0':v+'m'}</Text>
-        </TouchableOpacity>))}
-      </View>
-      {/* Tasks */}
-      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6}}>TASKS</Text>
-      {tasks.map((t,i)=>(
-        <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:6}}>
-          <TouchableOpacity onPress={()=>toggleTask(i)}
-            style={{width:20,height:20,borderRadius:5,borderWidth:1.5,borderColor:t.done?color:C.border,
-              backgroundColor:t.done?color:'#fff',alignItems:'center',justifyContent:'center'}}>
-            {t.done&&<Text style={{color:'#fff',fontSize:11,fontWeight:'800'}}>✓</Text>}
-          </TouchableOpacity>
-          <Text style={{flex:1,fontSize:12,color:t.done?C.textDim:C.text,textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
-          <TouchableOpacity onPress={()=>deleteTask(i)} style={{padding:4}}>
-            <Text style={{fontSize:12,color:'#C44'}}>✕</Text>
-          </TouchableOpacity>
-        </View>))}
-      <View style={{flexDirection:'row',gap:8,marginBottom:12}}>
-        <TextInput value={taskInput} onChangeText={setTaskInput} placeholder="Add task..."
-          placeholderTextColor={C.textDark} style={[s.input,{flex:1,marginBottom:0,fontSize:12,padding:8}]}
-          onSubmitEditing={addTask} returnKeyType="done"/>
-        <TouchableOpacity onPress={addTask}
-          style={{width:40,height:40,borderRadius:8,backgroundColor:color,alignItems:'center',justifyContent:'center'}}>
-          <Text style={{color:'#fff',fontSize:20,fontWeight:'700'}}>+</Text>
+          style={{width:44,height:44,borderRadius:22,backgroundColor:color+'20',borderWidth:1,borderColor:color+'40',alignItems:'center',justifyContent:'center'}}>
+          <Text style={{fontSize:22,fontWeight:'800',color}}>+</Text>
         </TouchableOpacity>
       </View>
-      {/* Note */}
-      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6}}>NOTES</Text>
-      <TextInput value={note} onChangeText={setNoteLocal} placeholder="Notes for this day..."
-        placeholderTextColor={C.textDark} style={[s.input,{height:60,textAlignVertical:'top',marginBottom:8}]} multiline/>
+      <View style={{flexDirection:'row',gap:5,marginBottom:14}}>
+        {[0,15,30,60,90,120].map(v=>(
+          <TouchableOpacity key={v} onPress={()=>setProjMinutes(pid,ds,v)}
+            style={{flex:1,paddingVertical:6,borderRadius:7,
+              backgroundColor:dm===v?color+'25':C.bg,
+              borderWidth:1,borderColor:dm===v?color+'60':C.border,alignItems:'center'}}>
+            <Text style={{fontSize:9,fontWeight:'700',color:dm===v?color:C.textDim}}>{v===0?'0':v+'m'}</Text>
+          </TouchableOpacity>))}
+      </View>
+
+      {/* ── TASKS ── */}
+      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>TASKS</Text>
+      {tasks.map((t,i)=>(
+        <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:8,
+          backgroundColor:'#fff',borderRadius:8,padding:8,borderWidth:1,borderColor:C.border}}>
+          <TouchableOpacity onPress={()=>toggleTask(i)}
+            style={{width:22,height:22,borderRadius:6,borderWidth:2,
+              borderColor:t.done?color:C.textDark,
+              backgroundColor:t.done?color:'#fff',
+              alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            {t.done&&<Text style={{color:'#fff',fontSize:12,fontWeight:'800'}}>✓</Text>}
+          </TouchableOpacity>
+          <Text style={{flex:1,fontSize:13,color:t.done?C.textDim:C.text,
+            textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
+          <TouchableOpacity onPress={()=>deleteTask(i)}
+            style={{width:26,height:26,borderRadius:13,backgroundColor:'#FEE',alignItems:'center',justifyContent:'center'}}>
+            <Text style={{fontSize:13,color:'#C44',fontWeight:'700'}}>✕</Text>
+          </TouchableOpacity>
+        </View>))}
+      {tasks.length===0&&(
+        <Text style={{fontSize:11,color:C.textDim,textAlign:'center',paddingVertical:6,marginBottom:8}}>No tasks yet</Text>)}
+      <View style={{flexDirection:'row',gap:8,marginBottom:14}}>
+        <TextInput value={taskInput} onChangeText={setTaskInput}
+          placeholder="Add a task..." placeholderTextColor={C.textDark}
+          style={[s.input,{flex:1,marginBottom:0,fontSize:13,paddingVertical:9}]}
+          onSubmitEditing={addTask} returnKeyType="done" blurOnSubmit={false}/>
+        <TouchableOpacity onPress={addTask}
+          style={{width:44,height:44,borderRadius:10,backgroundColor:color,alignItems:'center',justifyContent:'center'}}>
+          <Text style={{color:'#fff',fontSize:24,fontWeight:'600',lineHeight:28}}>+</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── NOTES ── */}
+      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>NOTES</Text>
+      <TextInput value={note} onChangeText={setNoteLocal}
+        placeholder="Notes for this day..." placeholderTextColor={C.textDark}
+        style={[s.input,{minHeight:70,textAlignVertical:'top',marginBottom:8}]} multiline/>
       {note!==savedNote&&(
         <TouchableOpacity onPress={()=>{setProjNote(pid,ds,note);setSavedNote(note);}}
-          style={{padding:10,borderRadius:8,backgroundColor:color,alignItems:'center',marginBottom:8}}>
-          <Text style={{fontSize:12,fontWeight:'700',color:'#fff'}}>Save Note</Text>
+          style={{padding:11,borderRadius:9,backgroundColor:color,alignItems:'center',marginBottom:8}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>Save Note</Text>
         </TouchableOpacity>)}
+
+      {/* ── DELETE ── */}
       {onDelete&&(
         <TouchableOpacity onPress={onDelete}
-          style={{padding:8,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC',marginTop:4}}>
+          style={{padding:9,borderRadius:8,backgroundColor:'#FEE',alignItems:'center',borderWidth:1,borderColor:'#FCC',marginTop:2}}>
           <Text style={{fontSize:12,fontWeight:'600',color:'#C44'}}>🗑 Delete project</Text>
         </TouchableOpacity>)}
     </View>);
 }
+
 
 // ═══════════════════════════════════════════════════════════════════
 // PROJECTS TAB — same layout as Home: week strip + day detail
@@ -597,12 +633,9 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
             </View>
             <Text style={{fontSize:14,color:C.textDark,paddingHorizontal:6}}>{isExp?'▾':'▸'}</Text>
           </TouchableOpacity>
-          {isExp&&<ProjDayPanel pid={p.id} ds={selDay}
-            dm={projLog[selDay]?.[p.id]?.minutes||0}
-            dn={projLog[selDay]?.[p.id]?.notes||''}
-            tasks={projLog[selDay]?.[p.id]?.tasks||[]}
+          {isExp&&<ProjDayPanel pid={p.id} ds={selDay} projLog={projLog}
             color={p.color}
-            addProjMinutes={addProjMinutes} setProjMinutes={setProjMinutes}
+            setProjMinutes={setProjMinutes}
             setProjNote={setProjNote} setProjTasks={setProjTasks}
             onDelete={()=>Alert.alert('Delete',`Delete "${p.name}"?`,[{text:'Cancel',style:'cancel'},
               {text:'Delete',style:'destructive',onPress:()=>{setExpandedProj(null);setProjects(pr=>pr.filter(x=>x.id!==p.id));}}])}
