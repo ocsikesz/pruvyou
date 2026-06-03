@@ -191,6 +191,34 @@ export default function App(){
     }catch(e){setDriveStatus('error');Alert.alert('Restore failed',e?.message||'Drive error');}
   },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
 
+  // ── Silent auto-backup to Drive (no alerts) ──
+  const driveAutoBackup=useCallback(async()=>{
+    if(!driveToken)return;
+    try{
+      setDriveStatus('syncing');
+      const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
+      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${BACKUP_FILENAME}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
+      const {files}=await search.json();
+      const fileId=files?.[0]?.id;
+      if(!fileId){
+        const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:JSON.stringify({name:BACKUP_FILENAME,mimeType:'application/json'})});
+        const {id}=await meta.json();
+        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
+      }else{
+        const r=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
+        if(r.status===401){setDriveStatus('error');return;} // token expired
+      }
+      setDriveStatus('ok');await sv('pv-drive-lastsync',new Date().toISOString());
+    }catch(e){setDriveStatus('error');}
+  },[driveToken,habits,log,projects,projLog,adHocTasks]);
+
+  // Debounced auto-backup: 4s after last data change
+  useEffect(()=>{
+    if(!loaded||!driveToken)return;
+    const t=setTimeout(()=>{driveAutoBackup();},4000);
+    return ()=>clearTimeout(t);
+  },[habits,log,projects,projLog,adHocTasks,driveToken,loaded]);
+
   if(!loaded)return<SafeAreaView style={s.root}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView>;
 
@@ -1193,46 +1221,53 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     <View style={s.statsCard}>
       <Text style={s.statsTitle}>☁️ Backup & Sync</Text>
 
-      {/* Google Drive section — temporarily disabled until OAuth verified */}
-      {false&&(!driveToken?(
+      {/* Google Drive section */}
+      {!driveToken?(
         <TouchableOpacity onPress={()=>promptAsync()}
           style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:12,
-            backgroundColor:'#fff',borderWidth:2,borderColor:'#4285F4',marginBottom:10}}>
+            backgroundColor:C.white,borderWidth:2,borderColor:'#4285F4',marginBottom:12}}>
           <Text style={{fontSize:22}}>🔵</Text>
           <View style={{flex:1}}>
             <Text style={{fontSize:14,fontWeight:'700',color:'#4285F4'}}>Connect Google Drive</Text>
-            <Text style={{fontSize:11,color:C.textDim}}>Backup automat în contul tău Drive</Text>
+            <Text style={{fontSize:11,color:C.textDim}}>Auto-backup to your Drive — no files to manage</Text>
           </View>
           <Text style={{fontSize:16,color:'#4285F4'}}>▸</Text>
         </TouchableOpacity>
       ):(
-        <View style={{padding:12,borderRadius:12,backgroundColor:'#E8F5E9',borderWidth:1,borderColor:'#81C784',marginBottom:10}}>
+        <View style={{padding:12,borderRadius:12,backgroundColor:'#E8F5E9',borderWidth:1,borderColor:'#81C784',marginBottom:12}}>
           <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:10}}>
-            <Text style={{fontSize:22}}>✅</Text>
+            <Text style={{fontSize:22}}>{driveStatus==='syncing'?'🔄':driveStatus==='error'?'⚠️':'✅'}</Text>
             <View style={{flex:1}}>
-              <Text style={{fontSize:13,fontWeight:'700',color:'#2E7D32'}}>Google Drive conectat</Text>
+              <Text style={{fontSize:13,fontWeight:'700',color:'#2E7D32'}}>
+                {driveStatus==='syncing'?'Syncing…':driveStatus==='error'?'Sync issue — reconnect':'Google Drive connected'}</Text>
               {driveUser?<Text style={{fontSize:11,color:'#388E3C'}}>{driveUser}</Text>:null}
             </View>
             <TouchableOpacity onPress={signOutDrive} style={{padding:6,borderRadius:6,backgroundColor:'#FEE',borderWidth:1,borderColor:'#FCC'}}>
               <Text style={{fontSize:11,color:'#C44',fontWeight:'600'}}>Sign out</Text>
             </TouchableOpacity>
           </View>
+          <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10,paddingHorizontal:4}}>
+            <View style={{width:6,height:6,borderRadius:3,backgroundColor:driveStatus==='error'?'#C44':'#34C79F'}}/>
+            <Text style={{fontSize:11,color:'#388E3C'}}>
+              {driveStatus==='error'?'Auto-backup paused':'Auto-backup on — saves a few seconds after each change'}</Text>
+          </View>
           <View style={{flexDirection:'row',gap:8}}>
             <TouchableOpacity onPress={driveBackup}
               style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#4285F4',alignItems:'center',
                 opacity:driveStatus==='syncing'?0.6:1}}>
               <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>
-                {driveStatus==='syncing'?'Se salvează...':driveStatus==='ok'?'✅ Salvat':'☁️ Backup acum'}</Text>
+                {driveStatus==='syncing'?'Saving…':'☁️ Backup now'}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={driveRestore}
-              style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#fff',alignItems:'center',
+              style={{flex:1,padding:11,borderRadius:9,backgroundColor:C.white,alignItems:'center',
                 borderWidth:1,borderColor:'#4285F4',opacity:driveStatus==='syncing'?0.6:1}}>
-              <Text style={{fontSize:13,fontWeight:'600',color:'#4285F4'}}>📥 Restaurează</Text>
+              <Text style={{fontSize:13,fontWeight:'600',color:'#4285F4'}}>📥 Restore</Text>
             </TouchableOpacity>
           </View>
-        </View>))}
+        </View>)}
 
-      <Text style={{fontSize:11,color:C.textDim,marginBottom:10}}>Save a backup file to your device, Google Drive, or OneDrive folder. Restore it anytime.</Text>
+      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>OR LOCAL FILE</Text>
+      <Text style={{fontSize:11,color:C.textDim,marginBottom:10}}>Save a backup file to your device or a Drive/OneDrive synced folder.</Text>
       <View style={{flexDirection:'row',gap:8}}>
         <TouchableOpacity onPress={handleBackup}
           style={{flex:1,padding:13,borderRadius:10,backgroundColor:brand.blue+'12',alignItems:'center',borderWidth:1,borderColor:brand.blue+'40'}}>
@@ -1253,7 +1288,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.6.0</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.7.0</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
