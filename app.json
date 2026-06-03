@@ -2,7 +2,7 @@
   "expo": {
     "name": "PruvYou",
     "slug": "pruvyou",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -24,7 +24,8 @@
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "SCHEDULE_EXACT_ALARM",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "WAKE_LOCK"
       ],
       "intentFilters": [
         {
@@ -51,7 +52,8 @@
           "icon": "./assets/icon.png",
           "color": "#1A4F8A"
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "scheme": "com.ocsikesz.pruvyou",
     "sdkVersion": "52.0.0"

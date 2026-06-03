@@ -10,6 +10,8 @@ import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as BackgroundTask from 'expo-background-task';
+import * as TaskManager from 'expo-task-manager';
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googleusercontent.com';
@@ -41,6 +43,58 @@ function getMonthDates(y,m){const days=new Date(y,m+1,0).getDate();
 
 const ld=async(k,fb)=>{try{const r=await AsyncStorage.getItem(k);return r?JSON.parse(r):fb;}catch{return fb;}};
 const sv=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch{}};
+
+// ─── Background backup task (runs even when app is closed) ───────────
+const BG_BACKUP_TASK='pruvyou-bg-backup';
+const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
+
+TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
+  try{
+    const cfg=await ld('pv-bg-config',null);
+    if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.Success;
+    const now=new Date();
+    const dow=now.getDay(); // 0=Sun..6=Sat
+    const hour=now.getHours();
+    // Check selected days (cfg.days = array of weekday indices 0..6) and hour window
+    if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundTask.BackgroundTaskResult.Success;
+    if(typeof cfg.hour==='number'&&hour<cfg.hour)return BackgroundTask.BackgroundTaskResult.Success;
+    const todayS=fmtDate(now);
+    const last=await ld('pv-drive-lastbackup',null);
+    if(last===todayS)return BackgroundTask.BackgroundTaskResult.Success; // already done today
+    const tk=await ld('pv-drive-token',null);
+    if(!tk||!tk.token)return BackgroundTask.BackgroundTaskResult.Success;
+    // Gather data
+    const habits=await ld('pv-habits',[]);
+    const log=await ld('pv-log',{});
+    const projects=await ld('pv-projects',[]);
+    const projLog=await ld('pv-projlog',{});
+    const adHocTasks=await ld('pv-adhoc',{});
+    const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:now.toISOString(),app:'PruvYou'},null,2);
+    const filename='pruvyou_backup_'+todayS+'.json';
+    const auth={Authorization:'Bearer '+tk.token};
+    // upsert today's file
+    const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:auth});
+    if(search.status===401)return BackgroundTask.BackgroundTaskResult.Success;
+    const {files}=await search.json();
+    const fileId=files?.[0]?.id;
+    if(!fileId){
+      const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
+      const {id}=await meta.json();
+      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:data});
+    }else{
+      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:data});
+    }
+    // prune to 7
+    try{
+      const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:auth});
+      const {files:allFiles}=await all.json();
+      if(allFiles&&allFiles.length>7)for(const f of allFiles.slice(7))await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:auth});
+    }catch(e){}
+    await sv('pv-drive-lastbackup',todayS);
+    return BackgroundTask.BackgroundTaskResult.Success;
+  }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
+});
+
 
 function Ring({size,sw,pct,color,children}){
   const r=(size-sw)/2,circ=2*Math.PI*r,off=circ-(Math.min(100,pct)/100)*circ;
@@ -209,19 +263,6 @@ export default function App(){
     }catch(e){setDriveStatus('error');Alert.alert('Restore failed',e?.message||'Drive error');}
   },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
 
-  // ── Nightly auto-backup: once per day, after 2 AM, on app open ──
-  useEffect(()=>{
-    if(!loaded||!driveToken)return;
-    (async()=>{
-      const last=await ld('pv-drive-lastbackup',null);
-      const todayS=fmt(today());
-      const hour=new Date().getHours();
-      // Run if: never backed up, OR last backup was a previous day AND it's past 2 AM
-      if(last!==todayS&&hour>=2){
-        driveWrite(false);
-      }
-    })();
-  },[loaded,driveToken]);
 
   if(!loaded)return<SafeAreaView style={s.root}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView>;
@@ -1145,15 +1186,35 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   const [reminderEnabled,setReminderEnabled]=useState(false);
   const [reminderTime,setReminderTime]=useState('20:00');
   const [reminderSaved,setReminderSaved]=useState(false);
+  const [bgEnabled,setBgEnabled]=useState(false);
+  const [bgHour,setBgHour]=useState(2);
+  const [bgDays,setBgDays]=useState([0,1,2,3,4,5,6]); // 0=Sun..6=Sat, default all
 
   React.useEffect(()=>{
     ld('pv-daily-reminder',null).then(r=>{if(r){setReminderEnabled(r.enabled);setReminderTime(r.time);setReminderSaved(r.enabled);}});
+    ld('pv-bg-config',null).then(c=>{if(c){setBgEnabled(c.enabled);setBgHour(c.hour??2);setBgDays(c.days||[0,1,2,3,4,5,6]);}});
   },[]);
 
   const saveGlobalReminder=async(enabled,time)=>{
     await sv('pv-daily-reminder',{enabled,time});
     setReminderEnabled(enabled);setReminderTime(time);setReminderSaved(enabled);
     if(enabled)scheduleDailyReminder(time);else cancelDailyReminder();
+  };
+
+  const saveBgConfig=async(enabled,hour,days)=>{
+    await sv('pv-bg-config',{enabled,hour,days});
+    setBgEnabled(enabled);setBgHour(hour);setBgDays(days);
+    try{
+      if(enabled){
+        await BackgroundTask.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60}); // check ~hourly
+      }else{
+        await BackgroundTask.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});
+      }
+    }catch(e){Alert.alert('Background task',e?.message||'Could not update background backup');}
+  };
+  const toggleBgDay=(d)=>{
+    const next=bgDays.includes(d)?bgDays.filter(x=>x!==d):[...bgDays,d].sort();
+    saveBgConfig(bgEnabled,bgHour,next);
   };
 
   const handleBackup=async()=>{
@@ -1268,6 +1329,40 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
               <Text style={{fontSize:13,fontWeight:'600',color:'#4285F4'}}>📥 Restore</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Auto-backup schedule */}
+          <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:'#C8E6C9'}}>
+            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+              <Text style={{fontSize:12,fontWeight:'700',color:'#2E7D32'}}>⏰ Scheduled auto-backup</Text>
+              <TouchableOpacity onPress={()=>saveBgConfig(!bgEnabled,bgHour,bgDays)}
+                style={{width:46,height:26,borderRadius:13,padding:3,
+                  backgroundColor:bgEnabled?'#34C79F':'#CCC',justifyContent:'center'}}>
+                <View style={{width:20,height:20,borderRadius:10,backgroundColor:'#fff',
+                  alignSelf:bgEnabled?'flex-end':'flex-start'}}/>
+              </TouchableOpacity>
+            </View>
+            {bgEnabled&&(<>
+              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>TIME (HOUR)</Text>
+              <View style={{flexDirection:'row',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+                {[0,1,2,3,4,5,6,22,23].map(h=>(
+                  <TouchableOpacity key={h} onPress={()=>saveBgConfig(true,h,bgDays)}
+                    style={{paddingHorizontal:10,paddingVertical:6,borderRadius:8,
+                      backgroundColor:bgHour===h?'#34C79F':C.bg,borderWidth:1,borderColor:bgHour===h?'#34C79F':C.border}}>
+                    <Text style={{fontSize:11,fontWeight:'700',color:bgHour===h?'#fff':C.textDim}}>{String(h).padStart(2,'0')}:00</Text>
+                  </TouchableOpacity>))}
+              </View>
+              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>DAYS</Text>
+              <View style={{flexDirection:'row',gap:5,marginBottom:8}}>
+                {[{i:1,l:'Mo'},{i:2,l:'Tu'},{i:3,l:'We'},{i:4,l:'Th'},{i:5,l:'Fr'},{i:6,l:'Sa'},{i:0,l:'Su'}].map(({i,l})=>(
+                  <TouchableOpacity key={i} onPress={()=>toggleBgDay(i)}
+                    style={{flex:1,paddingVertical:8,borderRadius:8,alignItems:'center',
+                      backgroundColor:bgDays.includes(i)?'#34C79F':C.bg,borderWidth:1,borderColor:bgDays.includes(i)?'#34C79F':C.border}}>
+                    <Text style={{fontSize:10,fontWeight:'700',color:bgDays.includes(i)?'#fff':C.textDim}}>{l}</Text>
+                  </TouchableOpacity>))}
+              </View>
+              <Text style={{fontSize:10,color:C.textDim,fontStyle:'italic'}}>Runs in background near the chosen hour. Android may shift the exact time by up to ~1h to save battery.</Text>
+            </>)}
+          </View>
         </View>)}
 
       <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>OR LOCAL FILE</Text>
@@ -1292,7 +1387,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.8.0</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.9.0</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
