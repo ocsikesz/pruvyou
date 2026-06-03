@@ -655,7 +655,10 @@ function StatsTab({habits,log,projects,projLog}){
   const [selMonth,setSelMonth]=useState(today().getMonth());
   const [selYear,setSelYear]=useState(today().getFullYear());
   const [detailDay,setDetailDay]=useState(null);
+  const [projDetailDay,setProjDetailDay]=useState(null);
+  const [projWeekOff,setProjWeekOff]=useState(0);
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
+  const projWeekDates=useMemo(()=>getWeekDates(projWeekOff),[projWeekOff]);
   const monthDates=useMemo(()=>getMonthDates(selYear,selMonth),[selYear,selMonth]);
   const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const todayStr=fmt(today());
@@ -758,42 +761,127 @@ function StatsTab({habits,log,projects,projLog}){
     {projects.length>0&&(<View style={s.statsCard}>
       <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
         <Text style={s.statsTitle}>📁 Project Status</Text>
-        <TouchableOpacity onPress={()=>setExpandProjects(e=>!e)}
+        <TouchableOpacity onPress={()=>{setExpandProjects(e=>!e);setProjDetailDay(null);}}
           style={{paddingHorizontal:10,paddingVertical:4,borderRadius:8,backgroundColor:expandProjects?brand.blue+'15':C.bg,borderWidth:1,borderColor:expandProjects?brand.blue:C.border}}>
           <Text style={{fontSize:10,fontWeight:'700',color:expandProjects?brand.blue:C.textDim}}>{expandProjects?'Week view':'Month view'}</Text>
         </TouchableOpacity>
       </View>
-      {projects.map(p=>{
-        const totalMins=Object.values(projLog).reduce((sum,day)=>sum+(day[p.id]?.minutes||0),0);
-        const viewDates=expandProjects?monthDates:weekDates;
-        const viewMins=viewDates.reduce((sum,d)=>sum+(projLog[fmt(d)]?.[p.id]?.minutes||0),0);
-        return(<View key={p.id} style={{marginBottom:14}}>
-          <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:6}}>
-            <View style={{width:10,height:10,borderRadius:5,backgroundColor:p.color}}/>
-            <Text style={{fontSize:13,fontWeight:'600',color:C.text,flex:1}}>{p.name}</Text>
-            <Text style={{fontSize:14,fontWeight:'800',color:p.color}}>{Math.round(totalMins/60*10)/10}h</Text>
+
+      {/* Week nav (week view only) */}
+      {!expandProjects&&(
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <TouchableOpacity onPress={()=>{setProjWeekOff(w=>w-1);setProjDetailDay(null);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+          <Text style={{fontSize:11,fontWeight:'600',color:C.textDim}}>
+            {projWeekOff===0?'This week':`${projWeekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${projWeekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}
+          </Text>
+          <TouchableOpacity onPress={()=>setProjWeekOff(w=>Math.min(0,w+1))} style={[s.navBtn,projWeekOff>=0&&{opacity:.3}]} disabled={projWeekOff>=0}><Text style={s.navBtnT}>▸</Text></TouchableOpacity>
+        </View>)}
+
+      {/* Month nav (month view only) */}
+      {expandProjects&&(
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <TouchableOpacity onPress={()=>{if(selMonth===0){setSelMonth(11);setSelYear(y=>y-1);}else setSelMonth(m=>m-1);setProjDetailDay(null);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+          <Text style={{fontSize:14,fontWeight:'700',color:C.text}}>{MN[selMonth]} {selYear}</Text>
+          <TouchableOpacity onPress={()=>{if(selMonth===11){setSelMonth(0);setSelYear(y=>y+1);}else setSelMonth(m=>m+1);setProjDetailDay(null);}} style={s.navBtn}><Text style={s.navBtnT}>▸</Text></TouchableOpacity>
+        </View>)}
+
+      {/* Day headers */}
+      <View style={{flexDirection:'row',marginBottom:4}}>
+        {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
+
+      {/* Week view: single row of 7 cells */}
+      {!expandProjects&&(
+        <View style={{flexDirection:'row',gap:3,marginBottom:4}}>
+          {projWeekDates.map((d,i)=>{
+            const ds=fmt(d);const isToday=ds===todayStr;const isSel=projDetailDay===ds;
+            const totalMins=projects.reduce((sum,p)=>sum+(projLog[ds]?.[p.id]?.minutes||0),0);
+            const hasAny=totalMins>0||projects.some(p=>(projLog[ds]?.[p.id]?.tasks||[]).length>0);
+            const pct=Math.min(100,totalMins/120*100);
+            return(<TouchableOpacity key={i} onPress={()=>setProjDetailDay(isSel?null:ds)}
+              style={{flex:1,height:36,borderRadius:6,justifyContent:'center',alignItems:'center',overflow:'hidden',
+                backgroundColor:hasAny?brand.blue+'20':C.bg,
+                borderWidth:isToday?2:(isSel?2:1),borderColor:isToday?brand.gold:(isSel?brand.blue:C.borderLight)}}>
+              {totalMins>0&&<View style={{position:'absolute',bottom:0,left:0,right:0,
+                height:`${pct}%`,backgroundColor:brand.blue+'40',borderRadius:5}}/>}
+              <Text style={{fontSize:9,fontWeight:'700',color:totalMins>0?brand.blue:C.textDim,zIndex:1}}>{d.getDate()}</Text>
+              {totalMins>0&&<Text style={{fontSize:6,fontWeight:'700',color:brand.blue,zIndex:1}}>{totalMins}m</Text>}
+            </TouchableOpacity>);})}
+        </View>)}
+
+      {/* Month view: full calendar grid */}
+      {expandProjects&&(
+        <>
+          {calGrid.map((row,ri)=>(
+            <View key={ri} style={{flexDirection:'row',gap:3,marginBottom:3}}>
+              {row.map((d,ci)=>{
+                if(!d)return<View key={ci} style={{flex:1,height:32}}/>;
+                const ds=fmt(d);const isToday=ds===todayStr;const isSel=projDetailDay===ds;
+                const totalMins=projects.reduce((sum,p)=>sum+(projLog[ds]?.[p.id]?.minutes||0),0);
+                const hasAny=totalMins>0||projects.some(p=>(projLog[ds]?.[p.id]?.tasks||[]).length>0);
+                const pct=Math.min(100,totalMins/120*100);
+                return(<TouchableOpacity key={ci} onPress={()=>setProjDetailDay(isSel?null:ds)}
+                  style={{flex:1,height:32,borderRadius:6,justifyContent:'center',alignItems:'center',overflow:'hidden',
+                    backgroundColor:hasAny?brand.blue+'20':C.bg,
+                    borderWidth:isToday?2:(isSel?2:1),borderColor:isToday?brand.gold:(isSel?brand.blue:C.borderLight)}}>
+                  {totalMins>0&&<View style={{position:'absolute',bottom:0,left:0,right:0,
+                    height:`${pct}%`,backgroundColor:brand.blue+'40',borderRadius:5}}/>}
+                  <Text style={{fontSize:9,fontWeight:'700',color:totalMins>0?brand.blue:C.textDim,zIndex:1}}>{d.getDate()}</Text>
+                  {totalMins>0&&<Text style={{fontSize:6,fontWeight:'700',color:brand.blue,zIndex:1}}>{totalMins}m</Text>}
+                </TouchableOpacity>);
+              })}
+            </View>))}
+          <View style={{flexDirection:'row',justifyContent:'center',gap:12,marginTop:8}}>
+            {[{c:brand.blue+'40',l:'120m+'},{c:brand.blue+'20',l:'any time'},{c:C.bg,l:'nothing'}].map(({c,l})=>(
+              <View key={l} style={{flexDirection:'row',alignItems:'center',gap:4}}>
+                <View style={{width:12,height:12,borderRadius:3,backgroundColor:c,borderWidth:1,borderColor:C.border}}/>
+                <Text style={{fontSize:8,color:C.textDim}}>{l}</Text></View>))}
           </View>
-          {!expandProjects&&(<>
-            <View style={{flexDirection:'row',marginBottom:4}}>
-              {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}><Text style={{fontSize:8,fontWeight:'700',color:C.textDim}}>{d}</Text></View>))}</View>
-            <View style={{flexDirection:'row',gap:3}}>
-              {weekDates.map((d,i)=>{const dm=projLog[fmt(d)]?.[p.id]?.minutes||0;const isToday=fmt(d)===todayStr;
-                return(<View key={i} style={{flex:1,alignItems:'center',gap:2}}>
-                  <View style={{width:'100%',height:28,borderRadius:6,justifyContent:'flex-end',
-                    backgroundColor:dm>0?p.color+'25':C.borderLight,borderWidth:isToday?2:1,borderColor:isToday?brand.gold:(dm>0?p.color+'50':C.borderLight)}}>
-                    {dm>0&&<View style={{width:'100%',height:`${Math.min(100,dm/120*100)}%`,backgroundColor:p.color,borderRadius:5}}/>}
+        </>)}
+
+      {/* Detail panel for selected day */}
+      {projDetailDay&&(()=>{
+        const dp=projDetailDay.split('-');
+        const d=new Date(dp[0],parseInt(dp[1])-1,dp[2]);
+        const isToday=projDetailDay===todayStr;
+        return(<View style={{marginTop:10,padding:12,backgroundColor:C.bg,borderRadius:10}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:C.text,marginBottom:8}}>
+            {d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}</Text>
+          {projects.map(p=>{
+            const dm=projLog[projDetailDay]?.[p.id]?.minutes||0;
+            const tasks=projLog[projDetailDay]?.[p.id]?.tasks||[];
+            // For today: also pull in any tasks from today that are undone
+            const todayTasks=isToday?(projLog[todayStr]?.[p.id]?.tasks||[]):[];
+            const displayTasks=isToday?todayTasks:tasks;
+            if(dm===0&&displayTasks.length===0)return null;
+            const doneCnt=displayTasks.filter(t=>t.done).length;
+            return(<View key={p.id} style={{marginBottom:10}}>
+              {/* Project header */}
+              <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:6}}>
+                <View style={{width:10,height:10,borderRadius:5,backgroundColor:p.color}}/>
+                <Text style={{fontSize:13,fontWeight:'700',color:C.text,flex:1}}>{p.name}</Text>
+                {dm>0&&<View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:6,backgroundColor:p.color+'20',borderWidth:1,borderColor:p.color+'40'}}>
+                  <Text style={{fontSize:11,fontWeight:'800',color:p.color}}>{dm}m</Text></View>}
+                {displayTasks.length>0&&<Text style={{fontSize:11,color:doneCnt===displayTasks.length?brand.green:C.textDim,fontWeight:'700'}}>
+                  {doneCnt}/{displayTasks.length} tasks</Text>}
+              </View>
+              {/* Tasks */}
+              {displayTasks.map((t,i)=>(
+                <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:4,marginLeft:18}}>
+                  <View style={{width:16,height:16,borderRadius:4,borderWidth:1.5,
+                    borderColor:t.done?p.color:C.border,backgroundColor:t.done?p.color:'#fff',
+                    alignItems:'center',justifyContent:'center'}}>
+                    {t.done&&<Text style={{color:'#fff',fontSize:9,fontWeight:'800'}}>✓</Text>}
                   </View>
-                  <Text style={{fontSize:8,fontWeight:'700',color:dm>0?p.color:C.textDim}}>{dm>0?dm+'m':'—'}</Text>
-                </View>);})}</View>
-          </>)}
-          {expandProjects&&(<>
-            <View style={{flexDirection:'row',gap:1,height:24,alignItems:'flex-end',marginBottom:2}}>
-              {monthDates.map((d,i)=>{const dm=projLog[fmt(d)]?.[p.id]?.minutes||0;
-                return(<View key={i} style={{flex:1,height:dm>0?clamp(dm/120*24,3,24):2,
-                  backgroundColor:dm>0?p.color:C.borderLight,borderRadius:1}}/> );})}</View>
-          </>)}
-          <Text style={{fontSize:9,color:C.textDim,marginTop:2}}>{viewMins}m this {expandProjects?'month':'week'} · {Math.round(viewMins/60*10)/10}h</Text>
-        </View>);})}
+                  <Text style={{flex:1,fontSize:12,color:t.done?C.textDim:C.text,
+                    textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
+                </View>))}
+            </View>);})}
+          {!projects.some(p=>{
+            const dm=projLog[projDetailDay]?.[p.id]?.minutes||0;
+            const tasks=isToday?(projLog[todayStr]?.[p.id]?.tasks||[]):(projLog[projDetailDay]?.[p.id]?.tasks||[]);
+            return dm>0||tasks.length>0;})&&
+            <Text style={{fontSize:11,color:C.textDim}}>No data for this day</Text>}
+        </View>)})()}
     </View>)}
   </View>);
 }
