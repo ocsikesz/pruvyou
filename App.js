@@ -12,7 +12,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 // ─── Google Drive OAuth ───────────────────────────────────────────
 // Replace with your Android OAuth 2.0 Client ID from Google Cloud Console
-const GOOGLE_CLIENT_ID='YOUR_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const BACKUP_FILENAME='pruvyou_backup.json';
 // ─────────────────────────────────────────────────────────────────
