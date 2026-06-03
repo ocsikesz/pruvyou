@@ -136,7 +136,7 @@ export default function App(){
         {tab==='projects'&&<ProjectsTab projects={projects} setProjects={setProjects}
           projLog={projLog} addProjMinutes={addProjMinutes} setProjNote={setProjNote} setProjMinutes={setProjMinutes} setProjTasks={setProjTasks}
           todayStr={todayStr}/>}
-        {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog}/>}
+        {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
           setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder}/>}
         <View style={{height:80}}/>
@@ -743,7 +743,7 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
 // ═══════════════════════════════════════════════════════════════════
 // STATS TAB — week view default, expandable to month
 // ═══════════════════════════════════════════════════════════════════
-function StatsTab({habits,log,projects,projLog}){
+function StatsTab({habits,log,projects,projLog,adHocTasks}){
   const [weekOff,setWeekOff]=useState(0);
   const [expandHabits,setExpandHabits]=useState(false);
   const [expandProjects,setExpandProjects]=useState(false);
@@ -849,6 +849,24 @@ function StatsTab({habits,log,projects,projLog}){
               </View>
               {e?.notes&&<Text style={{fontSize:10,color:brand.blue,marginLeft:20,marginTop:2}}>📝 {e.notes}</Text>}
             </View>);})}
+          {(()=>{const qt=adHocTasks?.[detailDay]||[];if(!qt.length)return null;
+            const done=qt.filter(t=>t.done).length;
+            return(<View style={{marginTop:8,paddingTop:8,borderTopWidth:1,borderTopColor:C.border}}>
+              <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:6}}>
+                <Text style={{fontSize:11,fontWeight:'700',color:brand.gold}}>⚡ Quick Tasks</Text>
+                <Text style={{fontSize:10,color:done===qt.length?brand.green:C.textDim,fontWeight:'700'}}>{done}/{qt.length}</Text>
+              </View>
+              {qt.map((t,i)=>(
+                <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:4}}>
+                  <View style={{width:14,height:14,borderRadius:3,borderWidth:1.5,
+                    borderColor:t.done?brand.green:C.border,backgroundColor:t.done?brand.green:'#fff',
+                    alignItems:'center',justifyContent:'center'}}>
+                    {t.done&&<Text style={{color:'#fff',fontSize:8,fontWeight:'800'}}>✓</Text>}
+                  </View>
+                  <Text style={{flex:1,fontSize:12,color:t.done?C.textDim:C.text,
+                    textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
+                </View>))}
+            </View>);})()}
         </View>)})()}
     </View>)}
 
@@ -1133,7 +1151,7 @@ const s=StyleSheet.create({
   cancelBtn:{flex:1,padding:12,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center'},cancelBtnT:{fontSize:13,fontWeight:'600',color:C.textDim},
   saveBtn:{flex:1,padding:12,borderRadius:10,alignItems:'center'},saveBtnT:{fontSize:13,fontWeight:'700',color:'#fff'},
   statsCard:{backgroundColor:C.white,borderRadius:14,padding:16,marginBottom:12,borderWidth:1,borderColor:C.border},statsTitle:{fontSize:13,fontWeight:'700',color:brand.blue,marginBottom:12},
-  tabBar:{position:'absolute',bottom:0,left:0,right:0,height:72,backgroundColor:C.white,borderTopWidth:1,borderTopColor:C.border,flexDirection:'row',alignItems:'center',justifyContent:'space-around'},
-  tabItem:{alignItems:'center',gap:3},tabIcon:{width:34,height:34},tabLabel:{fontSize:9,fontWeight:'500',color:C.textLight},
+  tabBar:{position:'absolute',bottom:0,left:0,right:0,height:88,backgroundColor:C.white,borderTopWidth:1,borderTopColor:C.border,flexDirection:'row',alignItems:'center',justifyContent:'space-around'},
+  tabItem:{alignItems:'center',gap:2},tabIcon:{width:62,height:62},tabLabel:{fontSize:9,fontWeight:'500',color:C.textLight},
   modalBg:{flex:1,backgroundColor:'rgba(0,0,0,0.4)',justifyContent:'flex-end'},modalBox:{backgroundColor:C.white,borderTopLeftRadius:24,borderTopRightRadius:24,padding:20,maxHeight:'80%'},
 });
