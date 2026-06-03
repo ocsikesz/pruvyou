@@ -2,7 +2,7 @@
   "expo": {
     "name": "PruvYou",
     "slug": "pruvyou",
-    "version": "1.9.1",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -53,9 +53,9 @@
           "color": "#1A4F8A"
         }
       ],
-      "expo-background-fetch"
+      "expo-background-task"
     ],
     "scheme": "com.ocsikesz.pruvyou",
-    "sdkVersion": "52.0.0"
+    "sdkVersion": "54.0.0"
   }
 }

@@ -10,7 +10,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import * as BackgroundFetch from 'expo-background-fetch';
+import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 WebBrowser.maybeCompleteAuthSession();
 
@@ -51,17 +51,17 @@ const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padSt
 TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
   try{
     const cfg=await ld('pv-bg-config',null);
-    if(!cfg||!cfg.enabled)return BackgroundFetch.BackgroundFetchResult.NoData;
+    if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.NoData;
     const now=new Date();
     const dow=now.getDay();
     const hour=now.getHours();
-    if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundFetch.BackgroundFetchResult.NoData;
-    if(typeof cfg.hour==='number'&&hour<cfg.hour)return BackgroundFetch.BackgroundFetchResult.NoData;
+    if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundTask.BackgroundTaskResult.NoData;
+    if(typeof cfg.hour==='number'&&hour<cfg.hour)return BackgroundTask.BackgroundTaskResult.NoData;
     const todayS=fmtDate(now);
     const last=await ld('pv-drive-lastbackup',null);
-    if(last===todayS)return BackgroundFetch.BackgroundFetchResult.NoData;
+    if(last===todayS)return BackgroundTask.BackgroundTaskResult.NoData;
     const tk=await ld('pv-drive-token',null);
-    if(!tk||!tk.token)return BackgroundFetch.BackgroundFetchResult.NoData;
+    if(!tk||!tk.token)return BackgroundTask.BackgroundTaskResult.NoData;
     const habits=await ld('pv-habits',[]);const log=await ld('pv-log',{});
     const projects=await ld('pv-projects',[]);const projLog=await ld('pv-projlog',{});
     const adHocTasks=await ld('pv-adhoc',{});
@@ -69,7 +69,7 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
     const filename='pruvyou_backup_'+todayS+'.json';
     const auth={Authorization:'Bearer '+tk.token};
     const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:auth});
-    if(search.status===401)return BackgroundFetch.BackgroundFetchResult.Failed;
+    if(search.status===401)return BackgroundTask.BackgroundTaskResult.Failed;
     const {files}=await search.json();
     const fileId=files?.[0]?.id;
     if(!fileId){
@@ -85,8 +85,8 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
       if(allFiles&&allFiles.length>7)for(const f of allFiles.slice(7))await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:auth});
     }catch(e){}
     await sv('pv-drive-lastbackup',todayS);
-    return BackgroundFetch.BackgroundFetchResult.NewData;
-  }catch(e){return BackgroundFetch.BackgroundFetchResult.Failed;}
+    return BackgroundTask.BackgroundTaskResult.NewData;
+  }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
 });
 
 function Ring({size,sw,pct,color,children}){
@@ -1199,9 +1199,9 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     setBgEnabled(enabled);setBgHour(hour);setBgDays(days);
     try{
       if(enabled){
-        await BackgroundFetch.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60,stopOnTerminate:false,startOnBoot:true});
+        await BackgroundTask.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60});
       }else{
-        await BackgroundFetch.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});
+        await BackgroundTask.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});
       }
     }catch(e){Alert.alert('Background task',e?.message||'Could not update background backup');}
   };
@@ -1393,7 +1393,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.9.1</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v2.0.0</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>

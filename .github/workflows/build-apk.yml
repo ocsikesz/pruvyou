@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK + AAB
 on:
   workflow_dispatch:
 
@@ -32,7 +32,6 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "apk_name=pruvyou_v${VERSION}.apk" >> "$GITHUB_OUTPUT"
           echo "Building PruvYou v${VERSION} (build ${BUILD})"
 
       - name: Install dependencies
@@ -62,7 +61,7 @@ jobs:
       - name: Setup release keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/pruvyou.keystore
-          echo "Keystore: $(ls -lh android/app/pruvyou.keystore)"
+          echo "Keystore ready"
           keytool -keystore android/app/pruvyou.keystore -list -v \
             -alias upload -storepass pruvyou123 2>/dev/null | grep "SHA1:"
 
@@ -87,18 +86,20 @@ jobs:
           }
           GRADLEOF
 
-      - name: Build APK
+      - name: Build APK + AAB
         run: |
           chmod +x android/gradlew
-          cd android && ./gradlew assembleRelease --no-daemon
+          cd android && ./gradlew assembleRelease bundleRelease --no-daemon
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Rename APK
+      - name: Collect artifacts
         run: |
           APK=$(find android/app/build/outputs/apk -name "*.apk" | head -1)
-          cp "$APK" "${{ steps.version.outputs.apk_name }}"
-          ls -lh "${{ steps.version.outputs.apk_name }}"
+          AAB=$(find android/app/build/outputs/bundle -name "*.aab" | head -1)
+          cp "$APK" "pruvyou_v${{ steps.version.outputs.version }}.apk"
+          cp "$AAB" "pruvyou_v${{ steps.version.outputs.version }}.aab"
+          ls -lh pruvyou_v${{ steps.version.outputs.version }}.*
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -108,7 +109,12 @@ jobs:
           body: |
             **PruvYou v${{ steps.version.outputs.version }}**
             Build: ${{ steps.version.outputs.build }} | Commit: ${{ steps.version.outputs.short_sha }}
-          files: ${{ steps.version.outputs.apk_name }}
+
+            **APK** — install directly on your phone
+            **AAB** — upload to Google Play Console
+          files: |
+            pruvyou_v${{ steps.version.outputs.version }}.apk
+            pruvyou_v${{ steps.version.outputs.version }}.aab
           draft: false
           prerelease: false
         env:
