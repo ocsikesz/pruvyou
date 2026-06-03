@@ -25,6 +25,20 @@
         "RECEIVE_BOOT_COMPLETED",
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "com.ocsikesz.pruvyou"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ]
     },
     "assetBundlePatterns": [
@@ -38,6 +52,7 @@
           "color": "#1A4F8A"
         }
       ]
-    ]
+    ],
+    "scheme": "com.ocsikesz.pruvyou"
   }
 }
