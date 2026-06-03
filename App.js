@@ -138,7 +138,7 @@ export default function App(){
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder}/>}
         <View style={{height:80}}/>
       </ScrollView>
 
@@ -1031,7 +1031,7 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,scheduleDailyReminder,cancelDailyReminder}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder}){
   const [reminderEnabled,setReminderEnabled]=useState(false);
   const [reminderTime,setReminderTime]=useState('20:00');
   const [reminderSaved,setReminderSaved]=useState(false);
@@ -1061,6 +1061,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
         {text:'Cancel',style:'cancel'},{text:'Restore',onPress:()=>{
           if(data.habits)setHabits(data.habits);if(data.log)setLog(data.log);
           if(data.projects)setProjects(data.projects);if(data.projLog)setProjLog(data.projLog);
+          if(data.adHocTasks)setAdHocTasks(data.adHocTasks);
           Alert.alert('Done','Data restored!');}}]);}
     }catch{Alert.alert('Error','Could not read file');}};
 
