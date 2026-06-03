@@ -123,7 +123,7 @@ export default function App(){
       <View style={s.tabBar}>
         {TABS.map(t=>(
           <TouchableOpacity key={t.id} onPress={()=>setTab(t.id)} style={s.tabItem}>
-            <Image source={TAB_ICONS[t.id]} style={[s.tabIcon,tab===t.id&&{tintColor:brand.blue}]} resizeMode="contain"/>
+            <Image source={TAB_ICONS[t.id]} style={[s.tabIcon,tab===t.id&&{transform:[{scale:1.1}]}]} resizeMode="contain"/>
             <Text style={[s.tabLabel,tab===t.id&&{color:brand.blue,fontWeight:'700'}]}>{t.label}</Text>
           </TouchableOpacity>))}
       </View>
@@ -752,7 +752,7 @@ const s=StyleSheet.create({
   cancelBtn:{flex:1,padding:12,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center'},cancelBtnT:{fontSize:13,fontWeight:'600',color:C.textDim},
   saveBtn:{flex:1,padding:12,borderRadius:10,alignItems:'center'},saveBtnT:{fontSize:13,fontWeight:'700',color:'#fff'},
   statsCard:{backgroundColor:C.white,borderRadius:14,padding:16,marginBottom:12,borderWidth:1,borderColor:C.border},statsTitle:{fontSize:13,fontWeight:'700',color:brand.blue,marginBottom:12},
-  tabBar:{position:'absolute',bottom:0,left:0,right:0,height:64,backgroundColor:C.white,borderTopWidth:1,borderTopColor:C.border,flexDirection:'row',alignItems:'center',justifyContent:'space-around'},
-  tabItem:{alignItems:'center',gap:2},tabIcon:{width:24,height:24,tintColor:C.textDark},tabLabel:{fontSize:9,fontWeight:'500',color:C.textLight},
+  tabBar:{position:'absolute',bottom:0,left:0,right:0,height:72,backgroundColor:C.white,borderTopWidth:1,borderTopColor:C.border,flexDirection:'row',alignItems:'center',justifyContent:'space-around'},
+  tabItem:{alignItems:'center',gap:3},tabIcon:{width:34,height:34},tabLabel:{fontSize:9,fontWeight:'500',color:C.textLight},
   modalBg:{flex:1,backgroundColor:'rgba(0,0,0,0.4)',justifyContent:'flex-end'},modalBox:{backgroundColor:C.white,borderTopLeftRadius:24,borderTopRightRadius:24,padding:20,maxHeight:'80%'},
 });
