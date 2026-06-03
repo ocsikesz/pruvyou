@@ -132,6 +132,7 @@ export default function App(){
     scopes:[DRIVE_SCOPE,'email','profile'],
     redirectUri,
     responseType:AuthSession.ResponseType.Token,
+    usePKCE:false,
   },discovery);
 
   useEffect(()=>{
@@ -1288,7 +1289,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.7.0</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v1.7.1</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
