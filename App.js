@@ -155,7 +155,7 @@ export default function App(){
     try{
       setDriveStatus('syncing');
       const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
-      const search=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D''+BACKUP_FILENAME+''%20and%20trashed%3Dfalse&fields=files(id)',{headers:{Authorization:'Bearer '+driveToken}});
+      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${BACKUP_FILENAME}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
       const {files}=await search.json();
       const fileId=files?.[0]?.id;
       if(!fileId){
@@ -174,7 +174,7 @@ export default function App(){
     if(!driveToken){Alert.alert('Not connected','Connect Google Drive first.');return;}
     try{
       setDriveStatus('syncing');
-      const search=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D''+BACKUP_FILENAME+''%20and%20trashed%3Dfalse&fields=files(id)',{headers:{Authorization:'Bearer '+driveToken}});
+      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${BACKUP_FILENAME}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
       const {files}=await search.json();
       if(!files?.length){setDriveStatus('');Alert.alert('No backup','No backup found in your Drive.');return;}
       const res=await fetch('https://www.googleapis.com/drive/v3/files/'+files[0].id+'?alt=media',{headers:{Authorization:'Bearer '+driveToken}});
