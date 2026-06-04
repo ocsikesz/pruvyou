@@ -16,6 +16,7 @@ import * as Linking from 'expo-linking';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 WebBrowser.maybeCompleteAuthSession();
+Notifications.setNotificationHandler({handleNotification:async()=>({shouldShowAlert:true,shouldPlaySound:true,shouldSetBadge:false})});
 
 const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
@@ -159,8 +160,8 @@ export default function App(){
       for(const n of scheduled){if(n.content.data?.type==='daily')await Notifications.cancelScheduledNotificationAsync(n.identifier);}
       const [hr,min]=time.split(':').map(Number);
       await Notifications.scheduleNotificationAsync({
-        content:{title:'PruvYou ⏰',body:"Don't forget to log your habits and tasks today!",data:{type:'daily'}},
-        trigger:{hour:hr,minute:min,repeats:true},
+        content:{title:'PruvYou ⏰',body:"Don't forget to log your habits and tasks today!",data:{type:'daily'},sound:true},
+        trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour:hr,minute:min},
       });
     }catch(e){console.log('Notification error',e);}
   },[]);
@@ -267,7 +268,7 @@ export default function App(){
       const cfg=await ld('pv-bg-config',null);
       if(!cfg||!cfg.enabled)return;
       const last=await ld('pv-drive-lastbackup',null);
-      if(last!==fmt(today())&&new Date().getHours()>=cfg.hour){
+      if(last!==fmt(today())&&new Date().getHours()>=(cfg.hour||parseInt((cfg.time||'02:00').split(':')[0]))){
         driveWrite(false);
       }
     })();
@@ -1171,19 +1172,28 @@ function TimePicker({value,onChange,color}){
   const [m,setM]=useState(value?parseInt(value.split(':')[1]):0);
   const pad=n=>String(n).padStart(2,'0');
   const update=(nh,nm)=>{setH(nh);setM(nm);onChange(`${pad(nh)}:${pad(nm)}`);};
+  const Drum=({val,onUp,onDown,max})=>(
+    <View style={{alignItems:'center',width:64}}>
+      <TouchableOpacity onPress={onUp}
+        style={{width:56,height:40,borderRadius:10,backgroundColor:color+'12',
+          alignItems:'center',justifyContent:'center',marginBottom:6}}>
+        <Text style={{fontSize:20,color:color+'80'}}>▲</Text>
+      </TouchableOpacity>
+      <View style={{width:64,height:52,borderRadius:12,backgroundColor:color+'18',
+        borderWidth:2,borderColor:color+'40',alignItems:'center',justifyContent:'center'}}>
+        <Text style={{fontSize:28,fontWeight:'800',color,letterSpacing:2}}>{pad(val)}</Text>
+      </View>
+      <TouchableOpacity onPress={onDown}
+        style={{width:56,height:40,borderRadius:10,backgroundColor:color+'12',
+          alignItems:'center',justifyContent:'center',marginTop:6}}>
+        <Text style={{fontSize:20,color:color+'80'}}>▼</Text>
+      </TouchableOpacity>
+    </View>);
   return(
-    <View style={{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:4}}>
-      <TouchableOpacity onPress={()=>update((h+23)%24,m)} style={{padding:6}}><Text style={{color:C.textDim,fontSize:16}}>▲</Text></TouchableOpacity>
-      <View style={{width:44,height:36,borderRadius:8,backgroundColor:color+'15',borderWidth:1,borderColor:color+'40',alignItems:'center',justifyContent:'center'}}>
-        <Text style={{fontSize:16,fontWeight:'800',color}}>{pad(h)}</Text></View>
-      <Text style={{fontSize:18,fontWeight:'700',color:C.textDim}}>:</Text>
-      <View style={{width:44,height:36,borderRadius:8,backgroundColor:color+'15',borderWidth:1,borderColor:color+'40',alignItems:'center',justifyContent:'center'}}>
-        <Text style={{fontSize:16,fontWeight:'800',color}}>{pad(m)}</Text></View>
-      <TouchableOpacity onPress={()=>update(h,(m+55)%60)} style={{padding:6}}><Text style={{color:C.textDim,fontSize:16}}>▲</Text></TouchableOpacity>
-      <View style={{width:2,height:36}}/>
-      <TouchableOpacity onPress={()=>update((h+1)%24,m)} style={{padding:6}}><Text style={{color:C.textDim,fontSize:16}}>▼</Text></TouchableOpacity>
-      <View style={{width:44}}/>
-      <TouchableOpacity onPress={()=>update(h,(m+5)%60)} style={{padding:6}}><Text style={{color:C.textDim,fontSize:16}}>▼</Text></TouchableOpacity>
+    <View style={{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8}}>
+      <Drum val={h} onUp={()=>update((h+1)%24,m)} onDown={()=>update((h+23)%24,m)}/>
+      <Text style={{fontSize:32,fontWeight:'800',color:color+'60',marginBottom:4}}>:</Text>
+      <Drum val={m} onUp={()=>update(h,(m+5)%60)} onDown={()=>update(h,(m+55)%60)}/>
     </View>);
 }
 
@@ -1195,12 +1205,12 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   const [reminderTime,setReminderTime]=useState('20:00');
   const [reminderSaved,setReminderSaved]=useState(false);
   const [bgEnabled,setBgEnabled]=useState(false);
-  const [bgHour,setBgHour]=useState(2);
+  const [bgTime,setBgTime]=useState('02:00');
   const [bgDays,setBgDays]=useState([0,1,2,3,4,5,6]); // 0=Sun..6=Sat, default all
 
   React.useEffect(()=>{
     ld('pv-daily-reminder',null).then(r=>{if(r){setReminderEnabled(r.enabled);setReminderTime(r.time);setReminderSaved(r.enabled);}});
-    ld('pv-bg-config',null).then(c=>{if(c){setBgEnabled(c.enabled);setBgHour(c.hour??2);setBgDays(c.days||[0,1,2,3,4,5,6]);}});
+    ld('pv-bg-config',null).then(c=>{if(c){setBgEnabled(c.enabled);setBgTime(c.time||'02:00');setBgDays(c.days||[0,1,2,3,4,5,6]);}});
   },[]);
 
   const saveGlobalReminder=async(enabled,time)=>{
@@ -1209,9 +1219,10 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     if(enabled)scheduleDailyReminder(time);else cancelDailyReminder();
   };
 
-  const saveBgConfig=async(enabled,hour,days)=>{
-    await sv('pv-bg-config',{enabled,hour,days});
-    setBgEnabled(enabled);setBgHour(hour);setBgDays(days);
+  const saveBgConfig=async(enabled,time,days)=>{
+    const hour=parseInt(time.split(':')[0]);
+    await sv('pv-bg-config',{enabled,time,hour,days});
+    setBgEnabled(enabled);setBgTime(time);setBgDays(days);
     try{
       if(enabled){
         await BackgroundTask.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60});
@@ -1222,7 +1233,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   };
   const toggleBgDay=(d)=>{
     const next=bgDays.includes(d)?bgDays.filter(x=>x!==d):[...bgDays,d].sort();
-    saveBgConfig(bgEnabled,bgHour,next);
+    saveBgConfig(bgEnabled,bgTime,next);
   };
 
   const handleBackup=async()=>{
@@ -1342,7 +1353,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
           <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:'#C8E6C9'}}>
             <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
               <Text style={{fontSize:12,fontWeight:'700',color:'#2E7D32'}}>⏰ Scheduled auto-backup</Text>
-              <TouchableOpacity onPress={()=>saveBgConfig(!bgEnabled,bgHour,bgDays)}
+              <TouchableOpacity onPress={()=>saveBgConfig(!bgEnabled,bgTime,bgDays)}
                 style={{width:46,height:26,borderRadius:13,padding:3,
                   backgroundColor:bgEnabled?'#34C79F':'#CCC',justifyContent:'center'}}>
                 <View style={{width:20,height:20,borderRadius:10,backgroundColor:'#fff',
@@ -1350,15 +1361,9 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
               </TouchableOpacity>
             </View>
             {bgEnabled&&(<>
-              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>TIME (HOUR)</Text>
-              <View style={{flexDirection:'row',gap:6,marginBottom:10,flexWrap:'wrap'}}>
-                {[0,1,2,3,4,5,6,22,23].map(h=>(
-                  <TouchableOpacity key={h} onPress={()=>saveBgConfig(true,h,bgDays)}
-                    style={{paddingHorizontal:10,paddingVertical:6,borderRadius:8,
-                      backgroundColor:bgHour===h?'#34C79F':C.bg,borderWidth:1,borderColor:bgHour===h?'#34C79F':C.border}}>
-                    <Text style={{fontSize:11,fontWeight:'700',color:bgHour===h?'#fff':C.textDim}}>{String(h).padStart(2,'0')}:00</Text>
-                  </TouchableOpacity>))}
-              </View>
+              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>BACKUP TIME</Text>
+              <TimePicker value={bgTime} onChange={(t)=>saveBgConfig(true,t,bgDays)} color={'#34C79F'}/>
+              <View style={{height:10}}/>
               <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>DAYS</Text>
               <View style={{flexDirection:'row',gap:5,marginBottom:8}}>
                 {[{i:1,l:'Mo'},{i:2,l:'Tu'},{i:3,l:'We'},{i:4,l:'Th'},{i:5,l:'Fr'},{i:6,l:'Sa'},{i:0,l:'Su'}].map(({i,l})=>(
