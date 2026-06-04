@@ -257,6 +257,19 @@ export default function App(){
   },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
 
 
+  // Fallback: if app opens and no backup today, do one now
+  useEffect(()=>{
+    if(!loaded||!driveToken)return;
+    (async()=>{
+      const cfg=await ld('pv-bg-config',null);
+      if(!cfg||!cfg.enabled)return;
+      const last=await ld('pv-drive-lastbackup',null);
+      if(last!==fmt(today())&&new Date().getHours()>=cfg.hour){
+        driveWrite(false);
+      }
+    })();
+  },[loaded,driveToken]);
+
   if(!loaded)return<SafeAreaView style={s.root}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView>;
 
@@ -1209,19 +1222,6 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     const next=bgDays.includes(d)?bgDays.filter(x=>x!==d):[...bgDays,d].sort();
     saveBgConfig(bgEnabled,bgHour,next);
   };
-
-  // Fallback: if app opens and no backup today, do one now
-  useEffect(()=>{
-    if(!loaded||!driveToken)return;
-    (async()=>{
-      const cfg=await ld('pv-bg-config',null);
-      if(!cfg||!cfg.enabled)return;
-      const last=await ld('pv-drive-lastbackup',null);
-      if(last!==fmt(today())&&new Date().getHours()>=cfg.hour){
-        driveWrite(false);
-      }
-    })();
-  },[loaded,driveToken]);
 
   const handleBackup=async()=>{
     const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
