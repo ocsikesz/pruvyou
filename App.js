@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, SafeAreaView, Modal, Image, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, Modal, Image, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 
 import Svg, { Circle } from 'react-native-svg';
@@ -272,14 +273,14 @@ export default function App(){
     })();
   },[loaded,driveToken]);
 
-  if(!loaded)return<SafeAreaView style={s.root}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
-    <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView>;
+  if(!loaded)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
+    <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
 
   const TABS=[{id:'home',label:'Home'},{id:'habits',label:'Habits'},{id:'projects',label:'Projects'},
     {id:'stats',label:'Stats'},{id:'settings',label:'Settings'}];
 
   return(
-    <SafeAreaView style={s.root}>
+    <SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}>
       <ScrollView style={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={s.logoArea}>
           <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain"/>
@@ -313,7 +314,7 @@ export default function App(){
 
 
 
-    </SafeAreaView>);
+    </SafeAreaView></SafeAreaProvider>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
