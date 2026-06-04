@@ -479,20 +479,56 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
   const tasks=adHocTasks[ds]||[];
   const [input,setInput]=useState('');
   const [show,setShow]=useState(false);
+  const [taskTime,setTaskTime]=useState('');
+  const [showTimePicker,setShowTimePicker]=useState(false);
+  const [reminder,setReminder]=useState(0); // minutes before
   const isToday=ds===fmt(today());
+  const pad=n=>String(n).padStart(2,'0');
 
-  const addTask=()=>{if(!input.trim())return;
-    setAdHocTasksForDay(ds,[...tasks,{id:Date.now().toString(),text:input.trim(),done:false}]);
-    setInput('');};
-  const toggle=(idx)=>{const t=[...tasks];t[idx]={...t[idx],done:!t[idx].done};setAdHocTasksForDay(ds,t);};
-  const del=(idx)=>setAdHocTasksForDay(ds,tasks.filter((_,i)=>i!==idx));
+  const scheduleTaskNotif=async(task,dateStr)=>{
+    if(!task.time||!task.reminder)return null;
+    try{
+      const [th,tm]=task.time.split(':').map(Number);
+      const [y,mo,da]=dateStr.split('-').map(Number);
+      const taskDate=new Date(y,mo-1,da,th,tm);
+      const notifDate=new Date(taskDate.getTime()-task.reminder*60*1000);
+      if(notifDate<=new Date())return null; // already passed
+      const id=await Notifications.scheduleNotificationAsync({
+        content:{title:'⏰ '+task.text,body:`Starting in ${task.reminder} minutes`,sound:true,data:{type:'quicktask',taskId:task.id}},
+        trigger:{type:Notifications.SchedulableTriggerInputTypes.DATE,date:notifDate},
+      });
+      return id;
+    }catch(e){return null;}
+  };
+
+  const cancelTaskNotif=async(notifId)=>{
+    if(!notifId)return;
+    try{await Notifications.cancelScheduledNotificationAsync(notifId);}catch(e){}
+  };
+
+  const addTask=async()=>{if(!input.trim())return;
+    const task={id:Date.now().toString(),text:input.trim(),done:false,
+      time:taskTime||null,reminder:taskTime?reminder:0,notifId:null};
+    if(task.time&&task.reminder>0){
+      task.notifId=await scheduleTaskNotif(task,ds);
+    }
+    setAdHocTasksForDay(ds,[...tasks,task]);
+    setInput('');setTaskTime('');setReminder(0);setShowTimePicker(false);
+  };
+  const toggle=(idx)=>{const t=[...tasks];t[idx]={...t[idx],done:!t[idx].done};
+    if(t[idx].done&&t[idx].notifId)cancelTaskNotif(t[idx].notifId);
+    setAdHocTasksForDay(ds,t);};
+  const del=async(idx)=>{
+    if(tasks[idx].notifId)await cancelTaskNotif(tasks[idx].notifId);
+    setAdHocTasksForDay(ds,tasks.filter((_,i)=>i!==idx));
+  };
 
   const doneCnt=tasks.filter(t=>t.done).length;
-  const undone=tasks.filter(t=>!t.done);
+  const REMINDERS=[{v:0,l:'None'},{v:5,l:'5m'},{v:15,l:'15m'},{v:30,l:'30m'},{v:60,l:'1h'},{v:120,l:'2h'}];
 
   return(
     <View style={{marginTop:12}}>
-      {/* Header row */}
+      {/* Header */}
       <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
         <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
           <Text style={[s.sectionTitle,{fontSize:14}]}>Quick Tasks</Text>
@@ -502,26 +538,57 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
               {doneCnt}/{tasks.length}</Text>
           </View>}
         </View>
-        <TouchableOpacity onPress={()=>setShow(s=>!s)}
+        <TouchableOpacity onPress={()=>{setShow(s=>!s);setShowTimePicker(false);}}
           style={{flexDirection:'row',alignItems:'center',gap:5,paddingHorizontal:10,paddingVertical:6,
             borderRadius:8,backgroundColor:show?brand.gold+'20':brand.gold,borderWidth:1,borderColor:brand.gold}}>
-          <Text style={{fontSize:14,fontWeight:'800',color:show?brand.gold:'#fff'}}>{show?'✕':'+' }</Text>
+          <Text style={{fontSize:14,fontWeight:'800',color:show?brand.gold:'#fff'}}>{show?'✕':'+'}</Text>
           <Text style={{fontSize:11,fontWeight:'700',color:show?brand.gold:'#fff'}}>Add task</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Add input */}
-      {show&&(
-        <View style={{flexDirection:'row',gap:8,marginBottom:10}}>
+      {/* Add form */}
+      {show&&(<View style={{marginBottom:10}}>
+        <View style={{flexDirection:'row',gap:8,marginBottom:8}}>
           <TextInput value={input} onChangeText={setInput}
             placeholder="What do you need to do?" placeholderTextColor={C.textDark}
             style={[s.input,{flex:1,marginBottom:0,fontSize:13,paddingVertical:10}]}
-            onSubmitEditing={()=>{addTask();}} returnKeyType="done" blurOnSubmit={false} autoFocus/>
+            onSubmitEditing={addTask} returnKeyType="done" blurOnSubmit={false} autoFocus/>
           <TouchableOpacity onPress={addTask}
             style={{width:44,height:44,borderRadius:10,backgroundColor:brand.gold,alignItems:'center',justifyContent:'center'}}>
             <Text style={{color:'#fff',fontSize:22,fontWeight:'600',lineHeight:26}}>+</Text>
           </TouchableOpacity>
-        </View>)}
+        </View>
+        {/* Time + Reminder row */}
+        <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:showTimePicker?8:0}}>
+          <TouchableOpacity onPress={()=>{setShowTimePicker(p=>!p);if(!taskTime)setTaskTime(pad(new Date().getHours())+':'+pad(Math.ceil(new Date().getMinutes()/5)*5%60));}}
+            style={{flexDirection:'row',alignItems:'center',gap:5,paddingHorizontal:10,paddingVertical:7,
+              borderRadius:8,backgroundColor:taskTime?brand.blue+'15':C.bg,borderWidth:1,
+              borderColor:taskTime?brand.blue:C.border}}>
+            <Text style={{fontSize:14}}>⏰</Text>
+            <Text style={{fontSize:12,fontWeight:'600',color:taskTime?brand.blue:C.textDim}}>
+              {taskTime||'Set time'}</Text>
+          </TouchableOpacity>
+          {taskTime&&(<>
+            <Text style={{fontSize:10,color:C.textDim}}>Remind:</Text>
+            {REMINDERS.map(r=>(
+              <TouchableOpacity key={r.v} onPress={()=>setReminder(r.v)}
+                style={{paddingHorizontal:8,paddingVertical:5,borderRadius:6,
+                  backgroundColor:reminder===r.v?brand.blue:C.bg,borderWidth:1,
+                  borderColor:reminder===r.v?brand.blue:C.border}}>
+                <Text style={{fontSize:10,fontWeight:'700',color:reminder===r.v?'#fff':C.textDim}}>{r.l}</Text>
+              </TouchableOpacity>))}
+          </>)}
+          {taskTime&&(
+            <TouchableOpacity onPress={()=>{setTaskTime('');setReminder(0);setShowTimePicker(false);}} style={{padding:4}}>
+              <Text style={{fontSize:12,color:'#C44'}}>✕</Text>
+            </TouchableOpacity>)}
+        </View>
+        {/* Inline time picker */}
+        {showTimePicker&&taskTime&&(
+          <View style={{backgroundColor:C.bg,borderRadius:10,padding:12,borderWidth:1,borderColor:C.border}}>
+            <TimePicker value={taskTime} onChange={setTaskTime} color={brand.blue}/>
+          </View>)}
+      </View>)}
 
       {/* Task list */}
       {tasks.map((t,i)=>(
@@ -536,15 +603,21 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
               alignItems:'center',justifyContent:'center',flexShrink:0}}>
             {t.done&&<Text style={{color:'#fff',fontSize:12,fontWeight:'800'}}>✓</Text>}
           </TouchableOpacity>
-          <Text style={{flex:1,fontSize:13,color:t.done?C.textDim:C.text,
-            textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
+          <View style={{flex:1}}>
+            <Text style={{fontSize:13,color:t.done?C.textDim:C.text,
+              textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
+            {t.time&&(<View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:3}}>
+              <Text style={{fontSize:11,color:brand.blue,fontWeight:'600'}}>⏰ {t.time}</Text>
+              {t.reminder>0&&<Text style={{fontSize:10,color:C.textDim}}>🔔 {t.reminder>=60?t.reminder/60+'h':t.reminder+'m'} before</Text>}
+            </View>)}
+          </View>
           <TouchableOpacity onPress={()=>del(i)}
             style={{width:24,height:24,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',justifyContent:'center'}}>
             <Text style={{fontSize:12,color:'#C44',fontWeight:'700'}}>✕</Text>
           </TouchableOpacity>
         </View>))}
 
-      {/* If today: show undone tasks from yesterday as reminder */}
+      {/* Unfinished from yesterday */}
       {isToday&&(()=>{
         const yest=new Date(today());yest.setDate(yest.getDate()-1);
         const yds=fmt(yest);
@@ -555,7 +628,7 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
           {yundone.map((t,i)=>(
             <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:4}}>
               <View style={{width:14,height:14,borderRadius:3,borderWidth:1.5,borderColor:brand.gold,backgroundColor:'#fff'}}/>
-              <Text style={{fontSize:12,color:C.textMuted}}>{t.text}</Text>
+              <Text style={{fontSize:12,color:C.textMuted}}>{t.text}{t.time?' · '+t.time:''}</Text>
             </View>))}
         </View>);})()}
     </View>);
