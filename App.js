@@ -410,7 +410,7 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
       <TouchableOpacity onPress={()=>{setWeekOff(w=>w-1);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
       <Text style={s.weekLabel}>{weekOff===0?'This week':
         `${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}</Text>
-      <TouchableOpacity onPress={()=>setWeekOff(w=>Math.min(0,w+1))} style={[s.navBtn,weekOff>=0&&{opacity:.3}]} disabled={weekOff>=0}>
+      <TouchableOpacity onPress={()=>setWeekOff(w=>w+1)} style={s.navBtn}>
         <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
 
     {/* 7 Day Cards — tap to select day */}
@@ -420,8 +420,8 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
       const total=act.length;const done=act.filter(h=>log[ds]?.[h.id]?.done).length;
       const pct=total>0?Math.round((done/total)*100):0;const fill=compColor(done/Math.max(1,total));
       return(<TouchableOpacity key={i} activeOpacity={0.7}
-        onPress={()=>{if(!isFut){setSelDay(ds);setExpandedHabit(null);}}}
-        style={[s.dayCard,isT&&{borderColor:brand.gold,borderWidth:2},isSel&&!isT&&{borderColor:brand.blue,borderWidth:2},isFut&&{opacity:.35}]}>
+        onPress={()=>{setSelDay(ds);setExpandedHabit(null);}}
+        style={[s.dayCard,isT&&{borderColor:brand.gold,borderWidth:2},isSel&&!isT&&{borderColor:brand.blue,borderWidth:2},isFut&&{opacity:.6}]}>
         <View style={s.dcProgress}><View style={s.dcTrack}><View style={[s.dcFill,{height:`${pct}%`,backgroundColor:fill}]}/></View>
           <View style={s.dcOverlay}>{total>0&&<Text style={[s.dcCount,{color:fill}]}>{done}/{total}</Text>}
             <Text style={[s.dcPct,{color:pct>45?'#fff':C.textMuted}]}>{total>0?`${pct}%`:'—'}</Text></View></View>
@@ -434,7 +434,8 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
     <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
       <View>
         <Text style={s.sectionTitle}>{isToday?'Today':selDate.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'short'})}</Text>
-        {!isToday&&<Text style={{fontSize:10,color:C.textDim}}>Tap today to return</Text>}
+        {!isToday&&<Text style={{fontSize:10,color:selDate>today()?brand.blue:C.textDim}}>
+          {selDate>today()?'Upcoming — plan tasks':'Tap today to return'}</Text>}
       </View>
       <Text style={{fontSize:15,fontWeight:'800',color:doneCount===selHabits.length&&selHabits.length>0?brand.green:C.textMuted}}>
         {doneCount}/{selHabits.length}</Text>
@@ -830,7 +831,7 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
         <TouchableOpacity onPress={()=>{setWeekOff(w=>w-1);setExpandedProj(null);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
         <Text style={s.weekLabel}>{weekOff===0?'This week':
           `${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}</Text>
-        <TouchableOpacity onPress={()=>setWeekOff(w=>Math.min(0,w+1))} style={[s.navBtn,weekOff>=0&&{opacity:.3}]} disabled={weekOff>=0}>
+        <TouchableOpacity onPress={()=>setWeekOff(w=>w+1)} style={s.navBtn}>
           <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
 
       {/* 7 Day Cards — show total minutes per day across all projects */}
@@ -842,8 +843,8 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
         const pct=totalMins>0?Math.min(100,Math.round(totalMins/120*100)):0;
         const fill=totalMins>0?brand.blue:C.textDark;
         return(<TouchableOpacity key={i} activeOpacity={0.7}
-          onPress={()=>{if(!isFut){setSelDay(ds);setExpandedProj(null);}}}
-          style={[s.dayCard,isT&&{borderColor:brand.gold,borderWidth:2},isSel&&!isT&&{borderColor:brand.blue,borderWidth:2},isFut&&{opacity:.35}]}>
+          onPress={()=>{setSelDay(ds);setExpandedProj(null);}}
+          style={[s.dayCard,isT&&{borderColor:brand.gold,borderWidth:2},isSel&&!isT&&{borderColor:brand.blue,borderWidth:2},isFut&&{opacity:.6}]}>
           <View style={s.dcProgress}><View style={s.dcTrack}>
             <View style={[s.dcFill,{height:`${pct}%`,backgroundColor:totalMins>0?brand.blue:C.borderLight}]}/></View>
             <View style={s.dcOverlay}>
