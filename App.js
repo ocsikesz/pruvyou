@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, Modal, Image, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, SafeAreaView, Modal, Image, KeyboardAvoidingView, Platform } from 'react-native';
+
 
 import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -105,8 +105,7 @@ const TAB_ICONS={home:require('./assets/Home.png'),habits:require('./assets/Habi
   projects:require('./assets/Projects.png'),stats:require('./assets/Stats.png'),settings:require('./assets/Setting.png')};
 
 // ═══════════════════════════════════════════════════════════════════
-function AppContent(){
-  const insets=useSafeAreaInsets();
+export default function App(){
   const [tab,setTab]=useState('home');
   const [habits,setHabits]=useState([]);
   const [log,setLog]=useState({}); // {dateStr:{habitId:{done,minutes,notes}}}
@@ -299,11 +298,11 @@ function AppContent(){
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
           setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} promptAsync={promptAsync} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore}/>}
-        <View style={{height:80+insets.bottom}}/>
+        <View style={{height:80}}/>
       </ScrollView>
 
       {/* Tab Bar with PNG icons */}
-      <View style={[s.tabBar,{paddingBottom:insets.bottom,height:80+insets.bottom}]}>
+      <View style={s.tabBar}>
         {TABS.map(t=>(
           <TouchableOpacity key={t.id} onPress={()=>setTab(t.id)} style={s.tabItem}>
             <Image source={TAB_ICONS[t.id]} style={[s.tabIcon,tab===t.id&&{transform:[{scale:1.1}]}]} resizeMode="contain"/>
@@ -1405,10 +1404,6 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
 }
 
 // ═══════════════════════════════════════════════════════════════════
-export default function App(){
-  return(<SafeAreaProvider><AppContent/></SafeAreaProvider>);
-}
-
 const s=StyleSheet.create({
   root:{flex:1,backgroundColor:C.bg},content:{flex:1,paddingHorizontal:16},
   logoArea:{alignItems:'center',paddingTop:12,marginBottom:4},logoImg:{width:240,height:60},logoSub:{fontSize:8,fontWeight:'600',color:C.textDim,letterSpacing:2,marginTop:2},
