@@ -822,6 +822,40 @@ function HabitForm({habit,onSave,onCancel}){
 // ═══════════════════════════════════════════════════════════════════
 // PROJECT DAY PANEL — inline panel for a selected day in project
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// EDITABLE PROJECT TASK ROW
+// ═══════════════════════════════════════════════════════════════════
+function ProjTask({t,i,color,onToggle,onDelete,onEdit}){
+  const [editing,setEditing]=useState(false);
+  const [text,setText]=useState(t.text);
+  React.useEffect(()=>{setText(t.text);},[t.text]);
+  const save=()=>{if(text.trim()&&text!==t.text)onEdit(text.trim());setEditing(false);};
+  return(
+    <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:8,
+      backgroundColor:'#fff',borderRadius:8,padding:8,borderWidth:1,borderColor:editing?color:C.border}}>
+      <TouchableOpacity onPress={onToggle}
+        style={{width:22,height:22,borderRadius:6,borderWidth:2,
+          borderColor:t.done?color:C.textDark,
+          backgroundColor:t.done?color:'#fff',
+          alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        {t.done&&<Text style={{color:'#fff',fontSize:12,fontWeight:'800'}}>✓</Text>}
+      </TouchableOpacity>
+      {editing?(
+        <TextInput value={text} onChangeText={setText} autoFocus
+          onBlur={save} onSubmitEditing={save} returnKeyType="done"
+          style={{flex:1,fontSize:13,color:C.text,padding:0,borderBottomWidth:1,borderBottomColor:color}}/>
+      ):(
+        <TouchableOpacity onPress={()=>setEditing(true)} style={{flex:1}} activeOpacity={0.6}>
+          <Text style={{fontSize:13,color:t.done?C.textDim:C.text,
+            textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
+        </TouchableOpacity>)}
+      <TouchableOpacity onPress={onDelete}
+        style={{width:26,height:26,borderRadius:13,backgroundColor:'#FEE',alignItems:'center',justifyContent:'center'}}>
+        <Text style={{fontSize:13,color:'#C44',fontWeight:'700'}}>✕</Text>
+      </TouchableOpacity>
+    </View>);
+}
+
 function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTasks,onDelete}){
   // Read live from projLog so updates reflect immediately
   const dayData=projLog[ds]?.[pid]||{};
@@ -879,24 +913,28 @@ function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTa
       {/* ── TASKS ── */}
       <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>TASKS</Text>
       {tasks.map((t,i)=>(
-        <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:8,
-          backgroundColor:'#fff',borderRadius:8,padding:8,borderWidth:1,borderColor:C.border}}>
-          <TouchableOpacity onPress={()=>toggleTask(i)}
-            style={{width:22,height:22,borderRadius:6,borderWidth:2,
-              borderColor:t.done?color:C.textDark,
-              backgroundColor:t.done?color:'#fff',
-              alignItems:'center',justifyContent:'center',flexShrink:0}}>
-            {t.done&&<Text style={{color:'#fff',fontSize:12,fontWeight:'800'}}>✓</Text>}
-          </TouchableOpacity>
-          <Text style={{flex:1,fontSize:13,color:t.done?C.textDim:C.text,
-            textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
-          <TouchableOpacity onPress={()=>deleteTask(i)}
-            style={{width:26,height:26,borderRadius:13,backgroundColor:'#FEE',alignItems:'center',justifyContent:'center'}}>
-            <Text style={{fontSize:13,color:'#C44',fontWeight:'700'}}>✕</Text>
-          </TouchableOpacity>
-        </View>))}
+        <ProjTask key={t.id||i} t={t} i={i} color={color}
+          onToggle={()=>toggleTask(i)} onDelete={()=>deleteTask(i)}
+          onEdit={(newText)=>{const u=[...tasks];u[i]={...u[i],text:newText};setProjTasks(pid,ds,u);}}/>))}
       {tasks.length===0&&(
         <Text style={{fontSize:11,color:C.textDim,textAlign:'center',paddingVertical:6,marginBottom:8}}>No tasks yet</Text>)}
+      {/* Carry over unfinished from yesterday */}
+      {(()=>{const yest=new Date(dateObj);yest.setDate(yest.getDate()-1);const yds=fmt(yest);
+        const yTasks=(projLog[yds]?.[pid]?.tasks||[]).filter(t=>!t.done);
+        if(!yTasks.length)return null;
+        return(<View style={{marginBottom:8,padding:10,borderRadius:8,backgroundColor:'#FEF8E6',borderWidth:1,borderColor:brand.gold+'40'}}>
+          <Text style={{fontSize:10,fontWeight:'700',color:brand.gold,marginBottom:6}}>⚠️ UNFINISHED FROM PREVIOUS DAY</Text>
+          {yTasks.map((t,i)=>(
+            <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:5}}>
+              <View style={{width:14,height:14,borderRadius:3,borderWidth:1.5,borderColor:brand.gold,backgroundColor:'#fff'}}/>
+              <Text style={{flex:1,fontSize:12,color:C.textMuted}}>{t.text}</Text>
+              <TouchableOpacity onPress={()=>{
+                setProjTasks(pid,ds,[...tasks,{...t,id:Date.now().toString(),done:false}]);
+              }} style={{paddingHorizontal:8,paddingVertical:4,borderRadius:6,backgroundColor:color+'20',borderWidth:1,borderColor:color+'40'}}>
+                <Text style={{fontSize:9,fontWeight:'700',color}}>Move here</Text>
+              </TouchableOpacity>
+            </View>))}
+        </View>);})()}
       <View style={{flexDirection:'row',gap:8,marginBottom:14}}>
         <TextInput value={taskInput} onChangeText={setTaskInput}
           placeholder="Add a task..." placeholderTextColor={C.textDark}
