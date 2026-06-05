@@ -521,20 +521,23 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
       const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.green;
       const isExp=expandedHabit===h.id;
       return(<View key={h.id}>
-        <TouchableOpacity onPress={()=>setExpandedHabit(isExp?null:h.id)} activeOpacity={0.7}
-          style={[s.thinCard,{borderLeftWidth:3,borderLeftColor:color},done&&{backgroundColor:cat?.bg||C.greenBg}]}>
-          <View style={[s.thinCheck,done&&{backgroundColor:color,borderColor:color}]}>
-            {done&&<Text style={{color:'#fff',fontSize:11,fontWeight:'700'}}>✓</Text>}</View>
-          <View style={{flex:1}}>
+        <View style={[s.thinCard,{borderLeftWidth:3,borderLeftColor:color},done&&{backgroundColor:cat?.bg||C.greenBg}]}>
+          <TouchableOpacity onPress={()=>{if(h.type==='check')toggleDay(h.id,selDay);else addMinutes(h.id,selDay,15,h.targetMinutes);}} activeOpacity={0.6}>
+            <View style={[s.thinCheck,done&&{backgroundColor:color,borderColor:color}]}>
+              {done&&<Text style={{color:'#fff',fontSize:11,fontWeight:'700'}}>✓</Text>}</View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={()=>setExpandedHabit(isExp?null:h.id)} activeOpacity={0.7} style={{flex:1}}>
             <Text style={[s.thinName,done&&{textDecorationLine:'line-through',color:C.textDim}]}>{h.icon} {h.name}</Text>
             {h.type==='timer'&&(<View style={{flexDirection:'row',alignItems:'center',gap:4,marginTop:3}}>
               <View style={{flex:1,height:3,backgroundColor:C.border,borderRadius:2,overflow:'hidden'}}>
                 <View style={{height:'100%',width:`${Math.min(100,(entry?.minutes||0)/h.targetMinutes*100)}%`,backgroundColor:color,borderRadius:2}}/></View>
               <Text style={{fontSize:9,fontWeight:'700',color}}>{entry?.minutes||0}/{h.targetMinutes}m</Text></View>)}
             {entry?.notes&&<Text style={{fontSize:9,color:brand.blue,marginTop:2}} numberOfLines={1}>📝 {entry.notes}</Text>}
-          </View>
-          <Text style={{fontSize:14,color:C.textDark,paddingHorizontal:6}}>{isExp?'▾':'▸'}</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={()=>setExpandedHabit(isExp?null:h.id)} style={{paddingHorizontal:6,paddingVertical:8}}>
+            <Text style={{fontSize:14,color:C.textDark}}>{isExp?'▾':'▸'}</Text>
+          </TouchableOpacity>
+        </View>
         {isExp&&<HabitDayPanel h={h} ds={selDay} log={log} toggleDay={toggleDay}
           addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} setNote={setNote}
           color={color} bg={cat?.bg} border={cat?.border}/>}
