@@ -17,6 +17,15 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 WebBrowser.maybeCompleteAuthSession();
 Notifications.setNotificationHandler({handleNotification:async()=>({shouldShowAlert:true,shouldPlaySound:true,shouldSetBadge:false})});
+// Setup Android notification channel
+if(Platform.OS==='android'){
+  Notifications.setNotificationChannelAsync('pruvyou',{
+    name:'PruvYou Reminders',
+    importance:Notifications.AndroidImportance.MAX,
+    vibrationPattern:[0,250,250,250],
+    sound:'default',
+  });
+}
 
 const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googleusercontent.com';
 const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.googleusercontent.com';
@@ -176,7 +185,9 @@ export default function App(){
       for(const n of scheduled){if(n.content.data?.type==='daily')await Notifications.cancelScheduledNotificationAsync(n.identifier);}
       const [hr,min]=time.split(':').map(Number);
       await Notifications.scheduleNotificationAsync({
-        content:{title:'PruvYou ⏰',body:"Don't forget to log your habits and tasks today!",data:{type:'daily'},sound:true},
+        content:{title:'PruvYou ⏰',body:"Don't forget to log your habits and tasks today!",
+          data:{type:'daily'},sound:true,
+          ...(Platform.OS==='android'&&{channelId:'pruvyou'})},
         trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour:hr,minute:min},
       });
     }catch(e){console.log('Notification error',e);}
@@ -600,17 +611,21 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
   const scheduleTaskNotif=async(task,dateStr)=>{
     if(!task.time||!task.reminder)return null;
     try{
+      await Notifications.requestPermissionsAsync();
       const [th,tm]=task.time.split(':').map(Number);
       const [y,mo,da]=dateStr.split('-').map(Number);
-      const taskDate=new Date(y,mo-1,da,th,tm);
+      const taskDate=new Date(y,mo-1,da,th,tm,0,0);
       const notifDate=new Date(taskDate.getTime()-task.reminder*60*1000);
-      if(notifDate<=new Date())return null; // already passed
+      const now=new Date();
+      if(notifDate.getTime()<=now.getTime()+5000)return null; // skip if <5s away or past
       const id=await Notifications.scheduleNotificationAsync({
-        content:{title:'⏰ '+task.text,body:`Starting in ${task.reminder} minutes`,sound:true,data:{type:'quicktask',taskId:task.id}},
-        trigger:{type:Notifications.SchedulableTriggerInputTypes.DATE,date:notifDate},
+        content:{title:'⏰ '+task.text,body:'Starting in '+task.reminder+' minutes',
+          sound:true,data:{type:'quicktask',taskId:task.id},
+          ...(Platform.OS==='android'&&{channelId:'pruvyou'})},
+        trigger:{type:Notifications.SchedulableTriggerInputTypes.DATE,date:notifDate.getTime()},
       });
       return id;
-    }catch(e){return null;}
+    }catch(e){console.log('Notif schedule error:',e);return null;}
   };
 
   const cancelTaskNotif=async(notifId)=>{
