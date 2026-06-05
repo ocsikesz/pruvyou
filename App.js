@@ -433,14 +433,7 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
           <Text style={{fontSize:9,color:C.textDim,marginTop:3,textAlign:'right'}}>{curMins}/{h.targetMinutes}m goal</Text>
         </View>
       ):(
-        <TouchableOpacity onPress={()=>toggleDay(h.id,ds)}
-          style={{flexDirection:'row',alignItems:'center',padding:12,borderRadius:10,marginBottom:12,
-            backgroundColor:done?color+'20':C.bg,borderWidth:1,borderColor:done?color:C.border}}>
-          <View style={[s.check,done&&{backgroundColor:color,borderColor:color}]}>
-            {done&&<Text style={{color:'#fff',fontSize:14,fontWeight:'700'}}>✓</Text>}</View>
-          <Text style={{marginLeft:10,fontSize:13,fontWeight:'600',color:done?color:C.text}}>
-            {done?'Done! Tap to undo':'Mark as done'}</Text>
-        </TouchableOpacity>
+        <View style={{marginBottom:4}}/>
       )}
       {/* Note */}
       <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6}}>NOTES</Text>
@@ -945,10 +938,13 @@ function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTa
       {/* Carry over unfinished from yesterday */}
       {(()=>{const yest=new Date(dateObj);yest.setDate(yest.getDate()-1);const yds=fmt(yest);
         const yTasks=(projLog[yds]?.[pid]?.tasks||[]).filter(t=>!t.done);
-        if(!yTasks.length)return null;
+        // Filter out already-moved tasks (check if text already exists in today's tasks)
+        const todayTexts=tasks.map(t=>t.text);
+        const unmoved=yTasks.filter(t=>!todayTexts.includes(t.text));
+        if(!unmoved.length)return null;
         return(<View style={{marginBottom:8,padding:10,borderRadius:8,backgroundColor:'#FEF8E6',borderWidth:1,borderColor:brand.gold+'40'}}>
           <Text style={{fontSize:10,fontWeight:'700',color:brand.gold,marginBottom:6}}>⚠️ UNFINISHED FROM PREVIOUS DAY</Text>
-          {yTasks.map((t,i)=>(
+          {unmoved.map((t,i)=>(
             <View key={t.id||i} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:5}}>
               <View style={{width:14,height:14,borderRadius:3,borderWidth:1.5,borderColor:brand.gold,backgroundColor:'#fff'}}/>
               <Text style={{flex:1,fontSize:12,color:C.textMuted}}>{t.text}</Text>
