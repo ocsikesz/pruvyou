@@ -261,10 +261,17 @@ export default function App(){
   },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
 
 
-  // Fallback: if app opens and no backup today, do one now
+  // On app open: check if Drive token still works, then fallback backup
   useEffect(()=>{
     if(!loaded||!driveToken)return;
     (async()=>{
+      // Quick token check
+      try{
+        const r=await fetch('https://www.googleapis.com/drive/v3/about?fields=user',{headers:{Authorization:'Bearer '+driveToken}});
+        if(r.status===401){setDriveStatus('error');return;}
+        setDriveStatus('ok');
+      }catch(e){setDriveStatus('error');return;}
+      // Fallback backup if needed
       const cfg=await ld('pv-bg-config',null);
       if(!cfg||!cfg.enabled)return;
       const last=await ld('pv-drive-lastbackup',null);
@@ -1396,32 +1403,38 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
           <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:10}}>
             <Text style={{fontSize:22}}>{driveStatus==='syncing'?'🔄':driveStatus==='error'?'⚠️':'✅'}</Text>
             <View style={{flex:1}}>
-              <Text style={{fontSize:13,fontWeight:'700',color:'#2E7D32'}}>
-                {driveStatus==='syncing'?'Syncing…':driveStatus==='error'?'Sync issue — reconnect':'Google Drive connected'}</Text>
-              {driveUser?<Text style={{fontSize:11,color:'#388E3C'}}>{driveUser}</Text>:null}
+              <Text style={{fontSize:13,fontWeight:'700',color:driveStatus==='error'?'#C44':'#2E7D32'}}>
+                {driveStatus==='syncing'?'Syncing…':driveStatus==='error'?'Session expired':'Google Drive connected'}</Text>
+              {driveUser?<Text style={{fontSize:11,color:driveStatus==='error'?'#C44':'#388E3C'}}>{driveUser}</Text>:null}
             </View>
             <TouchableOpacity onPress={signOutDrive} style={{padding:6,borderRadius:6,backgroundColor:'#FEE',borderWidth:1,borderColor:'#FCC'}}>
               <Text style={{fontSize:11,color:'#C44',fontWeight:'600'}}>Sign out</Text>
             </TouchableOpacity>
           </View>
-          <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10,paddingHorizontal:4}}>
-            <View style={{width:6,height:6,borderRadius:3,backgroundColor:driveStatus==='error'?'#C44':'#34C79F'}}/>
-            <Text style={{fontSize:11,color:'#388E3C'}}>
-              {driveStatus==='error'?'Auto-backup paused — reconnect':'Auto-backup nightly · keeps last 7 days'}</Text>
-          </View>
-          <View style={{flexDirection:'row',gap:8}}>
-            <TouchableOpacity onPress={driveBackup}
-              style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#4285F4',alignItems:'center',
-                opacity:driveStatus==='syncing'?0.6:1}}>
-              <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>
-                {driveStatus==='syncing'?'Saving…':'☁️ Backup now'}</Text>
+          {driveStatus==='error'?(
+            <TouchableOpacity onPress={()=>promptAsync()}
+              style={{padding:14,borderRadius:10,backgroundColor:'#4285F4',alignItems:'center',marginBottom:8}}>
+              <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>🔄 Reconnect Google Drive</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={driveRestore}
-              style={{flex:1,padding:11,borderRadius:9,backgroundColor:C.white,alignItems:'center',
-                borderWidth:1,borderColor:'#4285F4',opacity:driveStatus==='syncing'?0.6:1}}>
-              <Text style={{fontSize:13,fontWeight:'600',color:'#4285F4'}}>📥 Restore</Text>
-            </TouchableOpacity>
-          </View>
+          ):(<>
+            <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10,paddingHorizontal:4}}>
+              <View style={{width:6,height:6,borderRadius:3,backgroundColor:'#34C79F'}}/>
+              <Text style={{fontSize:11,color:'#388E3C'}}>Auto-backup nightly · keeps last 7 days</Text>
+            </View>
+            <View style={{flexDirection:'row',gap:8}}>
+              <TouchableOpacity onPress={driveBackup}
+                style={{flex:1,padding:11,borderRadius:9,backgroundColor:'#4285F4',alignItems:'center',
+                  opacity:driveStatus==='syncing'?0.6:1}}>
+                <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>
+                  {driveStatus==='syncing'?'Saving…':'☁️ Backup now'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={driveRestore}
+                style={{flex:1,padding:11,borderRadius:9,backgroundColor:C.white,alignItems:'center',
+                  borderWidth:1,borderColor:'#4285F4',opacity:driveStatus==='syncing'?0.6:1}}>
+                <Text style={{fontSize:13,fontWeight:'600',color:'#4285F4'}}>📥 Restore</Text>
+              </TouchableOpacity>
+            </View>
+          </>)}
 
           {/* Auto-backup schedule */}
           <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:'#C8E6C9'}}>
