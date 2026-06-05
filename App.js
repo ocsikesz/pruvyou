@@ -19,6 +19,7 @@ WebBrowser.maybeCompleteAuthSession();
 Notifications.setNotificationHandler({handleNotification:async()=>({shouldShowAlert:true,shouldPlaySound:true,shouldSetBadge:false})});
 
 const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googleusercontent.com';
+const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const BACKUP_FILENAME='pruvyou_backup.json';
 const brand={blue:'#1A4F8A',green:'#34C79F',gold:'#F7C602'};
@@ -73,7 +74,22 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
     const filename='pruvyou_backup_'+todayS+'.json';
     const auth={Authorization:'Bearer '+tk.token};
     const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:auth});
-    if(search.status===401)return BackgroundTask.BackgroundTaskResult.Failed;
+    if(search.status===401){
+      // Try refresh
+      if(tk.refreshToken){
+        try{
+          const rr=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
+            headers:{'Content-Type':'application/x-www-form-urlencoded'},
+            body:'client_id='+GOOGLE_WEB_CLIENT_ID+'&grant_type=refresh_token&refresh_token='+tk.refreshToken});
+          const dd=await rr.json();
+          if(dd.access_token){
+            await sv('pv-drive-token',{...tk,token:dd.access_token});
+            return BackgroundTask.BackgroundTaskResult.NewData; // will retry next cycle with new token
+          }
+        }catch(e){}
+      }
+      return BackgroundTask.BackgroundTaskResult.Failed;
+    }
     const {files}=await search.json();
     const fileId=files?.[0]?.id;
     if(!fileId){
@@ -179,21 +195,56 @@ export default function App(){
   // ── Google Drive OAuth — dedicated Google provider (handles Android redirect automatically) ──
   const [request,response,promptAsync]=Google.useAuthRequest({
     androidClientId:GOOGLE_CLIENT_ID,
+    webClientId:GOOGLE_WEB_CLIENT_ID,
     scopes:[DRIVE_SCOPE,'email','profile'],
+    offlineAccess:true,
   });
 
   useEffect(()=>{
     ld('pv-drive-token',null).then(t=>{if(t){setDriveToken(t.token);setDriveUser(t.email);}});
   },[]);
 
+  // Refresh access token using stored refresh token
+  const refreshAccessToken=useCallback(async(refreshToken)=>{
+    try{
+      const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:'client_id='+GOOGLE_WEB_CLIENT_ID+'&grant_type=refresh_token&refresh_token='+refreshToken});
+      const d=await r.json();
+      if(d.access_token){
+        setDriveToken(d.access_token);setDriveStatus('ok');
+        const stored=await ld('pv-drive-token',{});
+        await sv('pv-drive-token',{...stored,token:d.access_token});
+        return d.access_token;
+      }
+    }catch(e){}
+    return null;
+  },[]);
+
   useEffect(()=>{
     if(response?.type==='success'){
-      const token=response.authentication?.accessToken||response.params?.access_token;
-      if(!token)return;
-      fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json',{headers:{Authorization:'Bearer '+token}})
-        .then(r=>r.json())
-        .then(u=>{setDriveToken(token);setDriveUser(u.email||'');sv('pv-drive-token',{token,email:u.email||''});})
-        .catch(()=>{setDriveToken(token);sv('pv-drive-token',{token,email:''});});
+      (async()=>{
+        try{
+          // Try to get serverAuthCode for refresh token
+          const code=response.params?.code||response.serverAuthCode;
+          let accessToken=response.authentication?.accessToken;
+          let refreshToken=null;
+          if(code){
+            // Exchange auth code for access + refresh tokens
+            const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
+              headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:'code='+code+'&client_id='+GOOGLE_WEB_CLIENT_ID+'&grant_type=authorization_code&redirect_uri='});
+            const d=await r.json();
+            if(d.access_token)accessToken=d.access_token;
+            if(d.refresh_token)refreshToken=d.refresh_token;
+          }
+          if(!accessToken)return;
+          const u=await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json',
+            {headers:{Authorization:'Bearer '+accessToken}}).then(r=>r.json()).catch(()=>({}));
+          setDriveToken(accessToken);setDriveUser(u.email||'');setDriveStatus('ok');
+          await sv('pv-drive-token',{token:accessToken,email:u.email||'',refreshToken});
+        }catch(e){Alert.alert('Drive error',e?.message||'Auth failed');}
+      })();
     }
   },[response]);
 
@@ -208,7 +259,15 @@ export default function App(){
       const filename='pruvyou_backup_'+fmt(today())+'.json';
       // Find today's file if it already exists
       const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
-      if(search.status===401){setDriveStatus('error');if(showAlert)Alert.alert('Session expired','Please reconnect Google Drive.');return false;}
+      if(search.status===401){
+        // Try auto-refresh
+        const stored=await ld('pv-drive-token',{});
+        if(stored.refreshToken){
+          const newToken=await refreshAccessToken(stored.refreshToken);
+          if(newToken&&showAlert){driveWrite(true);return true;} // retry with new token
+        }
+        setDriveStatus('error');if(showAlert)Alert.alert('Session expired','Please reconnect.');return false;
+      }
       const {files}=await search.json();
       const fileId=files?.[0]?.id;
       if(!fileId){
@@ -265,10 +324,18 @@ export default function App(){
   useEffect(()=>{
     if(!loaded||!driveToken)return;
     (async()=>{
-      // Quick token check
+      // Quick token check — auto-refresh if expired
       try{
         const r=await fetch('https://www.googleapis.com/drive/v3/about?fields=user',{headers:{Authorization:'Bearer '+driveToken}});
-        if(r.status===401){setDriveStatus('error');return;}
+        if(r.status===401){
+          // Try refresh token
+          const stored=await ld('pv-drive-token',{});
+          if(stored.refreshToken){
+            const newToken=await refreshAccessToken(stored.refreshToken);
+            if(newToken){return;} // refreshed ok, driveStatus set to 'ok' inside
+          }
+          setDriveStatus('error');return;
+        }
         setDriveStatus('ok');
       }catch(e){setDriveStatus('error');return;}
       // Fallback backup if needed
