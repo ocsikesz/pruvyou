@@ -549,6 +549,48 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
 // ═══════════════════════════════════════════════════════════════════
 // AD HOC TASKS PANEL — quick tasks not tied to any habit/project
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// EDITABLE QUICK TASK ROW
+// ═══════════════════════════════════════════════════════════════════
+function QuickTaskRow({t,onToggle,onDelete,onEdit}){
+  const [editing,setEditing]=useState(false);
+  const [text,setText]=useState(t.text);
+  React.useEffect(()=>{setText(t.text);},[t.text]);
+  const save=()=>{if(text.trim()&&text!==t.text)onEdit(text.trim());setEditing(false);};
+  return(
+    <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:6,
+      backgroundColor:C.white,borderRadius:9,padding:10,borderWidth:1,
+      borderColor:editing?brand.gold:(t.done?brand.green+'30':C.border),
+      borderLeftWidth:3,borderLeftColor:t.done?brand.green:brand.gold}}>
+      <TouchableOpacity onPress={onToggle}
+        style={{width:22,height:22,borderRadius:6,borderWidth:2,
+          borderColor:t.done?brand.green:C.textDark,
+          backgroundColor:t.done?brand.green:'#fff',
+          alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        {t.done&&<Text style={{color:'#fff',fontSize:12,fontWeight:'800'}}>✓</Text>}
+      </TouchableOpacity>
+      <View style={{flex:1}}>
+        {editing?(
+          <TextInput value={text} onChangeText={setText} autoFocus
+            onBlur={save} onSubmitEditing={save} returnKeyType="done"
+            style={{fontSize:13,color:C.text,padding:0,borderBottomWidth:1,borderBottomColor:brand.gold}}/>
+        ):(
+          <TouchableOpacity onPress={()=>setEditing(true)} activeOpacity={0.6}>
+            <Text style={{fontSize:13,color:t.done?C.textDim:C.text,
+              textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
+          </TouchableOpacity>)}
+        {t.time&&(<View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:3}}>
+          <Text style={{fontSize:11,color:brand.blue,fontWeight:'600'}}>⏰ {t.time}</Text>
+          {t.reminder>0&&<Text style={{fontSize:10,color:C.textDim}}>🔔 {t.reminder>=60?t.reminder/60+'h':t.reminder+'m'} before</Text>}
+        </View>)}
+      </View>
+      <TouchableOpacity onPress={onDelete}
+        style={{width:24,height:24,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',justifyContent:'center'}}>
+        <Text style={{fontSize:12,color:'#C44',fontWeight:'700'}}>✕</Text>
+      </TouchableOpacity>
+    </View>);
+}
+
 function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
   const tasks=adHocTasks[ds]||[];
   const [input,setInput]=useState('');
@@ -596,6 +638,7 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
     if(tasks[idx].notifId)await cancelTaskNotif(tasks[idx].notifId);
     setAdHocTasksForDay(ds,tasks.filter((_,i)=>i!==idx));
   };
+  const editTask=(idx,newText)=>{const t=[...tasks];t[idx]={...t[idx],text:newText};setAdHocTasksForDay(ds,t);};
 
   const doneCnt=tasks.filter(t=>t.done).length;
   const REMINDERS=[{v:0,l:'None'},{v:5,l:'5m'},{v:15,l:'15m'},{v:30,l:'30m'},{v:60,l:'1h'},{v:120,l:'2h'}];
@@ -666,30 +709,8 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
 
       {/* Task list */}
       {tasks.map((t,i)=>(
-        <View key={t.id} style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:6,
-          backgroundColor:C.white,borderRadius:9,padding:10,borderWidth:1,
-          borderColor:t.done?brand.green+'30':C.border,
-          borderLeftWidth:3,borderLeftColor:t.done?brand.green:brand.gold}}>
-          <TouchableOpacity onPress={()=>toggle(i)}
-            style={{width:22,height:22,borderRadius:6,borderWidth:2,
-              borderColor:t.done?brand.green:C.textDark,
-              backgroundColor:t.done?brand.green:'#fff',
-              alignItems:'center',justifyContent:'center',flexShrink:0}}>
-            {t.done&&<Text style={{color:'#fff',fontSize:12,fontWeight:'800'}}>✓</Text>}
-          </TouchableOpacity>
-          <View style={{flex:1}}>
-            <Text style={{fontSize:13,color:t.done?C.textDim:C.text,
-              textDecorationLine:t.done?'line-through':'none'}}>{t.text}</Text>
-            {t.time&&(<View style={{flexDirection:'row',alignItems:'center',gap:6,marginTop:3}}>
-              <Text style={{fontSize:11,color:brand.blue,fontWeight:'600'}}>⏰ {t.time}</Text>
-              {t.reminder>0&&<Text style={{fontSize:10,color:C.textDim}}>🔔 {t.reminder>=60?t.reminder/60+'h':t.reminder+'m'} before</Text>}
-            </View>)}
-          </View>
-          <TouchableOpacity onPress={()=>del(i)}
-            style={{width:24,height:24,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',justifyContent:'center'}}>
-            <Text style={{fontSize:12,color:'#C44',fontWeight:'700'}}>✕</Text>
-          </TouchableOpacity>
-        </View>))}
+        <QuickTaskRow key={t.id} t={t} onToggle={()=>toggle(i)} onDelete={()=>del(i)}
+          onEdit={(txt)=>editTask(i,txt)}/>))}
 
       {/* Unfinished from yesterday */}
       {isToday&&(()=>{
