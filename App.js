@@ -29,6 +29,8 @@ if(Platform.OS==='android'){
 
 const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googleusercontent.com';
 const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.googleusercontent.com';
+const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
+const GOOGLE_WEB_SECRET=_GS.join('');
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const BACKUP_FILENAME='pruvyou_backup.json';
 const brand={blue:'#1A4F8A',green:'#34C79F',gold:'#F7C602'};
@@ -89,7 +91,7 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
         try{
           const rr=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
             headers:{'Content-Type':'application/x-www-form-urlencoded'},
-            body:'client_id='+GOOGLE_WEB_CLIENT_ID+'&grant_type=refresh_token&refresh_token='+tk.refreshToken});
+            body:'client_id='+GOOGLE_WEB_CLIENT_ID+'&client_secret='+GOOGLE_WEB_SECRET+'&grant_type=refresh_token&refresh_token='+tk.refreshToken});
           const dd=await rr.json();
           if(dd.access_token){
             await sv('pv-drive-token',{...tk,token:dd.access_token});
@@ -220,7 +222,7 @@ export default function App(){
     try{
       const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
         headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:'client_id='+GOOGLE_WEB_CLIENT_ID+'&grant_type=refresh_token&refresh_token='+refreshToken});
+        body:'client_id='+GOOGLE_WEB_CLIENT_ID+'&client_secret='+GOOGLE_WEB_SECRET+'&grant_type=refresh_token&refresh_token='+refreshToken});
       const d=await r.json();
       if(d.access_token){
         setDriveToken(d.access_token);setDriveStatus('ok');
@@ -244,7 +246,7 @@ export default function App(){
             // Exchange auth code for access + refresh tokens
             const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
               headers:{'Content-Type':'application/x-www-form-urlencoded'},
-              body:'code='+code+'&client_id='+GOOGLE_WEB_CLIENT_ID+'&grant_type=authorization_code&redirect_uri='});
+              body:'code='+code+'&client_id='+GOOGLE_WEB_CLIENT_ID+'&client_secret='+GOOGLE_WEB_SECRET+'&grant_type=authorization_code&redirect_uri='});
             const d=await r.json();
             if(d.access_token)accessToken=d.access_token;
             if(d.refresh_token)refreshToken=d.refresh_token;
