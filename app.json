@@ -41,7 +41,8 @@
             "DEFAULT"
           ]
         }
-      ]
+      ],
+      "softwareKeyboardLayoutMode": "resize"
     },
     "assetBundlePatterns": [
       "**/*"
