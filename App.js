@@ -238,7 +238,19 @@ export default function App(){
     if(response?.type==='success'){
       (async()=>{
         try{
-          // Try to get serverAuthCode for refresh token
+          // Debug: show what response contains
+          const debugInfo='type:'+response.type+
+            '
+auth.accessToken:'+(response.authentication?.accessToken?'YES':'NO')+
+            '
+params.code:'+(response.params?.code||'NONE')+
+            '
+serverAuthCode:'+(response.serverAuthCode||'NONE')+
+            '
+params.id_token:'+(response.params?.id_token?'YES':'NO')+
+            '
+params keys:'+Object.keys(response.params||{}).join(',');
+          Alert.alert('DEBUG Auth Response',debugInfo);
           const code=response.params?.code||response.serverAuthCode;
           let accessToken=response.authentication?.accessToken;
           let refreshToken=null;
