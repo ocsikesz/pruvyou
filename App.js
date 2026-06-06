@@ -239,18 +239,11 @@ export default function App(){
       (async()=>{
         try{
           // Debug: show what response contains
-          const debugInfo='type:'+response.type+
-            '
-auth.accessToken:'+(response.authentication?.accessToken?'YES':'NO')+
-            '
-params.code:'+(response.params?.code||'NONE')+
-            '
-serverAuthCode:'+(response.serverAuthCode||'NONE')+
-            '
-params.id_token:'+(response.params?.id_token?'YES':'NO')+
-            '
-params keys:'+Object.keys(response.params||{}).join(',');
-          Alert.alert('DEBUG Auth Response',debugInfo);
+          const _dk=Object.keys(response.params||{}).join(',');
+          const _at=response.authentication?.accessToken?'YES':'NO';
+          const _cd=response.params?.code||'NONE';
+          const _sa=response.serverAuthCode||'NONE';
+          Alert.alert('DEBUG Auth',_at+' | code:'+_cd+' | server:'+_sa+' | keys:'+_dk);
           const code=response.params?.code||response.serverAuthCode;
           let accessToken=response.authentication?.accessToken;
           let refreshToken=null;
