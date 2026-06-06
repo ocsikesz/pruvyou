@@ -1429,7 +1429,8 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   const [reminderSaved,setReminderSaved]=useState(false);
   const [bgEnabled,setBgEnabled]=useState(false);
   const [bgTime,setBgTime]=useState('02:00');
-  const [bgDays,setBgDays]=useState([0,1,2,3,4,5,6]); // 0=Sun..6=Sat, default all
+  const [bgDays,setBgDays]=useState([0,1,2,3,4,5,6]);
+  const [bgDirty,setBgDirty]=useState(false);
 
   React.useEffect(()=>{
     ld('pv-daily-reminder',null).then(r=>{if(r){setReminderEnabled(r.enabled);setReminderTime(r.time);setReminderSaved(r.enabled);}});
@@ -1455,8 +1456,8 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     }catch(e){Alert.alert('Background task',e?.message||'Could not update background backup');}
   };
   const toggleBgDay=(d)=>{
-    const next=bgDays.includes(d)?bgDays.filter(x=>x!==d):[...bgDays,d].sort();
-    saveBgConfig(bgEnabled,bgTime,next);
+    setBgDays(prev=>{const next=prev.includes(d)?prev.filter(x=>x!==d):[...prev,d].sort();return next;});
+    setBgDirty(true);
   };
 
   const handleBackup=async()=>{
@@ -1582,7 +1583,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
           <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:'#C8E6C9'}}>
             <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
               <Text style={{fontSize:12,fontWeight:'700',color:'#2E7D32'}}>⏰ Scheduled auto-backup</Text>
-              <TouchableOpacity onPress={()=>saveBgConfig(!bgEnabled,bgTime,bgDays)}
+              <TouchableOpacity onPress={()=>{const ne=!bgEnabled;saveBgConfig(ne,bgTime,bgDays);setBgDirty(false);}}
                 style={{width:46,height:26,borderRadius:13,padding:3,
                   backgroundColor:bgEnabled?'#34C79F':'#CCC',justifyContent:'center'}}>
                 <View style={{width:20,height:20,borderRadius:10,backgroundColor:'#fff',
@@ -1591,7 +1592,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
             </View>
             {bgEnabled&&(<>
               <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>BACKUP TIME</Text>
-              <TimePicker value={bgTime} onChange={(t)=>saveBgConfig(true,t,bgDays)} color={'#34C79F'}/>
+              <TimePicker value={bgTime} onChange={(t)=>{setBgTime(t);setBgDirty(true);}} color={'#34C79F'}/>
               <View style={{height:10}}/>
               <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>DAYS</Text>
               <View style={{flexDirection:'row',gap:5,marginBottom:8}}>
@@ -1602,7 +1603,13 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
                     <Text style={{fontSize:10,fontWeight:'700',color:bgDays.includes(i)?'#fff':C.textDim}}>{l}</Text>
                   </TouchableOpacity>))}
               </View>
-              <Text style={{fontSize:10,color:C.textDim,fontStyle:'italic'}}>Runs in background near the chosen hour. Android may shift the exact time by up to ~1h to save battery.</Text>
+              <Text style={{fontSize:10,color:C.textDim,fontStyle:'italic',marginBottom:10}}>Runs in background near the chosen hour. Android may shift the exact time by up to ~1h to save battery.</Text>
+              <TouchableOpacity onPress={()=>{saveBgConfig(true,bgTime,bgDays);setBgDirty(false);}}
+                style={{padding:12,borderRadius:10,backgroundColor:bgDirty?'#34C79F':'#E8F5E9',alignItems:'center',
+                  borderWidth:1,borderColor:bgDirty?'#34C79F':'#C8E6C9'}}>
+                <Text style={{fontSize:13,fontWeight:'700',color:bgDirty?'#fff':'#81C784'}}>
+                  {bgDirty?'💾 Apply changes':'✅ Saved'}</Text>
+              </TouchableOpacity>
             </>)}
           </View>
         </View>)}
