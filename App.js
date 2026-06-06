@@ -263,9 +263,23 @@ const code=response.params?.code||response.serverAuthCode;
   const signOutDrive=async()=>{setDriveToken(null);setDriveUser(null);setDriveStatus('');await sv('pv-drive-token',null);};
 
   // ── Helper: write data to Drive as a dated file + prune to 7 ──
-  const driveWrite=useCallback(async(showAlert)=>{
+  const driveWrite=useCallback(async(showAlert,force=false)=>{
     if(!driveToken)return false;
     try{
+      // Safety check: don't auto-save if data looks empty/wiped (protect against accidental delete)
+      if(!force&&habits.length===0&&projects.length===0&&Object.keys(log).length===0){
+        return false; // skip auto-save of empty data
+      }
+      // Safety check: compare with last known data size
+      if(!force){
+        const lastSize=await ld('pv-drive-lastsize',0);
+        const curSize=habits.length+projects.length+Object.keys(log).length;
+        if(lastSize>5&&curSize<lastSize*0.3){
+          // Data shrank by >70% — likely accidental delete, skip auto-save
+          setDriveStatus('ok');
+          return false;
+        }
+      }
       setDriveStatus('syncing');
       const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
       const filename='pruvyou_backup_'+fmt(today())+'.json';
@@ -300,13 +314,13 @@ const code=response.params?.code||response.serverAuthCode;
           }
         }
       }catch(e){/* prune best-effort */}
-      setDriveStatus('ok');await sv('pv-drive-lastbackup',fmt(today()));
+      setDriveStatus('ok');await sv('pv-drive-lastbackup',fmt(today()));await sv('pv-drive-lastsize',habits.length+projects.length+Object.keys(log).length);
       if(showAlert)Alert.alert('✅ Saved','Backup saved to Google Drive as '+filename);
       return true;
     }catch(e){setDriveStatus('error');if(showAlert)Alert.alert('Backup failed',e?.message||'Drive error');return false;}
   },[driveToken,habits,log,projects,projLog,adHocTasks]);
 
-  const driveBackup=useCallback(()=>driveWrite(true),[driveWrite]);
+  const driveBackup=useCallback(()=>driveWrite(true,true),[driveWrite]);
 
   const driveRestore=useCallback(async()=>{
     if(!driveToken){Alert.alert('Not connected','Connect Google Drive first.');return;}
@@ -1555,7 +1569,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
           ):(<>
             <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10,paddingHorizontal:4}}>
               <View style={{width:6,height:6,borderRadius:3,backgroundColor:'#34C79F'}}/>
-              <Text style={{fontSize:11,color:'#388E3C'}}>Auto-saves 30s after each change · keeps last 7 days</Text>
+              <Text style={{fontSize:11,color:'#388E3C'}}>Auto-saves after changes · keeps 7 days · protects against accidental delete</Text>
             </View>
             <View style={{flexDirection:'row',gap:8}}>
               <TouchableOpacity onPress={driveBackup}
