@@ -9,8 +9,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
-import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import * as BackgroundTask from 'expo-background-task';
@@ -205,67 +204,62 @@ export default function App(){
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
-  // ── Google Drive OAuth — dedicated Google provider (handles Android redirect automatically) ──
-  const [request,response,promptAsync]=Google.useAuthRequest({
-    androidClientId:GOOGLE_CLIENT_ID,
-    webClientId:GOOGLE_WEB_CLIENT_ID,
-    scopes:[DRIVE_SCOPE,'email','profile'],
-    offlineAccess:true,
-  });
-
+  // ── Google Drive OAuth — native Google Sign-In ──
   useEffect(()=>{
-    ld('pv-drive-token',null).then(t=>{if(t){setDriveToken(t.token);setDriveUser(t.email);}});
+    GoogleSignin.configure({webClientId:GOOGLE_WEB_CLIENT_ID,scopes:[DRIVE_SCOPE],offlineAccess:true});
+    (async()=>{
+      try{
+        const stored=await ld('pv-drive-token',null);
+        if(!stored)return;
+        await GoogleSignin.signInSilently();
+        const tokens=await GoogleSignin.getTokens();
+        if(tokens.accessToken){
+          setDriveToken(tokens.accessToken);setDriveUser(stored.email||'');setDriveStatus('ok');
+          await sv('pv-drive-token',{...stored,token:tokens.accessToken});
+        }
+      }catch(e){}
+    })();
   },[]);
 
-  // Refresh access token using stored refresh token
-  const refreshAccessToken=useCallback(async(refreshToken)=>{
+  const connectDrive=useCallback(async()=>{
     try{
-      const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:'client_id='+GOOGLE_WEB_CLIENT_ID+'&client_secret='+GOOGLE_WEB_SECRET+'&grant_type=refresh_token&refresh_token='+refreshToken});
-      const d=await r.json();
-      if(d.access_token){
-        setDriveToken(d.access_token);setDriveStatus('ok');
-        const stored=await ld('pv-drive-token',{});
-        await sv('pv-drive-token',{...stored,token:d.access_token});
-        return d.access_token;
-      }
-    }catch(e){}
-    return null;
+      await GoogleSignin.hasPlayServices();
+      const userInfo=await GoogleSignin.signIn();
+      const tokens=await GoogleSignin.getTokens();
+      const email=userInfo?.data?.user?.email||'';
+      setDriveToken(tokens.accessToken);setDriveUser(email);setDriveStatus('ok');
+      await sv('pv-drive-token',{token:tokens.accessToken,email});
+    }catch(e){
+      if(e.code!==statusCodes.SIGN_IN_CANCELLED)
+        Alert.alert('Connection failed',e?.message||'Could not sign in');
+    }
   },[]);
 
-  useEffect(()=>{
-    if(response?.type==='success'){
-      (async()=>{
-        try{
-const code=response.params?.code||response.serverAuthCode;
-          let accessToken=response.authentication?.accessToken;
-          let refreshToken=null;
-          if(code){
-            // Exchange auth code for access + refresh tokens
-            const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
-              headers:{'Content-Type':'application/x-www-form-urlencoded'},
-              body:'code='+code+'&client_id='+GOOGLE_WEB_CLIENT_ID+'&client_secret='+GOOGLE_WEB_SECRET+'&grant_type=authorization_code&redirect_uri='});
-            const d=await r.json();
-            if(d.access_token)accessToken=d.access_token;
-            if(d.refresh_token)refreshToken=d.refresh_token;
-          }
-          if(!accessToken)return;
-          const u=await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json',
-            {headers:{Authorization:'Bearer '+accessToken}}).then(r=>r.json()).catch(()=>({}));
-          setDriveToken(accessToken);setDriveUser(u.email||'');setDriveStatus('ok');
-          await sv('pv-drive-token',{token:accessToken,email:u.email||'',refreshToken});
-        }catch(e){Alert.alert('Drive error',e?.message||'Auth failed');}
-      })();
-    }
-  },[response]);
+  const signOutDrive=useCallback(async()=>{
+    try{await GoogleSignin.signOut();}catch(e){}
+    setDriveToken(null);setDriveUser(null);setDriveStatus('');
+    await sv('pv-drive-token',null);
+  },[]);
 
-  const signOutDrive=async()=>{setDriveToken(null);setDriveUser(null);setDriveStatus('');await sv('pv-drive-token',null);};
+  const getFreshToken=useCallback(async()=>{
+    try{
+      const tokens=await GoogleSignin.getTokens();
+      if(tokens.accessToken){setDriveToken(tokens.accessToken);return tokens.accessToken;}
+    }catch(e){
+      try{await GoogleSignin.signInSilently();const t2=await GoogleSignin.getTokens();
+        if(t2.accessToken){setDriveToken(t2.accessToken);return t2.accessToken;}}catch(e2){}
+    }
+    setDriveStatus('error');return null;
+  },[]);
+
+
 
   // ── Helper: write data to Drive as a dated file + prune to 7 ──
   const driveWrite=useCallback(async(showAlert,force=false)=>{
     if(!driveToken)return false;
     try{
+      const freshToken=await getFreshToken();
+      if(!freshToken)return false;
       // Safety check: don't auto-save if data looks empty/wiped (protect against accidental delete)
       if(!force&&habits.length===0&&projects.length===0&&Object.keys(log).length===0){
         return false; // skip auto-save of empty data
@@ -284,33 +278,25 @@ const code=response.params?.code||response.serverAuthCode;
       const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
       const filename='pruvyou_backup_'+fmt(today())+'.json';
       // Find today's file if it already exists
-      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+driveToken}});
-      if(search.status===401){
-        // Try auto-refresh
-        const stored=await ld('pv-drive-token',{});
-        if(stored.refreshToken){
-          const newToken=await refreshAccessToken(stored.refreshToken);
-          if(newToken&&showAlert){driveWrite(true);return true;} // retry with new token
-        }
-        setDriveStatus('error');if(showAlert)Alert.alert('Session expired','Please reconnect.');return false;
-      }
+      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+freshToken}});
+      if(search.status===401){setDriveStatus('error');return false;}
       const {files}=await search.json();
       const fileId=files?.[0]?.id;
       if(!fileId){
-        const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
+        const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+freshToken,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
         const {id}=await meta.json();
-        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
+        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+freshToken,'Content-Type':'application/json'},body:data});
       }else{
-        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'application/json'},body:data});
+        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+freshToken,'Content-Type':'application/json'},body:data});
       }
       // Prune: keep only the 7 most recent pruvyou_backup_*.json files
       try{
-        const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:{Authorization:'Bearer '+driveToken}});
+        const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:{Authorization:'Bearer '+freshToken}});
         const {files:allFiles}=await all.json();
         if(allFiles&&allFiles.length>7){
           const toDelete=allFiles.slice(7); // sorted desc by name(date) -> oldest are last
           for(const f of toDelete){
-            await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:{Authorization:'Bearer '+driveToken}});
+            await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:{Authorization:'Bearer '+freshToken}});
           }
         }
       }catch(e){/* prune best-effort */}
@@ -318,20 +304,21 @@ const code=response.params?.code||response.serverAuthCode;
       if(showAlert)Alert.alert('✅ Saved','Backup saved to Google Drive as '+filename);
       return true;
     }catch(e){setDriveStatus('error');if(showAlert)Alert.alert('Backup failed',e?.message||'Drive error');return false;}
-  },[driveToken,habits,log,projects,projLog,adHocTasks]);
+  },[driveToken,habits,log,projects,projLog,adHocTasks,getFreshToken]);
 
   const driveBackup=useCallback(()=>driveWrite(true,true),[driveWrite]);
 
   const driveRestore=useCallback(async()=>{
-    if(!driveToken){Alert.alert('Not connected','Connect Google Drive first.');return;}
+    const freshToken=await getFreshToken();
+    if(!freshToken){Alert.alert('Not connected','Connect Google Drive first.');return;}
     try{
       setDriveStatus('syncing');
       // Get the most recent dated backup
-      const search=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:{Authorization:'Bearer '+driveToken}});
+      const search=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:{Authorization:'Bearer '+freshToken}});
       const {files}=await search.json();
       if(!files?.length){setDriveStatus('');Alert.alert('No backup','No backup found in your Drive.');return;}
       const newest=files[0];
-      const res=await fetch('https://www.googleapis.com/drive/v3/files/'+newest.id+'?alt=media',{headers:{Authorization:'Bearer '+driveToken}});
+      const res=await fetch('https://www.googleapis.com/drive/v3/files/'+newest.id+'?alt=media',{headers:{Authorization:'Bearer '+freshToken}});
       const d=JSON.parse(await res.text());
       if(d.app==='PruvYou'){
         Alert.alert('Restore','From '+newest.name.replace('pruvyou_backup_','').replace('.json','')+': '+d.habits?.length+' habits, '+(d.projects?.length||0)+' projects. Restore?',[
@@ -346,19 +333,11 @@ const code=response.params?.code||response.serverAuthCode;
   },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
 
 
-  // On app open: check if Drive token still works
+  // On app open: backup if not done today
   useEffect(()=>{
     if(!loaded||!driveToken)return;
-    (async()=>{
-      try{
-        const r=await fetch('https://www.googleapis.com/drive/v3/about?fields=user',{headers:{Authorization:'Bearer '+driveToken}});
-        if(r.status===401){setDriveStatus('error');return;}
-        setDriveStatus('ok');
-        // Backup on open if not done today
-        const last=await ld('pv-drive-lastbackup',null);
-        if(last!==fmt(today()))driveWrite(false);
-      }catch(e){setDriveStatus('error');}
-    })();
+    (async()=>{const last=await ld('pv-drive-lastbackup',null);
+      if(last!==fmt(today()))driveWrite(false);})();
   },[loaded,driveToken]);
 
   // Auto-backup on every data change (debounced 30s) while token is valid
@@ -393,7 +372,7 @@ const code=response.params?.code||response.serverAuthCode;
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} promptAsync={promptAsync} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore}/>}
         </ScrollView>
 
       {/* Tab Bar with PNG icons */}
@@ -1430,7 +1409,7 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,promptAsync,signOutDrive,driveBackup,driveRestore}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore}){
   const [reminderEnabled,setReminderEnabled]=useState(false);
   const [reminderTime,setReminderTime]=useState('20:00');
   const [reminderSaved,setReminderSaved]=useState(false);
@@ -1538,7 +1517,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
 
       {/* Google Drive section */}
       {!driveToken?(
-        <TouchableOpacity onPress={()=>promptAsync()}
+        <TouchableOpacity onPress={connectDrive}
           style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:12,
             backgroundColor:C.white,borderWidth:2,borderColor:'#4285F4',marginBottom:12}}>
           <Text style={{fontSize:22}}>🔵</Text>
@@ -1562,7 +1541,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
             </TouchableOpacity>
           </View>
           {driveStatus==='error'?(
-            <TouchableOpacity onPress={()=>promptAsync()}
+            <TouchableOpacity onPress={connectDrive}
               style={{padding:14,borderRadius:10,backgroundColor:'#4285F4',alignItems:'center',marginBottom:8}}>
               <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>🔄 Reconnect Google Drive</Text>
             </TouchableOpacity>

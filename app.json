@@ -62,7 +62,8 @@
             "enableEdgeToEdge": false
           }
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "scheme": "com.ocsikesz.pruvyou",
     "sdkVersion": "54.0.0"
