@@ -75,31 +75,23 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
     const todayS=fmtDate(now);
     const last=await ld('pv-drive-lastbackup',null);
     if(last===todayS)return BackgroundTask.BackgroundTaskResult.NoData;
-    const tk=await ld('pv-drive-token',null);
-    if(!tk||!tk.token)return BackgroundTask.BackgroundTaskResult.NoData;
+    // Configure and get fresh token via Google Play Services
+    GoogleSignin.configure({webClientId:GOOGLE_WEB_CLIENT_ID,scopes:[DRIVE_SCOPE],offlineAccess:true});
+    let token=null;
+    try{
+      await GoogleSignin.signInSilently();
+      const tokens=await GoogleSignin.getTokens();
+      token=tokens.accessToken;
+    }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
+    if(!token)return BackgroundTask.BackgroundTaskResult.NoData;
     const habits=await ld('pv-habits',[]);const log=await ld('pv-log',{});
     const projects=await ld('pv-projects',[]);const projLog=await ld('pv-projlog',{});
     const adHocTasks=await ld('pv-adhoc',{});
     const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:now.toISOString(),app:'PruvYou'},null,2);
     const filename='pruvyou_backup_'+todayS+'.json';
-    const auth={Authorization:'Bearer '+tk.token};
+    const auth={Authorization:'Bearer '+token};
     const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:auth});
-    if(search.status===401){
-      // Try refresh
-      if(tk.refreshToken){
-        try{
-          const rr=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
-            headers:{'Content-Type':'application/x-www-form-urlencoded'},
-            body:'client_id='+GOOGLE_WEB_CLIENT_ID+'&client_secret='+GOOGLE_WEB_SECRET+'&grant_type=refresh_token&refresh_token='+tk.refreshToken});
-          const dd=await rr.json();
-          if(dd.access_token){
-            await sv('pv-drive-token',{...tk,token:dd.access_token});
-            return BackgroundTask.BackgroundTaskResult.NewData; // will retry next cycle with new token
-          }
-        }catch(e){}
-      }
-      return BackgroundTask.BackgroundTaskResult.Failed;
-    }
+    if(search.status===401)return BackgroundTask.BackgroundTaskResult.Failed;
     const {files}=await search.json();
     const fileId=files?.[0]?.id;
     if(!fileId){
@@ -1565,6 +1557,39 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
             </View>
           </>)}
 
+          {/* Scheduled backup */}
+          <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:'#C8E6C9'}}>
+            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+              <Text style={{fontSize:12,fontWeight:'700',color:'#2E7D32'}}>⏰ Scheduled auto-backup</Text>
+              <TouchableOpacity onPress={()=>{const ne=!bgEnabled;saveBgConfig(ne,bgTime,bgDays);setBgDirty(false);}}
+                style={{width:46,height:26,borderRadius:13,padding:3,
+                  backgroundColor:bgEnabled?'#34C79F':'#CCC',justifyContent:'center'}}>
+                <View style={{width:20,height:20,borderRadius:10,backgroundColor:'#fff',
+                  alignSelf:bgEnabled?'flex-end':'flex-start'}}/>
+              </TouchableOpacity>
+            </View>
+            {bgEnabled&&(<>
+              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>BACKUP TIME</Text>
+              <TimePicker value={bgTime} onChange={(t)=>{setBgTime(t);setBgDirty(true);}} color={'#34C79F'}/>
+              <View style={{height:10}}/>
+              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>DAYS</Text>
+              <View style={{flexDirection:'row',gap:5,marginBottom:8}}>
+                {[{i:1,l:'Mo'},{i:2,l:'Tu'},{i:3,l:'We'},{i:4,l:'Th'},{i:5,l:'Fr'},{i:6,l:'Sa'},{i:0,l:'Su'}].map(({i,l})=>(
+                  <TouchableOpacity key={i} onPress={()=>toggleBgDay(i)}
+                    style={{flex:1,paddingVertical:8,borderRadius:8,alignItems:'center',
+                      backgroundColor:bgDays.includes(i)?'#34C79F':C.bg,borderWidth:1,borderColor:bgDays.includes(i)?'#34C79F':C.border}}>
+                    <Text style={{fontSize:10,fontWeight:'700',color:bgDays.includes(i)?'#fff':C.textDim}}>{l}</Text>
+                  </TouchableOpacity>))}
+              </View>
+              <Text style={{fontSize:10,color:C.textDim,fontStyle:'italic',marginBottom:10}}>Runs in background even when app is closed. Android may shift the exact time by ~1h.</Text>
+              <TouchableOpacity onPress={()=>{saveBgConfig(true,bgTime,bgDays);setBgDirty(false);}}
+                style={{padding:12,borderRadius:10,backgroundColor:bgDirty?'#34C79F':'#E8F5E9',alignItems:'center',
+                  borderWidth:1,borderColor:bgDirty?'#34C79F':'#C8E6C9'}}>
+                <Text style={{fontSize:13,fontWeight:'700',color:bgDirty?'#fff':'#81C784'}}>
+                  {bgDirty?'💾 Apply changes':'✅ Saved'}</Text>
+              </TouchableOpacity>
+            </>)}
+          </View>
         </View>)}
 
       <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>OR LOCAL FILE</Text>
