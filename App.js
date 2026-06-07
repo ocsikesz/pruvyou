@@ -88,19 +88,13 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
     const projects=await ld('pv-projects',[]);const projLog=await ld('pv-projlog',{});
     const adHocTasks=await ld('pv-adhoc',{});
     const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:now.toISOString(),app:'PruvYou'},null,2);
-    const filename='pruvyou_backup_'+todayS+'.json';
+    const hhmm=String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
+    const filename='pruvyou_backup_'+todayS+'_'+hhmm+'.json';
     const auth={Authorization:'Bearer '+token};
-    const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:auth});
-    if(search.status===401)return BackgroundTask.BackgroundTaskResult.Failed;
-    const {files}=await search.json();
-    const fileId=files?.[0]?.id;
-    if(!fileId){
-      const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
-      const {id}=await meta.json();
-      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:data});
-    }else{
-      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:data});
-    }
+    const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
+    if(meta.status===401)return BackgroundTask.BackgroundTaskResult.Failed;
+    const {id}=await meta.json();
+    await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:data});
     try{
       const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:auth});
       const {files:allFiles}=await all.json();
@@ -268,19 +262,15 @@ export default function App(){
       }
       setDriveStatus('syncing');
       const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
-      const filename='pruvyou_backup_'+fmt(today())+'.json';
-      // Find today's file if it already exists
-      const search=await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${filename}'%20and%20trashed%3Dfalse&fields=files(id)`,{headers:{Authorization:'Bearer '+freshToken}});
-      if(search.status===401){setDriveStatus('error');return false;}
-      const {files}=await search.json();
-      const fileId=files?.[0]?.id;
-      if(!fileId){
-        const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+freshToken,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
-        const {id}=await meta.json();
-        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+freshToken,'Content-Type':'application/json'},body:data});
-      }else{
-        await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+freshToken,'Content-Type':'application/json'},body:data});
-      }
+      const now=new Date();const filename='pruvyou_backup_'+fmt(today())+'_'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0')+'.json';
+      // Create new backup file
+      const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',
+        headers:{Authorization:'Bearer '+freshToken,'Content-Type':'application/json'},
+        body:JSON.stringify({name:filename,mimeType:'application/json'})});
+      if(meta.status===401){setDriveStatus('error');return false;}
+      const {id}=await meta.json();
+      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',
+        headers:{Authorization:'Bearer '+freshToken,'Content-Type':'application/json'},body:data});
       // Prune: keep only the 7 most recent pruvyou_backup_*.json files
       try{
         const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:{Authorization:'Bearer '+freshToken}});
@@ -332,12 +322,7 @@ export default function App(){
       if(last!==fmt(today()))driveWrite(false);})();
   },[loaded,driveToken]);
 
-  // Auto-backup on every data change (debounced 30s) while token is valid
-  useEffect(()=>{
-    if(!loaded||!driveToken||driveStatus==='error')return;
-    const t=setTimeout(()=>{driveWrite(false);},30000);
-    return ()=>clearTimeout(t);
-  },[habits,log,projects,projLog,adHocTasks,driveToken,loaded,driveStatus]);
+
 
   if(!loaded)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
@@ -347,6 +332,8 @@ export default function App(){
 
   return(
     <SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}>
+      <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==='ios'?'padding':'height'}
+        keyboardVerticalOffset={Platform.OS==='ios'?0:0}>
       <ScrollView style={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={s.logoArea}>
           <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain"/>
@@ -366,6 +353,7 @@ export default function App(){
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
           setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore}/>}
         </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Tab Bar with PNG icons */}
       <View style={s.tabBar}>
@@ -1440,7 +1428,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
 
   const handleBackup=async()=>{
     const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
-    const filename='pruvyou_backup_'+fmt(today())+'.json';
+    const now=new Date();const filename='pruvyou_backup_'+fmt(today())+'_'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0')+'.json';
     // On Android: let user pick a folder (Downloads, Drive, OneDrive sync folder, etc.)
     if(Platform.OS==='android'&&FileSystem.StorageAccessFramework){
       try{
@@ -1540,7 +1528,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
           ):(<>
             <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10,paddingHorizontal:4}}>
               <View style={{width:6,height:6,borderRadius:3,backgroundColor:'#34C79F'}}/>
-              <Text style={{fontSize:11,color:'#388E3C'}}>Auto-saves after changes · keeps 7 days · protects against accidental delete</Text>
+              <Text style={{fontSize:11,color:'#388E3C'}}>Scheduled backup · keeps last 7 · protected against accidental delete</Text>
             </View>
             <View style={{flexDirection:'row',gap:8}}>
               <TouchableOpacity onPress={driveBackup}
