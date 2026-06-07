@@ -66,7 +66,7 @@ const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padSt
 TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
   try{
     const cfg=await ld('pv-bg-config',null);
-    await sv('pv-bg-lastrun',new Date().toISOString()+' (checked)');
+    const _now=new Date();await sv('pv-bg-lastrun',_now.getDate()+'/'+(1+_now.getMonth())+' '+String(_now.getHours()).padStart(2,'0')+':'+String(_now.getMinutes()).padStart(2,'0')+' (checked)');
     if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.NoData;
     const now=new Date();
     const dow=now.getDay();
@@ -103,7 +103,7 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
       if(allFiles&&allFiles.length>7)for(const f of allFiles.slice(7))await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:auth});
     }catch(e){}
     await sv('pv-drive-lastbackup',todayS);
-    await sv('pv-bg-lastrun',new Date().toISOString());
+    const _n2=new Date();await sv('pv-bg-lastrun',_n2.getDate()+'/'+(1+_n2.getMonth())+' '+String(_n2.getHours()).padStart(2,'0')+':'+String(_n2.getMinutes()).padStart(2,'0')+' saved ✅');
     return BackgroundTask.BackgroundTaskResult.NewData;
   }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
 });
@@ -1406,7 +1406,6 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     ld('pv-daily-reminder',null).then(r=>{if(r){setReminderEnabled(r.enabled);setReminderTime(r.time);setReminderSaved(r.enabled);}});
     ld('pv-bg-config',null).then(c=>{if(c){setBgEnabled(c.enabled);setBgTime(c.time||'02:00');setBgDays(c.days||[0,1,2,3,4,5,6]);}});
     ld('pv-bg-lastrun',null).then(r=>setBgLastRun(r));
-    ld('pv-drive-lastbackup',null).then(r=>setBgLastRun(prev=>prev||r));
   },[]);
 
   const saveGlobalReminder=async(enabled,time)=>{
@@ -1422,6 +1421,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     try{
       if(enabled){
         await BackgroundTask.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60});
+        Alert.alert('✅ Scheduled','Background backup registered. Task will run near the set time.');
       }else{
         await BackgroundTask.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});
       }
@@ -1575,7 +1575,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
                     <Text style={{fontSize:10,fontWeight:'700',color:bgDays.includes(i)?'#fff':C.textDim}}>{l}</Text>
                   </TouchableOpacity>))}
               </View>
-              {bgLastRun&&<Text style={{fontSize:10,color:'#388E3C',marginBottom:6}}>Last run: {(()=>{try{const d=new Date(typeof bgLastRun==='string'?bgLastRun.replace(' (checked)',''):bgLastRun);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+(typeof bgLastRun==='string'&&bgLastRun.includes('checked')?' (checked only)':' ✅ saved');}catch(e){return String(bgLastRun);}})()}</Text>}
+              {bgLastRun&&<Text style={{fontSize:10,color:'#388E3C',marginBottom:6}}>Last background run: {String(bgLastRun)}</Text>}
               <Text style={{fontSize:10,color:C.textDim,fontStyle:'italic',marginBottom:10}}>Runs in background even when app is closed. Android may shift the exact time by ~1h.</Text>
               <TouchableOpacity onPress={async()=>{
                 const r=await driveBackup();
@@ -1588,7 +1588,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
                 style={{padding:12,borderRadius:10,backgroundColor:bgDirty?'#34C79F':'#E8F5E9',alignItems:'center',
                   borderWidth:1,borderColor:bgDirty?'#34C79F':'#C8E6C9'}}>
                 <Text style={{fontSize:13,fontWeight:'700',color:bgDirty?'#fff':'#81C784'}}>
-                  {bgDirty?'💾 Apply changes':'✅ Saved'}</Text>
+                  {bgDirty?'💾 Apply changes':'✅ Schedule active'}</Text>
               </TouchableOpacity>
             </>)}
           </View>
