@@ -1575,7 +1575,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
                     <Text style={{fontSize:10,fontWeight:'700',color:bgDays.includes(i)?'#fff':C.textDim}}>{l}</Text>
                   </TouchableOpacity>))}
               </View>
-              {bgLastRun&&<Text style={{fontSize:10,color:'#388E3C',marginBottom:6}}>Last run: {typeof bgLastRun==='string'&&bgLastRun.includes('T')?new Date(bgLastRun.replace(' (checked)','')).toLocaleString():bgLastRun}</Text>}
+              {bgLastRun&&<Text style={{fontSize:10,color:'#388E3C',marginBottom:6}}>Last run: {(()=>{try{const d=new Date(typeof bgLastRun==='string'?bgLastRun.replace(' (checked)',''):bgLastRun);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+(typeof bgLastRun==='string'&&bgLastRun.includes('checked')?' (checked only)':' ✅ saved');}catch(e){return String(bgLastRun);}})()}</Text>}
               <Text style={{fontSize:10,color:C.textDim,fontStyle:'italic',marginBottom:10}}>Runs in background even when app is closed. Android may shift the exact time by ~1h.</Text>
               <TouchableOpacity onPress={async()=>{
                 const r=await driveBackup();
