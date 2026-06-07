@@ -63,7 +63,8 @@
           }
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "expo-background-task"
     ],
     "scheme": "com.ocsikesz.pruvyou",
     "sdkVersion": "54.0.0"

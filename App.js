@@ -10,6 +10,8 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import * as BackgroundTask from 'expo-background-task';
+import * as TaskManager from 'expo-task-manager';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
@@ -57,6 +59,57 @@ function getMonthDates(y,m){const days=new Date(y,m+1,0).getDate();
 
 const ld=async(k,fb)=>{try{const r=await AsyncStorage.getItem(k);return r?JSON.parse(r):fb;}catch{return fb;}};
 const sv=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch{}};
+
+
+// ─── Background backup task (simplified: no hour check, just once per day) ───
+const BG_BACKUP_TASK='pruvyou-bg-backup';
+const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
+
+TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
+  try{
+    const cfg=await ld('pv-bg-config',null);
+    if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.NoData;
+    const now=new Date();
+    const todayS=fmtDate(now);
+    // Already done today?
+    const last=await ld('pv-drive-lastbackup',null);
+    if(last===todayS)return BackgroundTask.BackgroundTaskResult.NoData;
+    // Right day of week?
+    const dow=now.getDay();
+    if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundTask.BackgroundTaskResult.NoData;
+    // Get fresh token via Google Play Services
+    GoogleSignin.configure({webClientId:GOOGLE_WEB_CLIENT_ID,scopes:[DRIVE_SCOPE],offlineAccess:true});
+    let token=null;
+    try{
+      await GoogleSignin.signInSilently();
+      const tokens=await GoogleSignin.getTokens();
+      token=tokens.accessToken;
+    }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
+    if(!token)return BackgroundTask.BackgroundTaskResult.NoData;
+    // Gather data
+    const habits=await ld('pv-habits',[]);const log=await ld('pv-log',{});
+    const projects=await ld('pv-projects',[]);const projLog=await ld('pv-projlog',{});
+    const adHocTasks=await ld('pv-adhoc',{});
+    const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:now.toISOString(),app:'PruvYou'},null,2);
+    const hhmm=String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
+    const filename='pruvyou_backup_'+todayS+'_'+hhmm+'.json';
+    const auth={Authorization:'Bearer '+token};
+    // Create backup file
+    const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
+    if(meta.status===401)return BackgroundTask.BackgroundTaskResult.Failed;
+    const {id}=await meta.json();
+    await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:data});
+    // Prune to 7
+    try{
+      const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:auth});
+      const {files:allFiles}=await all.json();
+      if(allFiles&&allFiles.length>7)for(const f of allFiles.slice(7))await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:auth});
+    }catch(e){}
+    await sv('pv-drive-lastbackup',todayS);
+    const _n=new Date();await sv('pv-bg-lastrun',_n.getDate()+'/'+(1+_n.getMonth())+' '+String(_n.getHours()).padStart(2,'0')+':'+String(_n.getMinutes()).padStart(2,'0')+' saved');
+    return BackgroundTask.BackgroundTaskResult.NewData;
+  }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
+});
 
 
 function Ring({size,sw,pct,color,children}){
@@ -1349,12 +1402,16 @@ function TimePicker({value,onChange,color}){
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
 function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore}){
+  const [bgEnabled,setBgEnabled]=useState(false);
+  const [bgLastRun,setBgLastRun]=useState(null);
   const [reminderEnabled,setReminderEnabled]=useState(false);
   const [reminderTime,setReminderTime]=useState('20:00');
   const [reminderSaved,setReminderSaved]=useState(false);
 
   React.useEffect(()=>{
     ld('pv-daily-reminder',null).then(r=>{if(r){setReminderEnabled(r.enabled);setReminderTime(r.time);setReminderSaved(r.enabled);}});
+    ld('pv-bg-config',null).then(c=>{if(c)setBgEnabled(c.enabled);});
+    ld('pv-bg-lastrun',null).then(r=>setBgLastRun(r));
   },[]);
 
   const saveGlobalReminder=async(enabled,time)=>{
@@ -1484,6 +1541,26 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
             </View>
           </>)}
 
+          {/* Auto-backup toggle */}
+          <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:'#C8E6C9'}}>
+            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+              <Text style={{fontSize:12,fontWeight:'700',color:'#2E7D32'}}>⏰ Daily auto-backup</Text>
+              <TouchableOpacity onPress={async()=>{
+                const ne=!bgEnabled;setBgEnabled(ne);
+                await sv('pv-bg-config',{enabled:ne,days:[0,1,2,3,4,5,6]});
+                try{
+                  if(ne){await BackgroundTask.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60});}
+                  else{await BackgroundTask.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});}
+                }catch(e){}
+              }} style={{width:46,height:26,borderRadius:13,padding:3,
+                backgroundColor:bgEnabled?'#34C79F':'#CCC',justifyContent:'center'}}>
+                <View style={{width:20,height:20,borderRadius:10,backgroundColor:'#fff',
+                  alignSelf:bgEnabled?'flex-end':'flex-start'}}/>
+              </TouchableOpacity>
+            </View>
+            <Text style={{fontSize:10,color:C.textDim,marginBottom:6}}>Backs up once per day when Android runs the task. Also backs up every time you open the app.</Text>
+            {bgLastRun&&<Text style={{fontSize:10,color:'#388E3C'}}>Last background run: {String(bgLastRun)}</Text>}
+          </View>
         </View>)}
 
       <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>OR LOCAL FILE</Text>
