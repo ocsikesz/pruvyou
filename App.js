@@ -12,8 +12,7 @@ import * as Notifications from 'expo-notifications';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import * as BackgroundTask from 'expo-background-task';
-import * as TaskManager from 'expo-task-manager';
+
 WebBrowser.maybeCompleteAuthSession();
 Notifications.setNotificationHandler({handleNotification:async()=>({shouldShowAlert:true,shouldPlaySound:true,shouldSetBadge:false})});
 // Setup Android notification channel
@@ -59,54 +58,6 @@ function getMonthDates(y,m){const days=new Date(y,m+1,0).getDate();
 const ld=async(k,fb)=>{try{const r=await AsyncStorage.getItem(k);return r?JSON.parse(r):fb;}catch{return fb;}};
 const sv=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch{}};
 
-// ─── Background backup task (runs when app is in background) ─────
-const BG_BACKUP_TASK='pruvyou-bg-backup';
-const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
-
-TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
-  try{
-    const cfg=await ld('pv-bg-config',null);
-    const _now=new Date();await sv('pv-bg-lastrun',_now.getDate()+'/'+(1+_now.getMonth())+' '+String(_now.getHours()).padStart(2,'0')+':'+String(_now.getMinutes()).padStart(2,'0')+' (checked)');
-    if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.NoData;
-    const now=new Date();
-    const dow=now.getDay();
-    const hour=now.getHours();
-    if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundTask.BackgroundTaskResult.NoData;
-    const cfgMin=parseInt((cfg.time||'02:00').split(':')[1])||0;
-    if(typeof cfg.hour==='number'&&(hour<cfg.hour||(hour===cfg.hour&&now.getMinutes()<cfgMin)))return BackgroundTask.BackgroundTaskResult.NoData;
-    const todayS=fmtDate(now);
-    const last=await ld('pv-drive-lastbackup',null);
-    if(last===todayS)return BackgroundTask.BackgroundTaskResult.NoData;
-    // Configure and get fresh token via Google Play Services
-    GoogleSignin.configure({webClientId:GOOGLE_WEB_CLIENT_ID,scopes:[DRIVE_SCOPE],offlineAccess:true});
-    let token=null;
-    try{
-      await GoogleSignin.signInSilently();
-      const tokens=await GoogleSignin.getTokens();
-      token=tokens.accessToken;
-    }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
-    if(!token)return BackgroundTask.BackgroundTaskResult.NoData;
-    const habits=await ld('pv-habits',[]);const log=await ld('pv-log',{});
-    const projects=await ld('pv-projects',[]);const projLog=await ld('pv-projlog',{});
-    const adHocTasks=await ld('pv-adhoc',{});
-    const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:now.toISOString(),app:'PruvYou'},null,2);
-    const hhmm=String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
-    const filename='pruvyou_backup_'+todayS+'_'+hhmm+'.json';
-    const auth={Authorization:'Bearer '+token};
-    const meta=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({name:filename,mimeType:'application/json'})});
-    if(meta.status===401)return BackgroundTask.BackgroundTaskResult.Failed;
-    const {id}=await meta.json();
-    await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:data});
-    try{
-      const all=await fetch("https://www.googleapis.com/drive/v3/files?q=name%20contains%20'pruvyou_backup_'%20and%20trashed%3Dfalse&fields=files(id,name)&orderBy=name%20desc",{headers:auth});
-      const {files:allFiles}=await all.json();
-      if(allFiles&&allFiles.length>7)for(const f of allFiles.slice(7))await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:auth});
-    }catch(e){}
-    await sv('pv-drive-lastbackup',todayS);
-    const _n2=new Date();await sv('pv-bg-lastrun',_n2.getDate()+'/'+(1+_n2.getMonth())+' '+String(_n2.getHours()).padStart(2,'0')+':'+String(_n2.getMinutes()).padStart(2,'0')+' saved ✅');
-    return BackgroundTask.BackgroundTaskResult.NewData;
-  }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
-});
 
 function Ring({size,sw,pct,color,children}){
   const r=(size-sw)/2,circ=2*Math.PI*r,off=circ-(Math.min(100,pct)/100)*circ;
@@ -318,11 +269,16 @@ export default function App(){
   },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
 
 
-  // On app open: backup if not done today
+  // Auto-backup on every app open if connected to Drive
   useEffect(()=>{
     if(!loaded||!driveToken)return;
-    (async()=>{const last=await ld('pv-drive-lastbackup',null);
-      if(last!==fmt(today()))driveWrite(false);})();
+    (async()=>{
+      const last=await ld('pv-drive-lastbackup',null);
+      if(last!==fmt(today())){
+        const ok=await driveWrite(false);
+        if(ok)setDriveStatus('ok');
+      }
+    })();
   },[loaded,driveToken]);
 
 
@@ -1396,16 +1352,9 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   const [reminderEnabled,setReminderEnabled]=useState(false);
   const [reminderTime,setReminderTime]=useState('20:00');
   const [reminderSaved,setReminderSaved]=useState(false);
-  const [bgEnabled,setBgEnabled]=useState(false);
-  const [bgTime,setBgTime]=useState('02:00');
-  const [bgDays,setBgDays]=useState([0,1,2,3,4,5,6]);
-  const [bgDirty,setBgDirty]=useState(false);
-  const [bgLastRun,setBgLastRun]=useState(null);
 
   React.useEffect(()=>{
     ld('pv-daily-reminder',null).then(r=>{if(r){setReminderEnabled(r.enabled);setReminderTime(r.time);setReminderSaved(r.enabled);}});
-    ld('pv-bg-config',null).then(c=>{if(c){setBgEnabled(c.enabled);setBgTime(c.time||'02:00');setBgDays(c.days||[0,1,2,3,4,5,6]);}});
-    ld('pv-bg-lastrun',null).then(r=>setBgLastRun(r));
   },[]);
 
   const saveGlobalReminder=async(enabled,time)=>{
@@ -1414,23 +1363,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     if(enabled)scheduleDailyReminder(time);else cancelDailyReminder();
   };
 
-  const saveBgConfig=async(enabled,time,days)=>{
-    const hour=parseInt(time.split(':')[0]);
-    await sv('pv-bg-config',{enabled,time,hour,days});
-    setBgEnabled(enabled);setBgTime(time);setBgDays(days);
-    try{
-      if(enabled){
-        await BackgroundTask.registerTaskAsync(BG_BACKUP_TASK,{minimumInterval:60*60});
-        Alert.alert('✅ Scheduled','Background backup registered. Task will run near the set time.');
-      }else{
-        await BackgroundTask.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});
-      }
-    }catch(e){Alert.alert('Background task error',e?.message||'Could not register. Check battery optimization settings for PruvYou.');}
-  };
-  const toggleBgDay=(d)=>{
-    setBgDays(prev=>{const next=prev.includes(d)?prev.filter(x=>x!==d):[...prev,d].sort();return next;});
-    setBgDirty(true);
-  };
+
 
   const handleBackup=async()=>{
     const data=JSON.stringify({habits,log,projects,projLog,adHocTasks,exportDate:new Date().toISOString(),app:'PruvYou'},null,2);
@@ -1534,7 +1467,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
           ):(<>
             <View style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:10,paddingHorizontal:4}}>
               <View style={{width:6,height:6,borderRadius:3,backgroundColor:'#34C79F'}}/>
-              <Text style={{fontSize:11,color:'#388E3C'}}>Scheduled backup · keeps last 7 · protected against accidental delete</Text>
+              <Text style={{fontSize:11,color:'#388E3C'}}>Auto-backup on app open · keeps last 7 · protected against accidental delete</Text>
             </View>
             <View style={{flexDirection:'row',gap:8}}>
               <TouchableOpacity onPress={driveBackup}
@@ -1551,47 +1484,6 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
             </View>
           </>)}
 
-          {/* Scheduled backup */}
-          <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:'#C8E6C9'}}>
-            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-              <Text style={{fontSize:12,fontWeight:'700',color:'#2E7D32'}}>⏰ Scheduled auto-backup</Text>
-              <TouchableOpacity onPress={()=>{const ne=!bgEnabled;saveBgConfig(ne,bgTime,bgDays);setBgDirty(false);}}
-                style={{width:46,height:26,borderRadius:13,padding:3,
-                  backgroundColor:bgEnabled?'#34C79F':'#CCC',justifyContent:'center'}}>
-                <View style={{width:20,height:20,borderRadius:10,backgroundColor:'#fff',
-                  alignSelf:bgEnabled?'flex-end':'flex-start'}}/>
-              </TouchableOpacity>
-            </View>
-            {bgEnabled&&(<>
-              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>BACKUP TIME</Text>
-              <TimePicker value={bgTime} onChange={(t)=>{setBgTime(t);setBgDirty(true);}} color={'#34C79F'}/>
-              <View style={{height:10}}/>
-              <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>DAYS</Text>
-              <View style={{flexDirection:'row',gap:5,marginBottom:8}}>
-                {[{i:1,l:'Mo'},{i:2,l:'Tu'},{i:3,l:'We'},{i:4,l:'Th'},{i:5,l:'Fr'},{i:6,l:'Sa'},{i:0,l:'Su'}].map(({i,l})=>(
-                  <TouchableOpacity key={i} onPress={()=>toggleBgDay(i)}
-                    style={{flex:1,paddingVertical:8,borderRadius:8,alignItems:'center',
-                      backgroundColor:bgDays.includes(i)?'#34C79F':C.bg,borderWidth:1,borderColor:bgDays.includes(i)?'#34C79F':C.border}}>
-                    <Text style={{fontSize:10,fontWeight:'700',color:bgDays.includes(i)?'#fff':C.textDim}}>{l}</Text>
-                  </TouchableOpacity>))}
-              </View>
-              {bgLastRun&&<Text style={{fontSize:10,color:'#388E3C',marginBottom:6}}>Last background run: {String(bgLastRun)}</Text>}
-              <Text style={{fontSize:10,color:C.textDim,fontStyle:'italic',marginBottom:10}}>Runs in background even when app is closed. Android may shift the exact time by ~1h.</Text>
-              <TouchableOpacity onPress={async()=>{
-                const r=await driveBackup();
-                if(r)Alert.alert('✅ Test OK','Backup saved to Drive');
-                ld('pv-bg-lastrun',null).then(r2=>setBgLastRun(r2));
-              }} style={{padding:10,borderRadius:8,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border,marginBottom:8}}>
-                <Text style={{fontSize:12,fontWeight:'600',color:C.textDim}}>🧪 Test backup now</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={()=>{saveBgConfig(true,bgTime,bgDays);setBgDirty(false);}}
-                style={{padding:12,borderRadius:10,backgroundColor:bgDirty?'#34C79F':'#E8F5E9',alignItems:'center',
-                  borderWidth:1,borderColor:bgDirty?'#34C79F':'#C8E6C9'}}>
-                <Text style={{fontSize:13,fontWeight:'700',color:bgDirty?'#fff':'#81C784'}}>
-                  {bgDirty?'💾 Apply changes':'✅ Schedule active'}</Text>
-              </TouchableOpacity>
-            </>)}
-          </View>
         </View>)}
 
       <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:8,letterSpacing:1}}>OR LOCAL FILE</Text>

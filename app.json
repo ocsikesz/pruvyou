@@ -55,7 +55,6 @@
           "color": "#1A4F8A"
         }
       ],
-      "expo-background-task",
       [
         "expo-build-properties",
         {
