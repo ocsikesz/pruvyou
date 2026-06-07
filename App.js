@@ -66,12 +66,14 @@ const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padSt
 TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
   try{
     const cfg=await ld('pv-bg-config',null);
+    await sv('pv-bg-lastrun',new Date().toISOString()+' (checked)');
     if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.NoData;
     const now=new Date();
     const dow=now.getDay();
     const hour=now.getHours();
     if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundTask.BackgroundTaskResult.NoData;
-    if(typeof cfg.hour==='number'&&hour<cfg.hour)return BackgroundTask.BackgroundTaskResult.NoData;
+    const cfgMin=parseInt((cfg.time||'02:00').split(':')[1])||0;
+    if(typeof cfg.hour==='number'&&(hour<cfg.hour||(hour===cfg.hour&&now.getMinutes()<cfgMin)))return BackgroundTask.BackgroundTaskResult.NoData;
     const todayS=fmtDate(now);
     const last=await ld('pv-drive-lastbackup',null);
     if(last===todayS)return BackgroundTask.BackgroundTaskResult.NoData;
@@ -101,6 +103,7 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
       if(allFiles&&allFiles.length>7)for(const f of allFiles.slice(7))await fetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE',headers:auth});
     }catch(e){}
     await sv('pv-drive-lastbackup',todayS);
+    await sv('pv-bg-lastrun',new Date().toISOString());
     return BackgroundTask.BackgroundTaskResult.NewData;
   }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
 });
@@ -1397,10 +1400,13 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   const [bgTime,setBgTime]=useState('02:00');
   const [bgDays,setBgDays]=useState([0,1,2,3,4,5,6]);
   const [bgDirty,setBgDirty]=useState(false);
+  const [bgLastRun,setBgLastRun]=useState(null);
 
   React.useEffect(()=>{
     ld('pv-daily-reminder',null).then(r=>{if(r){setReminderEnabled(r.enabled);setReminderTime(r.time);setReminderSaved(r.enabled);}});
     ld('pv-bg-config',null).then(c=>{if(c){setBgEnabled(c.enabled);setBgTime(c.time||'02:00');setBgDays(c.days||[0,1,2,3,4,5,6]);}});
+    ld('pv-bg-lastrun',null).then(r=>setBgLastRun(r));
+    ld('pv-drive-lastbackup',null).then(r=>setBgLastRun(prev=>prev||r));
   },[]);
 
   const saveGlobalReminder=async(enabled,time)=>{
@@ -1419,7 +1425,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       }else{
         await BackgroundTask.unregisterTaskAsync(BG_BACKUP_TASK).catch(()=>{});
       }
-    }catch(e){Alert.alert('Background task',e?.message||'Could not update background backup');}
+    }catch(e){Alert.alert('Background task error',e?.message||'Could not register. Check battery optimization settings for PruvYou.');}
   };
   const toggleBgDay=(d)=>{
     setBgDays(prev=>{const next=prev.includes(d)?prev.filter(x=>x!==d):[...prev,d].sort();return next;});
@@ -1569,7 +1575,15 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
                     <Text style={{fontSize:10,fontWeight:'700',color:bgDays.includes(i)?'#fff':C.textDim}}>{l}</Text>
                   </TouchableOpacity>))}
               </View>
+              {bgLastRun&&<Text style={{fontSize:10,color:'#388E3C',marginBottom:6}}>Last run: {typeof bgLastRun==='string'&&bgLastRun.includes('T')?new Date(bgLastRun.replace(' (checked)','')).toLocaleString():bgLastRun}</Text>}
               <Text style={{fontSize:10,color:C.textDim,fontStyle:'italic',marginBottom:10}}>Runs in background even when app is closed. Android may shift the exact time by ~1h.</Text>
+              <TouchableOpacity onPress={async()=>{
+                const r=await driveBackup();
+                if(r)Alert.alert('✅ Test OK','Backup saved to Drive');
+                ld('pv-bg-lastrun',null).then(r2=>setBgLastRun(r2));
+              }} style={{padding:10,borderRadius:8,backgroundColor:C.bg,alignItems:'center',borderWidth:1,borderColor:C.border,marginBottom:8}}>
+                <Text style={{fontSize:12,fontWeight:'600',color:C.textDim}}>🧪 Test backup now</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={()=>{saveBgConfig(true,bgTime,bgDays);setBgDirty(false);}}
                 style={{padding:12,borderRadius:10,backgroundColor:bgDirty?'#34C79F':'#E8F5E9',alignItems:'center',
                   borderWidth:1,borderColor:bgDirty?'#34C79F':'#C8E6C9'}}>
