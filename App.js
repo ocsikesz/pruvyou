@@ -32,6 +32,7 @@ const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.g
 const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
 const GOOGLE_WEB_SECRET=_GS.join('');
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const SHEETS_SCOPE='https://www.googleapis.com/auth/spreadsheets';
 const BACKUP_FILENAME='pruvyou_backup.json';
 const brand={blue:'#1A4F8A',green:'#34C79F',gold:'#F7C602'};
 const C={bg:'#F5F7FA',white:'#FFFFFF',border:'#E0E4EA',borderLight:'#EDF0F5',
@@ -79,7 +80,7 @@ TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
     const dow=now.getDay();
     if(cfg.days&&cfg.days.length&&!cfg.days.includes(dow))return BackgroundTask.BackgroundTaskResult.NoData;
     // Get fresh token via Google Play Services
-    GoogleSignin.configure({webClientId:GOOGLE_WEB_CLIENT_ID,scopes:[DRIVE_SCOPE],offlineAccess:true});
+    GoogleSignin.configure({webClientId:GOOGLE_WEB_CLIENT_ID,scopes:[DRIVE_SCOPE,SHEETS_SCOPE],offlineAccess:true});
     let token=null;
     try{
       await GoogleSignin.signInSilently();
@@ -200,7 +201,7 @@ export default function App(){
 
   // ── Google Drive OAuth — native Google Sign-In ──
   useEffect(()=>{
-    GoogleSignin.configure({webClientId:GOOGLE_WEB_CLIENT_ID,scopes:[DRIVE_SCOPE],offlineAccess:true});
+    GoogleSignin.configure({webClientId:GOOGLE_WEB_CLIENT_ID,scopes:[DRIVE_SCOPE,SHEETS_SCOPE],offlineAccess:true});
     (async()=>{
       try{
         const stored=await ld('pv-drive-token',null);
@@ -322,6 +323,178 @@ export default function App(){
     }catch(e){setDriveStatus('error');Alert.alert('Restore failed',e?.message||'Drive error');}
   },[driveToken,setHabits,setLog,setProjects,setProjLog,setAdHocTasks]);
 
+  // ══════════════════════════════════════════════════════════
+  // GENERATE MONTHLY REPORT as Google Sheet
+  // ══════════════════════════════════════════════════════════
+  const generateMonthlyReport=useCallback(async(year,month)=>{
+    const token=await getFreshToken();
+    if(!token){Alert.alert('Not connected','Connect Google Drive first.');return;}
+    try{
+      Alert.alert('Generating...','Creating report for '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month]+' '+year);
+      const daysInMonth=new Date(year,month+1,0).getDate();
+      const dates=[];for(let i=1;i<=daysInMonth;i++){
+        const d=new Date(year,month,i);dates.push({date:d,str:fmt(d),dayName:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]});
+      }
+      const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+      // ── HABITS SHEET DATA ──
+      const habitRows=[];
+      const hdrH=['Day','Date',...habits.map(h=>h.icon+' '+h.name),'Completion %'];
+      habitRows.push(hdrH.map(v=>({userEnteredValue:{stringValue:v}})));
+      let totalPossible=0,totalDone=0;
+      dates.forEach(({date,str,dayName})=>{
+        const dayIdx=date.getDay()===0?6:date.getDay()-1;
+        const row=[{userEnteredValue:{stringValue:dayName}},{userEnteredValue:{stringValue:str}}];
+        let dayTotal=0,dayDone=0;
+        habits.forEach(h=>{
+          const active=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
+          const entry=log[str]?.[h.id];
+          if(!active){row.push({userEnteredValue:{stringValue:'—'}});return;}
+          dayTotal++;totalPossible++;
+          if(h.type==='timer'){
+            const mins=entry?.minutes||0;
+            row.push({userEnteredValue:{stringValue:mins>0?fmtMins(mins):'0'}});
+            if(entry?.done){dayDone++;totalDone++;}
+          }else{
+            const done=!!entry?.done;
+            row.push({userEnteredValue:{stringValue:done?'✓':'✗'}});
+            if(done){dayDone++;totalDone++;}
+          }
+        });
+        const pct=dayTotal>0?Math.round(dayDone/dayTotal*100):0;
+        row.push({userEnteredValue:{numberValue:pct}});
+        habitRows.push(row);
+      });
+      // Totals row
+      const totalPct=totalPossible>0?Math.round(totalDone/totalPossible*100):0;
+      const totR=[{userEnteredValue:{stringValue:'TOTAL'}},{userEnteredValue:{stringValue:''}}];
+      habits.forEach(h=>{
+        const total=dates.reduce((s,{str})=>(s+(log[str]?.[h.id]?.done?1:0)),0);
+        totR.push({userEnteredValue:{stringValue:total+' days'}});
+      });
+      totR.push({userEnteredValue:{numberValue:totalPct}});
+      habitRows.push(totR);
+
+      // ── QUICK TASKS SHEET DATA ──
+      const qtRows=[];
+      qtRows.push([{userEnteredValue:{stringValue:'Day'}},{userEnteredValue:{stringValue:'Date'}},{userEnteredValue:{stringValue:'Task'}},{userEnteredValue:{stringValue:'Time'}},{userEnteredValue:{stringValue:'Status'}}]);
+      dates.forEach(({str,dayName})=>{
+        const tasks=adHocTasks[str]||[];
+        tasks.forEach(t=>{
+          qtRows.push([
+            {userEnteredValue:{stringValue:dayName}},
+            {userEnteredValue:{stringValue:str}},
+            {userEnteredValue:{stringValue:t.text}},
+            {userEnteredValue:{stringValue:t.time||'—'}},
+            {userEnteredValue:{stringValue:t.done?'✓ Done':'✗ Not done'}}
+          ]);
+        });
+      });
+      if(qtRows.length===1)qtRows.push([{userEnteredValue:{stringValue:'No quick tasks this month'}}]);
+
+      // ── PROJECTS SHEET DATA ──
+      const projRows=[];
+      const hdrP=['Day','Date',...projects.flatMap(p=>[p.name+' (time)',p.name+' (tasks)'])];
+      projRows.push(hdrP.map(v=>({userEnteredValue:{stringValue:v}})));
+      dates.forEach(({str,dayName})=>{
+        const row=[{userEnteredValue:{stringValue:dayName}},{userEnteredValue:{stringValue:str}}];
+        projects.forEach(p=>{
+          const dm=projLog[str]?.[p.id]?.minutes||0;
+          const tasks=projLog[str]?.[p.id]?.tasks||[];
+          const done=tasks.filter(t=>t.done).length;
+          row.push({userEnteredValue:{stringValue:dm>0?fmtMins(dm):'—'}});
+          row.push({userEnteredValue:{stringValue:tasks.length>0?done+'/'+tasks.length:'—'}});
+        });
+        projRows.push(row);
+      });
+      // Project totals
+      const totP=[{userEnteredValue:{stringValue:'TOTAL'}},{userEnteredValue:{stringValue:''}}];
+      projects.forEach(p=>{
+        const totalM=dates.reduce((s,{str})=>s+(projLog[str]?.[p.id]?.minutes||0),0);
+        totP.push({userEnteredValue:{stringValue:fmtMins(totalM)}});
+        totP.push({userEnteredValue:{stringValue:''}});
+      });
+      projRows.push(totP);
+
+      // ── CREATE SPREADSHEET ──
+      const title='PruvYou Report — '+MN[month]+' '+year;
+      const body={properties:{title},sheets:[
+        {properties:{sheetId:0,title:'Habits',gridProperties:{frozenRowCount:1}},
+         data:[{startRow:0,startColumn:0,rowData:habitRows}]},
+        {properties:{sheetId:1,title:'Quick Tasks',gridProperties:{frozenRowCount:1}},
+         data:[{startRow:0,startColumn:0,rowData:qtRows}]},
+        {properties:{sheetId:2,title:'Projects',gridProperties:{frozenRowCount:1}},
+         data:[{startRow:0,startColumn:0,rowData:projRows}]}
+      ]};
+
+      const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{
+        method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify(body)});
+      if(!res.ok){const err=await res.text();Alert.alert('Error',err);return;}
+      const sheet=await res.json();
+      const sheetId=sheet.spreadsheetId;
+
+      // ── ADD CHARTS ──
+      const chartReqs=[];
+      // Chart 1: Habit completion % line chart
+      if(habits.length>0){
+        chartReqs.push({addChart:{chart:{spec:{
+          title:'Daily Habit Completion %',
+          basicChart:{chartType:'LINE',legendPosition:'BOTTOM_LEGEND',
+            axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'%',viewWindowOptions:{viewWindowMin:0,viewWindowMax:100}}],
+            domains:[{domain:{sourceRange:{sources:[{sheetId:0,startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],
+            series:[{series:{sourceRange:{sources:[{sheetId:0,startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:habits.length+2,endColumnIndex:habits.length+3}]}},color:{red:0.2,green:0.78,blue:0.62}}]
+          }},position:{overlayPosition:{anchorCell:{sheetId:0,rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});
+      }
+      // Chart 2: Project time bar chart
+      if(projects.length>0){
+        const projSeries=projects.map((_,i)=>({series:{sourceRange:{sources:[{sheetId:2,startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:2+i*2,endColumnIndex:3+i*2}]}}}));
+        chartReqs.push({addChart:{chart:{spec:{
+          title:'Project Time Logged',
+          basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',
+            axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'Time'}],
+            domains:[{domain:{sourceRange:{sources:[{sheetId:2,startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],
+            series:projSeries
+          }},position:{overlayPosition:{anchorCell:{sheetId:2,rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});
+      }
+
+      // Formatting: bold header, auto-resize
+      const fmtReqs=[
+        {repeatCell:{range:{sheetId:0,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:0.95,blue:1}}},fields:'userEnteredFormat'}},
+        {repeatCell:{range:{sheetId:1,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.95,green:0.95,blue:0.9}}},fields:'userEnteredFormat'}},
+        {repeatCell:{range:{sheetId:2,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:1,blue:0.95}}},fields:'userEnteredFormat'}},
+        {autoResizeDimensions:{dimensions:{sheetId:0,dimension:'COLUMNS',startIndex:0,endIndex:habits.length+3}}},
+        {autoResizeDimensions:{dimensions:{sheetId:1,dimension:'COLUMNS',startIndex:0,endIndex:5}}},
+        {autoResizeDimensions:{dimensions:{sheetId:2,dimension:'COLUMNS',startIndex:0,endIndex:2+projects.length*2}}}
+      ];
+
+      if(chartReqs.length>0||fmtReqs.length>0){
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+':batchUpdate',{
+          method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+          body:JSON.stringify({requests:[...fmtReqs,...chartReqs]})});
+      }
+
+      Alert.alert('✅ Report created!',title+'\n\nCheck your Google Drive for the spreadsheet.');
+      await sv('pv-last-report',year+'-'+String(month+1).padStart(2,'0'));
+    }catch(e){Alert.alert('Report error',e?.message||'Could not generate report');}
+  },[habits,log,projects,projLog,adHocTasks,getFreshToken]);
+
+
+
+  // Auto-generate last month's report on 1st-3rd of new month
+  useEffect(()=>{
+    if(!loaded||!driveToken)return;
+    (async()=>{
+      const d=new Date();
+      if(d.getDate()<=3){ // first 3 days of month
+        const pm=d.getMonth()===0?11:d.getMonth()-1;
+        const py=d.getMonth()===0?d.getFullYear()-1:d.getFullYear();
+        const key=py+'-'+String(pm+1).padStart(2,'0');
+        const last=await ld('pv-last-report',null);
+        if(last!==key)generateMonthlyReport(py,pm);
+      }
+    })();
+  },[loaded,driveToken]);
 
   // Auto-backup on every app open if connected to Drive
   useEffect(()=>{
@@ -364,7 +537,7 @@ export default function App(){
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport}/>}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1402,7 +1575,7 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport}){
   const [bgEnabled,setBgEnabled]=useState(false);
   const [bgLastRun,setBgLastRun]=useState(null);
   const [reminderEnabled,setReminderEnabled]=useState(false);
@@ -1578,7 +1751,25 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View>
     </View>
 
-    <View style={s.statsCard}><Text style={s.statsTitle}>📊 Your Data</Text>
+    {/* Monthly Report */}
+    <View style={s.statsCard}>
+      <Text style={s.statsTitle}>📋 Monthly Report</Text>
+      <Text style={{fontSize:11,color:C.textDim,marginBottom:12}}>Generate a Google Sheets report with habits, tasks, projects, and charts.</Text>
+      <View style={{flexDirection:'row',gap:8}}>
+        <TouchableOpacity onPress={()=>{
+          const d=new Date();const pm=d.getMonth()===0?11:d.getMonth()-1;const py=d.getMonth()===0?d.getFullYear()-1:d.getFullYear();
+          generateMonthlyReport(py,pm);}}
+          style={{flex:1,padding:13,borderRadius:10,backgroundColor:brand.blue,alignItems:'center'}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>📊 Last month</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={()=>generateMonthlyReport(new Date().getFullYear(),new Date().getMonth())}
+          style={{flex:1,padding:13,borderRadius:10,backgroundColor:brand.green+'20',alignItems:'center',borderWidth:1,borderColor:brand.green}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:brand.green}}>📊 This month</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+
+        <View style={s.statsCard}><Text style={s.statsTitle}>📊 Your Data</Text>
       <View style={{flexDirection:'row',justifyContent:'space-around'}}>
         <View style={{alignItems:'center'}}><Text style={{fontSize:24,fontWeight:'800',color:brand.blue}}>{habits.length}</Text><Text style={{fontSize:10,color:C.textDim}}>habits</Text></View>
         <View style={{alignItems:'center'}}><Text style={{fontSize:24,fontWeight:'800',color:brand.green}}>{projects.length}</Text><Text style={{fontSize:10,color:C.textDim}}>projects</Text></View>
