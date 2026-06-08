@@ -330,151 +330,146 @@ export default function App(){
     const token=await getFreshToken();
     if(!token){Alert.alert('Not connected','Connect Google Drive first.');return;}
     try{
-      Alert.alert('Generating...','Creating report for '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month]+' '+year);
+      const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const MNF=['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const mn=MN[month];
+      Alert.alert('Generating...','Creating '+mn+' '+year+' report...');
       const daysInMonth=new Date(year,month+1,0).getDate();
       const dates=[];for(let i=1;i<=daysInMonth;i++){
         const d=new Date(year,month,i);dates.push({date:d,str:fmt(d),dayName:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]});
       }
-      const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-      // ── HABITS SHEET DATA ──
+      // ── Build sheet data ──
+      // HABITS
       const habitRows=[];
-      const hdrH=['Day','Date',...habits.map(h=>h.icon+' '+h.name),'Completion %'];
+      const hdrH=['Day','Date',...habits.map(h=>h.icon+' '+h.name),'%'];
       habitRows.push(hdrH.map(v=>({userEnteredValue:{stringValue:v}})));
       let totalPossible=0,totalDone=0;
       dates.forEach(({date,str,dayName})=>{
         const dayIdx=date.getDay()===0?6:date.getDay()-1;
         const row=[{userEnteredValue:{stringValue:dayName}},{userEnteredValue:{stringValue:str}}];
-        let dayTotal=0,dayDone=0;
+        let dayT=0,dayD=0;
         habits.forEach(h=>{
           const active=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
           const entry=log[str]?.[h.id];
           if(!active){row.push({userEnteredValue:{stringValue:'—'}});return;}
-          dayTotal++;totalPossible++;
+          dayT++;totalPossible++;
           if(h.type==='timer'){
-            const mins=entry?.minutes||0;
-            row.push({userEnteredValue:{stringValue:mins>0?fmtMins(mins):'0'}});
-            if(entry?.done){dayDone++;totalDone++;}
+            const mins=entry?.minutes||0;row.push({userEnteredValue:{stringValue:mins>0?fmtMins(mins):'0'}});
+            if(entry?.done){dayD++;totalDone++;}
           }else{
-            const done=!!entry?.done;
-            row.push({userEnteredValue:{stringValue:done?'✓':'✗'}});
-            if(done){dayDone++;totalDone++;}
+            const done=!!entry?.done;row.push({userEnteredValue:{stringValue:done?'✓':'✗'}});
+            if(done){dayD++;totalDone++;}
           }
         });
-        const pct=dayTotal>0?Math.round(dayDone/dayTotal*100):0;
-        row.push({userEnteredValue:{numberValue:pct}});
+        row.push({userEnteredValue:{numberValue:dayT>0?Math.round(dayD/dayT*100):0}});
         habitRows.push(row);
       });
-      // Totals row
-      const totalPct=totalPossible>0?Math.round(totalDone/totalPossible*100):0;
-      const totR=[{userEnteredValue:{stringValue:'TOTAL'}},{userEnteredValue:{stringValue:''}}];
-      habits.forEach(h=>{
-        const total=dates.reduce((s,{str})=>(s+(log[str]?.[h.id]?.done?1:0)),0);
-        totR.push({userEnteredValue:{stringValue:total+' days'}});
-      });
-      totR.push({userEnteredValue:{numberValue:totalPct}});
-      habitRows.push(totR);
+      const totH=[{userEnteredValue:{stringValue:'TOTAL'}},{userEnteredValue:{stringValue:''}}];
+      habits.forEach(h=>{const t=dates.reduce((s,{str})=>(s+(log[str]?.[h.id]?.done?1:0)),0);totH.push({userEnteredValue:{stringValue:t+' days'}});});
+      totH.push({userEnteredValue:{numberValue:totalPossible>0?Math.round(totalDone/totalPossible*100):0}});
+      habitRows.push(totH);
 
-      // ── QUICK TASKS SHEET DATA ──
-      const qtRows=[];
-      qtRows.push([{userEnteredValue:{stringValue:'Day'}},{userEnteredValue:{stringValue:'Date'}},{userEnteredValue:{stringValue:'Task'}},{userEnteredValue:{stringValue:'Time'}},{userEnteredValue:{stringValue:'Status'}}]);
-      dates.forEach(({str,dayName})=>{
-        const tasks=adHocTasks[str]||[];
-        tasks.forEach(t=>{
-          qtRows.push([
-            {userEnteredValue:{stringValue:dayName}},
-            {userEnteredValue:{stringValue:str}},
-            {userEnteredValue:{stringValue:t.text}},
-            {userEnteredValue:{stringValue:t.time||'—'}},
-            {userEnteredValue:{stringValue:t.done?'✓ Done':'✗ Not done'}}
-          ]);
-        });
-      });
-      if(qtRows.length===1)qtRows.push([{userEnteredValue:{stringValue:'No quick tasks this month'}}]);
+      // QUICK TASKS
+      const qtRows=[[{userEnteredValue:{stringValue:'Day'}},{userEnteredValue:{stringValue:'Date'}},{userEnteredValue:{stringValue:'Task'}},{userEnteredValue:{stringValue:'Time'}},{userEnteredValue:{stringValue:'Status'}}]];
+      dates.forEach(({str,dayName})=>{(adHocTasks[str]||[]).forEach(t=>{
+        qtRows.push([{userEnteredValue:{stringValue:dayName}},{userEnteredValue:{stringValue:str}},{userEnteredValue:{stringValue:t.text}},{userEnteredValue:{stringValue:t.time||'—'}},{userEnteredValue:{stringValue:t.done?'✓ Done':'✗'}}]);
+      });});
+      if(qtRows.length===1)qtRows.push([{userEnteredValue:{stringValue:'No tasks this month'}}]);
 
-      // ── PROJECTS SHEET DATA ──
+      // PROJECTS
       const projRows=[];
       const hdrP=['Day','Date',...projects.flatMap(p=>[p.name+' (time)',p.name+' (tasks)'])];
       projRows.push(hdrP.map(v=>({userEnteredValue:{stringValue:v}})));
       dates.forEach(({str,dayName})=>{
         const row=[{userEnteredValue:{stringValue:dayName}},{userEnteredValue:{stringValue:str}}];
         projects.forEach(p=>{
-          const dm=projLog[str]?.[p.id]?.minutes||0;
-          const tasks=projLog[str]?.[p.id]?.tasks||[];
-          const done=tasks.filter(t=>t.done).length;
+          const dm=projLog[str]?.[p.id]?.minutes||0;const tasks=projLog[str]?.[p.id]?.tasks||[];
           row.push({userEnteredValue:{stringValue:dm>0?fmtMins(dm):'—'}});
-          row.push({userEnteredValue:{stringValue:tasks.length>0?done+'/'+tasks.length:'—'}});
-        });
-        projRows.push(row);
+          row.push({userEnteredValue:{stringValue:tasks.length>0?tasks.filter(t=>t.done).length+'/'+tasks.length:'—'}});
+        });projRows.push(row);
       });
-      // Project totals
       const totP=[{userEnteredValue:{stringValue:'TOTAL'}},{userEnteredValue:{stringValue:''}}];
-      projects.forEach(p=>{
-        const totalM=dates.reduce((s,{str})=>s+(projLog[str]?.[p.id]?.minutes||0),0);
-        totP.push({userEnteredValue:{stringValue:fmtMins(totalM)}});
-        totP.push({userEnteredValue:{stringValue:''}});
-      });
+      projects.forEach(p=>{totP.push({userEnteredValue:{stringValue:fmtMins(dates.reduce((s,{str})=>s+(projLog[str]?.[p.id]?.minutes||0),0))}});totP.push({userEnteredValue:{stringValue:''}});});
       projRows.push(totP);
 
-      // ── CREATE SPREADSHEET ──
-      const title='PruvYou Report — '+MN[month]+' '+year;
-      const body={properties:{title},sheets:[
-        {properties:{sheetId:0,title:'Habits',gridProperties:{frozenRowCount:1}},
-         data:[{startRow:0,startColumn:0,rowData:habitRows}]},
-        {properties:{sheetId:1,title:'Quick Tasks',gridProperties:{frozenRowCount:1}},
-         data:[{startRow:0,startColumn:0,rowData:qtRows}]},
-        {properties:{sheetId:2,title:'Projects',gridProperties:{frozenRowCount:1}},
-         data:[{startRow:0,startColumn:0,rowData:projRows}]}
-      ]};
+      // ── Find or create yearly spreadsheet ──
+      const ssTitle='PruvYou '+year;
+      const auth={Authorization:'Bearer '+token,'Content-Type':'application/json'};
+      let ssId=null;
 
-      const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{
-        method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-        body:JSON.stringify(body)});
-      if(!res.ok){const err=await res.text();Alert.alert('Error',err);return;}
-      const sheet=await res.json();
-      const sheetId=sheet.spreadsheetId;
+      // Search for existing file
+      const search=await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D'"+encodeURIComponent(ssTitle)+"'%20and%20mimeType%3D'application%2Fvnd.google-apps.spreadsheet'%20and%20trashed%3Dfalse&fields=files(id)",{headers:{Authorization:'Bearer '+token}});
+      const {files}=await search.json();
+      
+      if(files&&files.length>0){
+        // ── USE EXISTING spreadsheet ──
+        ssId=files[0].id;
+        // Delete old sheets for this month if they exist (to regenerate)
+        const ssInfo=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'?fields=sheets.properties',{headers:{Authorization:'Bearer '+token}});
+        const ssData=await ssInfo.json();
+        const delReqs=[];
+        (ssData.sheets||[]).forEach(s=>{
+          if(s.properties.title.startsWith(mn+' '))delReqs.push({deleteSheet:{sheetId:s.properties.sheetId}});
+        });
+        // Add new sheets
+        const newSheetIds=[month*10+1,month*10+2,month*10+3];
+        const addReqs=[
+          {addSheet:{properties:{sheetId:newSheetIds[0],title:mn+' Habits',gridProperties:{frozenRowCount:1}}}},
+          {addSheet:{properties:{sheetId:newSheetIds[1],title:mn+' Tasks',gridProperties:{frozenRowCount:1}}}},
+          {addSheet:{properties:{sheetId:newSheetIds[2],title:mn+' Projects',gridProperties:{frozenRowCount:1}}}}
+        ];
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{
+          method:'POST',headers:auth,body:JSON.stringify({requests:[...delReqs,...addReqs]})});
+        // Write data
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'/values/\''+mn+' Habits\'!A1?valueInputOption=RAW',{
+          method:'PUT',headers:auth,body:JSON.stringify({values:habitRows.map(r=>r.map(c=>c.userEnteredValue.stringValue||c.userEnteredValue.numberValue||''))})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'/values/\''+mn+' Tasks\'!A1?valueInputOption=RAW',{
+          method:'PUT',headers:auth,body:JSON.stringify({values:qtRows.map(r=>r.map(c=>c.userEnteredValue.stringValue||c.userEnteredValue.numberValue||''))})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'/values/\''+mn+' Projects\'!A1?valueInputOption=RAW',{
+          method:'PUT',headers:auth,body:JSON.stringify({values:projRows.map(r=>r.map(c=>c.userEnteredValue.stringValue||c.userEnteredValue.numberValue||''))})});
 
-      // ── ADD CHARTS ──
-      const chartReqs=[];
-      // Chart 1: Habit completion % line chart
-      if(habits.length>0){
-        chartReqs.push({addChart:{chart:{spec:{
-          title:'Daily Habit Completion %',
-          basicChart:{chartType:'LINE',legendPosition:'BOTTOM_LEGEND',
-            axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'%',viewWindowOptions:{viewWindowMin:0,viewWindowMax:100}}],
-            domains:[{domain:{sourceRange:{sources:[{sheetId:0,startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],
-            series:[{series:{sourceRange:{sources:[{sheetId:0,startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:habits.length+2,endColumnIndex:habits.length+3}]}},color:{red:0.2,green:0.78,blue:0.62}}]
-          }},position:{overlayPosition:{anchorCell:{sheetId:0,rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});
+        // Format + charts
+        const fmtReqs=[
+          {repeatCell:{range:{sheetId:newSheetIds[0],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:0.95,blue:1}}},fields:'userEnteredFormat'}},
+          {repeatCell:{range:{sheetId:newSheetIds[1],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.95,green:0.95,blue:0.9}}},fields:'userEnteredFormat'}},
+          {repeatCell:{range:{sheetId:newSheetIds[2],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:1,blue:0.95}}},fields:'userEnteredFormat'}},
+          {autoResizeDimensions:{dimensions:{sheetId:newSheetIds[0],dimension:'COLUMNS',startIndex:0,endIndex:habits.length+3}}},
+          {autoResizeDimensions:{dimensions:{sheetId:newSheetIds[1],dimension:'COLUMNS',startIndex:0,endIndex:5}}},
+          {autoResizeDimensions:{dimensions:{sheetId:newSheetIds[2],dimension:'COLUMNS',startIndex:0,endIndex:2+projects.length*2}}}
+        ];
+        const chartReqs=[];
+        if(habits.length>0){chartReqs.push({addChart:{chart:{spec:{title:mn+' Habit Completion %',basicChart:{chartType:'LINE',legendPosition:'BOTTOM_LEGEND',axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'%'}],domains:[{domain:{sourceRange:{sources:[{sheetId:newSheetIds[0],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],series:[{series:{sourceRange:{sources:[{sheetId:newSheetIds[0],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:habits.length+2,endColumnIndex:habits.length+3}]}},color:{red:0.2,green:0.78,blue:0.62}}]}},position:{overlayPosition:{anchorCell:{sheetId:newSheetIds[0],rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});}
+        if(projects.length>0){chartReqs.push({addChart:{chart:{spec:{title:mn+' Project Time',basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'Time'}],domains:[{domain:{sourceRange:{sources:[{sheetId:newSheetIds[2],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],series:projects.map((_,i)=>({series:{sourceRange:{sources:[{sheetId:newSheetIds[2],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:2+i*2,endColumnIndex:3+i*2}]}}}))}},position:{overlayPosition:{anchorCell:{sheetId:newSheetIds[2],rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});}
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{
+          method:'POST',headers:auth,body:JSON.stringify({requests:[...fmtReqs,...chartReqs]})});
+
+      }else{
+        // ── CREATE NEW spreadsheet ──
+        const body={properties:{title:ssTitle},sheets:[
+          {properties:{sheetId:month*10+1,title:mn+' Habits',gridProperties:{frozenRowCount:1}},data:[{startRow:0,startColumn:0,rowData:habitRows}]},
+          {properties:{sheetId:month*10+2,title:mn+' Tasks',gridProperties:{frozenRowCount:1}},data:[{startRow:0,startColumn:0,rowData:qtRows}]},
+          {properties:{sheetId:month*10+3,title:mn+' Projects',gridProperties:{frozenRowCount:1}},data:[{startRow:0,startColumn:0,rowData:projRows}]}
+        ]};
+        const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',headers:auth,body:JSON.stringify(body)});
+        if(!res.ok){Alert.alert('Error',await res.text());return;}
+        const sheet=await res.json();ssId=sheet.spreadsheetId;
+        // Format + charts
+        const sids=[month*10+1,month*10+2,month*10+3];
+        const reqs=[
+          {repeatCell:{range:{sheetId:sids[0],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:0.95,blue:1}}},fields:'userEnteredFormat'}},
+          {repeatCell:{range:{sheetId:sids[1],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.95,green:0.95,blue:0.9}}},fields:'userEnteredFormat'}},
+          {repeatCell:{range:{sheetId:sids[2],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:1,blue:0.95}}},fields:'userEnteredFormat'}},
+          {autoResizeDimensions:{dimensions:{sheetId:sids[0],dimension:'COLUMNS',startIndex:0,endIndex:habits.length+3}}},
+          {autoResizeDimensions:{dimensions:{sheetId:sids[1],dimension:'COLUMNS',startIndex:0,endIndex:5}}},
+          {autoResizeDimensions:{dimensions:{sheetId:sids[2],dimension:'COLUMNS',startIndex:0,endIndex:2+projects.length*2}}}
+        ];
+        if(habits.length>0){reqs.push({addChart:{chart:{spec:{title:mn+' Habit Completion %',basicChart:{chartType:'LINE',legendPosition:'BOTTOM_LEGEND',axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'%'}],domains:[{domain:{sourceRange:{sources:[{sheetId:sids[0],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],series:[{series:{sourceRange:{sources:[{sheetId:sids[0],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:habits.length+2,endColumnIndex:habits.length+3}]}},color:{red:0.2,green:0.78,blue:0.62}}]}},position:{overlayPosition:{anchorCell:{sheetId:sids[0],rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});}
+        if(projects.length>0){reqs.push({addChart:{chart:{spec:{title:mn+' Project Time',basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'Time'}],domains:[{domain:{sourceRange:{sources:[{sheetId:sids[2],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],series:projects.map((_,i)=>({series:{sourceRange:{sources:[{sheetId:sids[2],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:2+i*2,endColumnIndex:3+i*2}]}}}))}},position:{overlayPosition:{anchorCell:{sheetId:sids[2],rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});}
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:reqs})});
       }
-      // Chart 2: Project time bar chart
-      if(projects.length>0){
-        const projSeries=projects.map((_,i)=>({series:{sourceRange:{sources:[{sheetId:2,startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:2+i*2,endColumnIndex:3+i*2}]}}}));
-        chartReqs.push({addChart:{chart:{spec:{
-          title:'Project Time Logged',
-          basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',
-            axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'Time'}],
-            domains:[{domain:{sourceRange:{sources:[{sheetId:2,startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],
-            series:projSeries
-          }},position:{overlayPosition:{anchorCell:{sheetId:2,rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});
-      }
 
-      // Formatting: bold header, auto-resize
-      const fmtReqs=[
-        {repeatCell:{range:{sheetId:0,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:0.95,blue:1}}},fields:'userEnteredFormat'}},
-        {repeatCell:{range:{sheetId:1,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.95,green:0.95,blue:0.9}}},fields:'userEnteredFormat'}},
-        {repeatCell:{range:{sheetId:2,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:1,blue:0.95}}},fields:'userEnteredFormat'}},
-        {autoResizeDimensions:{dimensions:{sheetId:0,dimension:'COLUMNS',startIndex:0,endIndex:habits.length+3}}},
-        {autoResizeDimensions:{dimensions:{sheetId:1,dimension:'COLUMNS',startIndex:0,endIndex:5}}},
-        {autoResizeDimensions:{dimensions:{sheetId:2,dimension:'COLUMNS',startIndex:0,endIndex:2+projects.length*2}}}
-      ];
-
-      if(chartReqs.length>0||fmtReqs.length>0){
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+':batchUpdate',{
-          method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-          body:JSON.stringify({requests:[...fmtReqs,...chartReqs]})});
-      }
-
-      Alert.alert('✅ Report created!',title+'\n\nCheck your Google Drive for the spreadsheet.');
+      Alert.alert('✅ Report ready!',mn+' '+year+' added to "'+ssTitle+'" in your Drive.');
       await sv('pv-last-report',year+'-'+String(month+1).padStart(2,'0'));
     }catch(e){Alert.alert('Report error',e?.message||'Could not generate report');}
   },[habits,log,projects,projLog,adHocTasks,getFreshToken]);
