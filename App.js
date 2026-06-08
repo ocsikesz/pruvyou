@@ -51,6 +51,7 @@ const compColor=(r)=>r>=1?brand.green:r>=0.7?brand.gold:r>=0.4?'#E8956B':C.textD
 const fmt=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
 const today=()=>new Date();
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const fmtMins=(m)=>m>=60?Math.floor(m/60)+'h'+(m%60>0?' '+m%60+'m':''):m+'m';
 function getWeekDates(off=0){const d=today();const day=d.getDay()===0?6:d.getDay()-1;
   const mon=new Date(d);mon.setDate(d.getDate()-day+off*7);
   return Array.from({length:7},(_,i)=>{const x=new Date(mon);x.setDate(mon.getDate()+i);return x;});}
@@ -156,18 +157,18 @@ export default function App(){
   const toggleDay=useCallback((hid,ds)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     const cur=c[ds][hid];c[ds]={...c[ds],[hid]:{...cur,done:!cur?.done}};return c;});},[]);
   const addMinutes=useCallback((hid,ds,delta,target)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
-    const cur=c[ds][hid]?.minutes||0;const next=clamp(cur+delta,0,999);
+    const cur=c[ds][hid]?.minutes||0;const next=clamp(cur+delta,0,99999);
     c[ds]={...c[ds],[hid]:{...c[ds][hid],done:next>=target,minutes:next}};return c;});},[]);
   const setNote=useCallback((hid,ds,note)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     c[ds]={...c[ds],[hid]:{...c[ds][hid],notes:note}};return c;});},[]);
   const addProjMinutes=useCallback((pid,ds,delta)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
-    const cur=c[ds][pid]?.minutes||0;c[ds]={...c[ds],[pid]:{...c[ds][pid],minutes:clamp(cur+delta,0,999)}};return c;});},[]);
-  const setProjMinutes=useCallback((pid,ds,val)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};c[ds]={...c[ds],[pid]:{...c[ds][pid],minutes:clamp(val,0,999)}};return c;});},[]);
+    const cur=c[ds][pid]?.minutes||0;c[ds]={...c[ds],[pid]:{...c[ds][pid],minutes:clamp(cur+delta,0,99999)}};return c;});},[]);
+  const setProjMinutes=useCallback((pid,ds,val)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};c[ds]={...c[ds],[pid]:{...c[ds][pid],minutes:clamp(val,0,99999)}};return c;});},[]);
   const setProjNote=useCallback((pid,ds,note)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     c[ds]={...c[ds],[pid]:{...c[ds][pid],notes:note}};return c;});},[]);
 
   const setHabitMinutes=useCallback((hid,ds,val,target)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
-    const v=clamp(val,0,999);c[ds]={...c[ds],[hid]:{...c[ds][hid],done:v>=(target||0),minutes:v}};return c;});},[]);
+    const v=clamp(val,0,99999);c[ds]={...c[ds],[hid]:{...c[ds][hid],done:v>=(target||0),minutes:v}};return c;});},[]);
   const setAdHocTasksForDay=useCallback((ds,tasks)=>{setAdHocTasks(p=>({...p,[ds]:tasks}));},[]);
   const setProjTasks=useCallback((pid,ds,tasks)=>{setProjLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     c[ds]={...c[ds],[pid]:{...c[ds][pid],tasks}};return c;});},[]);
@@ -405,14 +406,14 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
               <Text style={{fontSize:22,fontWeight:'800',color:'#C44'}}>−</Text></TouchableOpacity>
             <TouchableOpacity onPress={()=>setHabitMinutes(h.id,ds,0,h.targetMinutes)}
               style={{flex:1,height:44,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center',justifyContent:'center'}}>
-              <Text style={{fontSize:18,fontWeight:'800',color:curMins>0?color:C.textDim}}>{curMins}m</Text>
+              <Text style={{fontSize:18,fontWeight:'800',color:curMins>0?color:C.textDim}}>{fmtMins(curMins)}</Text>
               <Text style={{fontSize:8,color:C.textDim}}>{curMins>0?'tap to reset':'tap 0'}</Text></TouchableOpacity>
             <TouchableOpacity onPress={()=>setHabitMinutes(h.id,ds,curMins+15,h.targetMinutes)}
               style={{width:44,height:44,borderRadius:22,backgroundColor:color+'20',borderWidth:1,borderColor:color+'50',alignItems:'center',justifyContent:'center'}}>
               <Text style={{fontSize:22,fontWeight:'800',color}}>+</Text></TouchableOpacity>
           </View>
           <View style={{flexDirection:'row',gap:6,marginTop:8}}>
-            {[15,30,60,90].map(v=>(<TouchableOpacity key={v} onPress={()=>setHabitMinutes(h.id,ds,v,h.targetMinutes)}
+            {[15,30,60,90,120].map(v=>(<TouchableOpacity key={v} onPress={()=>setHabitMinutes(h.id,ds,v,h.targetMinutes)}
               style={{flex:1,padding:6,borderRadius:8,backgroundColor:curMins===v?color+'25':C.bg,borderWidth:1,borderColor:curMins===v?color+'60':C.border,alignItems:'center'}}>
               <Text style={{fontSize:10,fontWeight:'700',color:curMins===v?color:C.textDim}}>{v}m</Text>
             </TouchableOpacity>))}
@@ -421,7 +422,7 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
           <View style={{marginTop:8,height:4,backgroundColor:C.border,borderRadius:2,overflow:'hidden'}}>
             <View style={{height:'100%',width:`${Math.min(100,curMins/h.targetMinutes*100)}%`,backgroundColor:color,borderRadius:2}}/>
           </View>
-          <Text style={{fontSize:9,color:C.textDim,marginTop:3,textAlign:'right'}}>{curMins}/{h.targetMinutes}m goal</Text>
+          <Text style={{fontSize:9,color:C.textDim,marginTop:3,textAlign:'right'}}>{fmtMins(curMins)}/{fmtMins(h.targetMinutes)} goal</Text>
         </View>
       ):(
         <View style={{marginBottom:4}}/>
@@ -515,7 +516,7 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
             {h.type==='timer'&&(<View style={{flexDirection:'row',alignItems:'center',gap:4,marginTop:3}}>
               <View style={{flex:1,height:3,backgroundColor:C.border,borderRadius:2,overflow:'hidden'}}>
                 <View style={{height:'100%',width:`${Math.min(100,(entry?.minutes||0)/h.targetMinutes*100)}%`,backgroundColor:color,borderRadius:2}}/></View>
-              <Text style={{fontSize:9,fontWeight:'700',color}}>{entry?.minutes||0}/{h.targetMinutes}m</Text></View>)}
+              <Text style={{fontSize:9,fontWeight:'700',color}}>{fmtMins(entry?.minutes||0)}/{fmtMins(h.targetMinutes)}</Text></View>)}
             {entry?.notes&&<Text style={{fontSize:9,color:brand.blue,marginTop:2}} numberOfLines={1}>📝 {entry.notes}</Text>}
           </TouchableOpacity>
           <TouchableOpacity onPress={()=>setExpandedHabit(isExp?null:h.id)} style={{paddingHorizontal:6,paddingVertical:8}}>
@@ -763,7 +764,7 @@ function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabi
                       borderColor:isTod?brand.gold:(dd?cat.color:C.border),opacity:isFut?0.3:1}}>
                     <Text style={{fontSize:8,fontWeight:'700',color:isTod?brand.gold:C.textDim}}>{DAYS[i]}</Text>
                     <Text style={{fontSize:10,fontWeight:'800',color:dd?cat.color:C.textDark}}>
-                      {h.type==='timer'?(dm>0?dm+'m':'—'):(dd?'✓':'○')}</Text>
+                      {h.type==='timer'?(dm>0?fmtMins(dm):'—'):(dd?'✓':'○')}</Text>
                   </TouchableOpacity>);})}
               </View>
               {/* Expanded day panel */}
@@ -904,7 +905,7 @@ function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTa
         </TouchableOpacity>
         <TouchableOpacity onPress={()=>setProjMinutes(pid,ds,0)}
           style={{flex:1,height:44,borderRadius:10,backgroundColor:C.bg,borderWidth:1,borderColor:C.border,alignItems:'center',justifyContent:'center'}}>
-          <Text style={{fontSize:20,fontWeight:'800',color:dm>0?color:C.textDim}}>{dm}m</Text>
+          <Text style={{fontSize:20,fontWeight:'800',color:dm>0?color:C.textDim}}>{fmtMins(dm)}</Text>
           {dm>0&&<Text style={{fontSize:8,color:C.textDim}}>tap to reset</Text>}
         </TouchableOpacity>
         <TouchableOpacity onPress={()=>setProjMinutes(pid,ds,dm+15)}
@@ -918,7 +919,7 @@ function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTa
             style={{flex:1,paddingVertical:6,borderRadius:7,
               backgroundColor:dm===v?color+'25':C.bg,
               borderWidth:1,borderColor:dm===v?color+'60':C.border,alignItems:'center'}}>
-            <Text style={{fontSize:9,fontWeight:'700',color:dm===v?color:C.textDim}}>{v===0?'0':v+'m'}</Text>
+            <Text style={{fontSize:9,fontWeight:'700',color:dm===v?color:C.textDim}}>{v===0?'0':fmtMins(v)}</Text>
           </TouchableOpacity>))}
       </View>
 
@@ -1078,12 +1079,12 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
             <View style={{width:22,height:22,borderRadius:11,borderWidth:2,
               borderColor:dm>0?p.color:C.textDark,backgroundColor:dm>0?p.color:'#fff',
               justifyContent:'center',alignItems:'center',marginRight:8}}>
-              {dm>0&&<Text style={{color:'#fff',fontSize:9,fontWeight:'800'}}>{dm}m</Text>}
+              {dm>0&&<Text style={{color:'#fff',fontSize:9,fontWeight:'800'}}>{fmtMins(dm)}</Text>}
             </View>
             <View style={{flex:1}}>
               <Text style={[s.thinName]}>{p.name}</Text>
               <Text style={{fontSize:9,color:C.textDim,marginTop:1}}>
-                {dm>0?`${dm}m today · `:'No time today · '}{Math.round(totalMins/60*10)/10}h total
+                {dm>0?fmtMins(dm)+' today · ':'No time today · '}{Math.round(totalMins/60*10)/10}h total
                 {tasks.length>0?` · ${done}/${tasks.length} tasks`:''}
               </Text>
             </View>
@@ -1206,7 +1207,7 @@ function StatsTab({habits,log,projects,projLog,adHocTasks}){
               <View style={{flexDirection:'row',alignItems:'center',gap:6}}>
                 <Text style={{fontSize:11,color:e?.done?brand.green:C.textDim}}>{e?.done?'✓':'○'}</Text>
                 <Text style={{fontSize:12,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
-                {h.type==='timer'&&<Text style={{fontSize:10,color:C.textDim}}>{e?.minutes||0}m</Text>}
+                {h.type==='timer'&&<Text style={{fontSize:10,color:C.textDim}}>{fmtMins(e?.minutes||0)}</Text>}
               </View>
               {e?.notes&&<Text style={{fontSize:10,color:brand.blue,marginLeft:20,marginTop:2}}>📝 {e.notes}</Text>}
             </View>);})}
@@ -1334,7 +1335,7 @@ function StatsTab({habits,log,projects,projLog,adHocTasks}){
                 <View style={{width:10,height:10,borderRadius:5,backgroundColor:p.color}}/>
                 <Text style={{fontSize:13,fontWeight:'700',color:C.text,flex:1}}>{p.name}</Text>
                 {dm>0&&<View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:6,backgroundColor:p.color+'20',borderWidth:1,borderColor:p.color+'40'}}>
-                  <Text style={{fontSize:11,fontWeight:'800',color:p.color}}>{dm}m</Text></View>}
+                  <Text style={{fontSize:11,fontWeight:'800',color:p.color}}>{fmtMins(dm)}</Text></View>}
                 {displayTasks.length>0&&<Text style={{fontSize:11,color:doneCnt===displayTasks.length?brand.green:C.textDim,fontWeight:'700'}}>
                   {doneCnt}/{displayTasks.length} tasks</Text>}
               </View>
