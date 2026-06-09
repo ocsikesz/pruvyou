@@ -334,155 +334,180 @@ export default function App(){
       const MNF=['January','February','March','April','May','June','July','August','September','October','November','December'];
       const mn=MN[month];
       Alert.alert('Generating...','Creating '+mn+' '+year+' report...');
-      const daysInMonth=new Date(year,month+1,0).getDate();
-      const dates=[];for(let i=1;i<=daysInMonth;i++){
-        const d=new Date(year,month,i);dates.push({date:d,str:fmt(d),dayName:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]});
-      }
+      const dim=new Date(year,month+1,0).getDate();
+      const dates=[];for(let i=1;i<=dim;i++){const d=new Date(year,month,i);dates.push({d,str:fmt(d),dn:['S','M','T','W','T','F','S'][d.getDay()],we:d.getDay()===0||d.getDay()===6});}
 
-      // ── Build sheet data ──
-      // HABITS
-      const habitRows=[];
-      const hdrH=['Day','Date',...habits.map(h=>h.icon+' '+h.name),'%'];
-      habitRows.push(hdrH.map(v=>({userEnteredValue:{stringValue:v}})));
-      let totalPossible=0,totalDone=0;
-      dates.forEach(({date,str,dayName})=>{
-        const dayIdx=date.getDay()===0?6:date.getDay()-1;
-        const row=[{userEnteredValue:{stringValue:dayName}},{userEnteredValue:{stringValue:str}}];
-        let dayT=0,dayD=0;
-        habits.forEach(h=>{
+      // Build rows for single sheet (horizontal: days as columns)
+      const V=[];
+      const _=v=>({userEnteredValue:{stringValue:String(v??'')}});
+      const _n=v=>({userEnteredValue:{numberValue:v}});
+      const _f=v=>({userEnteredValue:{formulaValue:v}});
+      const _b=()=>({userEnteredValue:{stringValue:''}});
+      const C=2+dim*2; // total cols needed
+
+      // Row 0: empty
+      V.push(Array(C).fill(_b()));
+      // Row 1: PRUVYOU header
+      const r1=Array(C).fill(_b());r1[1]=_('PruvYou Report');r1[3]=_(MNF[month]+' '+year);V.push(r1);
+      // Row 2: Success Rate label
+      const r2=Array(C).fill(_b());r2[1]=_('Success Rate:');V.push(r2);
+      // Row 3: empty spacer
+      V.push(Array(C).fill(_b()));
+      // Row 4: header — HABIT | GOAL | day numbers...  | PROGRESS
+      const hdr=Array(C).fill(_b());hdr[1]=_('HABIT');hdr[3]=_('GOAL');
+      for(let i=0;i<dim;i++)hdr[4+i*2]=_(String(i+1));
+      hdr[4+dim*2]=_('PROGRESS');V.push(hdr);
+      // Row 5: day letters
+      const dlr=Array(C).fill(_b());
+      for(let i=0;i<dim;i++)dlr[4+i*2]=_(dates[i].dn);
+      V.push(dlr);
+
+      // ── HABITS ──
+      const habitStartRow=V.length;
+      let totalH=0,doneH=0;
+      habits.forEach(h=>{
+        const row=Array(C).fill(_b());
+        row[1]=_(h.icon+' '+h.name);row[3]=_(h.type==='timer'?fmtMins(h.targetMinutes):'daily');
+        let hDone=0,hTotal=0;
+        dates.forEach(({str,d:dt},i)=>{
+          const dayIdx=dt.getDay()===0?6:dt.getDay()-1;
           const active=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
           const entry=log[str]?.[h.id];
-          if(!active){row.push({userEnteredValue:{stringValue:'—'}});return;}
-          dayT++;totalPossible++;
+          if(!active){row[4+i*2]=_('—');return;}
+          hTotal++;totalH++;
           if(h.type==='timer'){
-            const mins=entry?.minutes||0;row.push({userEnteredValue:{stringValue:mins>0?fmtMins(mins):'0'}});
-            if(entry?.done){dayD++;totalDone++;}
+            const mins=entry?.minutes||0;
+            row[4+i*2]=_(mins>0?fmtMins(mins):'—');
+            if(entry?.done){hDone++;doneH++;}
           }else{
-            const done=!!entry?.done;row.push({userEnteredValue:{stringValue:done?'✓':'✗'}});
-            if(done){dayD++;totalDone++;}
+            const done=!!entry?.done;
+            row[4+i*2]=_(done?'✓':'✗');
+            if(done){hDone++;doneH++;}
           }
         });
-        row.push({userEnteredValue:{numberValue:dayT>0?Math.round(dayD/dayT*100):0}});
-        habitRows.push(row);
+        const pct=hTotal>0?Math.round(hDone/hTotal*100):0;
+        row[4+dim*2]=_(pct+'%');
+        V.push(row);
       });
-      const totH=[{userEnteredValue:{stringValue:'TOTAL'}},{userEnteredValue:{stringValue:''}}];
-      habits.forEach(h=>{const t=dates.reduce((s,{str})=>(s+(log[str]?.[h.id]?.done?1:0)),0);totH.push({userEnteredValue:{stringValue:t+' days'}});});
-      totH.push({userEnteredValue:{numberValue:totalPossible>0?Math.round(totalDone/totalPossible*100):0}});
-      habitRows.push(totH);
 
-      // QUICK TASKS
-      const qtRows=[[{userEnteredValue:{stringValue:'Day'}},{userEnteredValue:{stringValue:'Date'}},{userEnteredValue:{stringValue:'Task'}},{userEnteredValue:{stringValue:'Time'}},{userEnteredValue:{stringValue:'Status'}}]];
-      dates.forEach(({str,dayName})=>{(adHocTasks[str]||[]).forEach(t=>{
-        qtRows.push([{userEnteredValue:{stringValue:dayName}},{userEnteredValue:{stringValue:str}},{userEnteredValue:{stringValue:t.text}},{userEnteredValue:{stringValue:t.time||'—'}},{userEnteredValue:{stringValue:t.done?'✓ Done':'✗'}}]);
+      // ── SPACER + QUICK TASKS header ──
+      V.push(Array(C).fill(_b()));
+      const qtHdrRow=V.length;
+      const qth=Array(C).fill(_b());qth[1]=_('QUICK TASKS');V.push(qth);
+
+      // Quick tasks — one row per unique task, days marked
+      const allQT={};
+      dates.forEach(({str},i)=>{(adHocTasks[str]||[]).forEach(t=>{
+        if(!allQT[t.text])allQT[t.text]={cells:Array(dim).fill(''),done:0,total:0};
+        allQT[t.text].cells[i]=t.done?'✓':'✗';
+        allQT[t.text].total++;if(t.done)allQT[t.text].done++;
       });});
-      if(qtRows.length===1)qtRows.push([{userEnteredValue:{stringValue:'No tasks this month'}}]);
-
-      // PROJECTS
-      const projRows=[];
-      const hdrP=['Day','Date',...projects.flatMap(p=>[p.name+' (time)',p.name+' (tasks)'])];
-      projRows.push(hdrP.map(v=>({userEnteredValue:{stringValue:v}})));
-      dates.forEach(({str,dayName})=>{
-        const row=[{userEnteredValue:{stringValue:dayName}},{userEnteredValue:{stringValue:str}}];
-        projects.forEach(p=>{
-          const dm=projLog[str]?.[p.id]?.minutes||0;const tasks=projLog[str]?.[p.id]?.tasks||[];
-          row.push({userEnteredValue:{stringValue:dm>0?fmtMins(dm):'—'}});
-          row.push({userEnteredValue:{stringValue:tasks.length>0?tasks.filter(t=>t.done).length+'/'+tasks.length:'—'}});
-        });projRows.push(row);
+      Object.entries(allQT).forEach(([text,{cells,done,total}])=>{
+        const row=Array(C).fill(_b());
+        row[1]=_(text);row[3]=_(String(total));
+        cells.forEach((c,i)=>{if(c)row[4+i*2]=_(c);});
+        row[4+dim*2]=_(total>0?Math.round(done/total*100)+'%':'');
+        V.push(row);
       });
-      const totP=[{userEnteredValue:{stringValue:'TOTAL'}},{userEnteredValue:{stringValue:''}}];
-      projects.forEach(p=>{totP.push({userEnteredValue:{stringValue:fmtMins(dates.reduce((s,{str})=>s+(projLog[str]?.[p.id]?.minutes||0),0))}});totP.push({userEnteredValue:{stringValue:''}});});
-      projRows.push(totP);
+      if(Object.keys(allQT).length===0){const r=Array(C).fill(_b());r[1]=_('No quick tasks');V.push(r);}
 
-      // ── Find or create yearly spreadsheet ──
+      // ── SPACER + PROJECTS header ──
+      V.push(Array(C).fill(_b()));
+      const pjHdrRow=V.length;
+      const pjh=Array(C).fill(_b());pjh[1]=_('PROJECTS');V.push(pjh);
+
+      projects.forEach(p=>{
+        const row=Array(C).fill(_b());
+        row[1]=_(p.name);
+        let totalM=0;
+        dates.forEach(({str},i)=>{
+          const dm=projLog[str]?.[p.id]?.minutes||0;
+          if(dm>0){row[4+i*2]=_(fmtMins(dm));totalM+=dm;}
+        });
+        row[4+dim*2]=_(fmtMins(totalM));
+        V.push(row);
+      });
+      if(projects.length===0){const r=Array(C).fill(_b());r[1]=_('No projects');V.push(r);}
+
+      // Success rate
+      const sr=totalH>0?Math.round(doneH/totalH*100):0;
+      V[2][3]=_(sr+'%');
+      V[2][5]=_(sr>95?'🏆🏆🏆':sr>80?'❤️❤️':sr>50?'💪':sr>30?'👎':'⚠️');
+      V[2][7]=_(sr>95?'EXCELLENT':sr>80?'GOOD JOB':sr>50?'DO BETTER':sr>30?'NO EFFORT':'DISASTER');
+
+      // Convert to simple values for values API
+      const vals=V.map(row=>row.map(c=>c.userEnteredValue?.stringValue??c.userEnteredValue?.numberValue??c.userEnteredValue?.formulaValue??''));
+
+      // ── Find or create spreadsheet ──
       const ssTitle='PruvYou '+year;
       const auth={Authorization:'Bearer '+token,'Content-Type':'application/json'};
       let ssId=null;
-
-      // Search for existing file
       const search=await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D'"+encodeURIComponent(ssTitle)+"'%20and%20mimeType%3D'application%2Fvnd.google-apps.spreadsheet'%20and%20trashed%3Dfalse&fields=files(id)",{headers:{Authorization:'Bearer '+token}});
       const {files}=await search.json();
-      
+      const sid=month*10+1;
+
       if(files&&files.length>0){
-        // ── USE EXISTING spreadsheet ──
         ssId=files[0].id;
-        // Delete old sheets for this month if they exist (to regenerate)
         const ssInfo=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'?fields=sheets.properties',{headers:{Authorization:'Bearer '+token}});
         const ssData=await ssInfo.json();
         const delReqs=[];
-        (ssData.sheets||[]).forEach(s=>{
-          if(s.properties.title.startsWith(mn+' '))delReqs.push({deleteSheet:{sheetId:s.properties.sheetId}});
-        });
-        // Add new sheets
-        const newSheetIds=[month*10+1,month*10+2,month*10+3];
-        const addReqs=[
-          {addSheet:{properties:{sheetId:newSheetIds[0],title:mn+' Habits',gridProperties:{frozenRowCount:1}}}},
-          {addSheet:{properties:{sheetId:newSheetIds[1],title:mn+' Tasks',gridProperties:{frozenRowCount:1}}}},
-          {addSheet:{properties:{sheetId:newSheetIds[2],title:mn+' Projects',gridProperties:{frozenRowCount:1}}}}
-        ];
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{
-          method:'POST',headers:auth,body:JSON.stringify({requests:[...delReqs,...addReqs]})});
-        // Write data
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'/values/\''+mn+' Habits\'!A1?valueInputOption=RAW',{
-          method:'PUT',headers:auth,body:JSON.stringify({values:habitRows.map(r=>r.map(c=>c.userEnteredValue.stringValue||c.userEnteredValue.numberValue||''))})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'/values/\''+mn+' Tasks\'!A1?valueInputOption=RAW',{
-          method:'PUT',headers:auth,body:JSON.stringify({values:qtRows.map(r=>r.map(c=>c.userEnteredValue.stringValue||c.userEnteredValue.numberValue||''))})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'/values/\''+mn+' Projects\'!A1?valueInputOption=RAW',{
-          method:'PUT',headers:auth,body:JSON.stringify({values:projRows.map(r=>r.map(c=>c.userEnteredValue.stringValue||c.userEnteredValue.numberValue||''))})});
-
-        // Format + charts
-        const fmtReqs=[
-          {repeatCell:{range:{sheetId:newSheetIds[0],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:0.95,blue:1}}},fields:'userEnteredFormat'}},
-          {repeatCell:{range:{sheetId:newSheetIds[1],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.95,green:0.95,blue:0.9}}},fields:'userEnteredFormat'}},
-          {repeatCell:{range:{sheetId:newSheetIds[2],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:1,blue:0.95}}},fields:'userEnteredFormat'}},
-          {autoResizeDimensions:{dimensions:{sheetId:newSheetIds[0],dimension:'COLUMNS',startIndex:0,endIndex:habits.length+3}}},
-          {autoResizeDimensions:{dimensions:{sheetId:newSheetIds[1],dimension:'COLUMNS',startIndex:0,endIndex:5}}},
-          {autoResizeDimensions:{dimensions:{sheetId:newSheetIds[2],dimension:'COLUMNS',startIndex:0,endIndex:2+projects.length*2}}}
-        ];
-        const chartReqs=[];
-        if(habits.length>0){chartReqs.push({addChart:{chart:{spec:{title:mn+' Habit Completion %',basicChart:{chartType:'LINE',legendPosition:'BOTTOM_LEGEND',axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'%'}],domains:[{domain:{sourceRange:{sources:[{sheetId:newSheetIds[0],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],series:[{series:{sourceRange:{sources:[{sheetId:newSheetIds[0],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:habits.length+2,endColumnIndex:habits.length+3}]}},color:{red:0.2,green:0.78,blue:0.62}}]}},position:{overlayPosition:{anchorCell:{sheetId:newSheetIds[0],rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});}
-        if(projects.length>0){chartReqs.push({addChart:{chart:{spec:{title:mn+' Project Time',basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'Time'}],domains:[{domain:{sourceRange:{sources:[{sheetId:newSheetIds[2],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],series:projects.map((_,i)=>({series:{sourceRange:{sources:[{sheetId:newSheetIds[2],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:2+i*2,endColumnIndex:3+i*2}]}}}))}},position:{overlayPosition:{anchorCell:{sheetId:newSheetIds[2],rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});}
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{
-          method:'POST',headers:auth,body:JSON.stringify({requests:[...fmtReqs,...chartReqs]})});
-
+        (ssData.sheets||[]).forEach(s=>{if(s.properties.title===mn)delReqs.push({deleteSheet:{sheetId:s.properties.sheetId}});});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,
+          body:JSON.stringify({requests:[...delReqs,{addSheet:{properties:{sheetId:sid,title:mn,gridProperties:{frozenRowCount:6,frozenColumnCount:4}}}}]})});
       }else{
-        // ── CREATE NEW spreadsheet with blank month sheets ──
-        const sids=[month*10+1,month*10+2,month*10+3];
         const body={properties:{title:ssTitle},sheets:[
-          {properties:{sheetId:sids[0],title:mn+' Habits',gridProperties:{frozenRowCount:1}}},
-          {properties:{sheetId:sids[1],title:mn+' Tasks',gridProperties:{frozenRowCount:1}}},
-          {properties:{sheetId:sids[2],title:mn+' Projects',gridProperties:{frozenRowCount:1}}}
+          {properties:{sheetId:sid,title:mn,gridProperties:{frozenRowCount:6,frozenColumnCount:4}}}
         ]};
         const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',headers:auth,body:JSON.stringify(body)});
-        if(!res.ok){const e=await res.text();Alert.alert('Error creating sheet',e.substring(0,200));return;}
-        const sheet=await res.json();ssId=sheet.spreadsheetId;
-        // Delete the default 'Sheet1' that gets auto-created
+        if(!res.ok){Alert.alert('Error',await res.text());return;}
+        ssId=(await res.json()).spreadsheetId;
         try{const info=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'?fields=sheets.properties',{headers:{Authorization:'Bearer '+token}});
           const sd=await info.json();const def=sd.sheets?.find(s=>s.properties.title==='Sheet1');
           if(def)await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:[{deleteSheet:{sheetId:def.properties.sheetId}}]})});
         }catch(e){}
-        // Write data using values API (same as existing file path)
-        const toVals=(rows)=>rows.map(r=>r.map(c=>c.userEnteredValue?.stringValue??c.userEnteredValue?.numberValue??''));
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+" Habits'!A1?valueInputOption=RAW",{
-          method:'PUT',headers:auth,body:JSON.stringify({values:toVals(habitRows)})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+" Tasks'!A1?valueInputOption=RAW",{
-          method:'PUT',headers:auth,body:JSON.stringify({values:toVals(qtRows)})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+" Projects'!A1?valueInputOption=RAW",{
-          method:'PUT',headers:auth,body:JSON.stringify({values:toVals(projRows)})});
-        // Format + charts
-        const reqs=[
-          {repeatCell:{range:{sheetId:sids[0],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:0.95,blue:1}}},fields:'userEnteredFormat'}},
-          {repeatCell:{range:{sheetId:sids[1],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.95,green:0.95,blue:0.9}}},fields:'userEnteredFormat'}},
-          {repeatCell:{range:{sheetId:sids[2],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:1,blue:0.95}}},fields:'userEnteredFormat'}},
-          {autoResizeDimensions:{dimensions:{sheetId:sids[0],dimension:'COLUMNS',startIndex:0,endIndex:habits.length+3}}},
-          {autoResizeDimensions:{dimensions:{sheetId:sids[1],dimension:'COLUMNS',startIndex:0,endIndex:5}}},
-          {autoResizeDimensions:{dimensions:{sheetId:sids[2],dimension:'COLUMNS',startIndex:0,endIndex:2+projects.length*2}}}
-        ];
-        if(habits.length>0){reqs.push({addChart:{chart:{spec:{title:mn+' Habit Completion %',basicChart:{chartType:'LINE',legendPosition:'BOTTOM_LEGEND',axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'%'}],domains:[{domain:{sourceRange:{sources:[{sheetId:sids[0],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],series:[{series:{sourceRange:{sources:[{sheetId:sids[0],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:habits.length+2,endColumnIndex:habits.length+3}]}},color:{red:0.2,green:0.78,blue:0.62}}]}},position:{overlayPosition:{anchorCell:{sheetId:sids[0],rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});}
-        if(projects.length>0){reqs.push({addChart:{chart:{spec:{title:mn+' Project Time',basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',axis:[{position:'BOTTOM_AXIS',title:'Day'},{position:'LEFT_AXIS',title:'Time'}],domains:[{domain:{sourceRange:{sources:[{sheetId:sids[2],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:0,endColumnIndex:1}]}}}],series:projects.map((_,i)=>({series:{sourceRange:{sources:[{sheetId:sids[2],startRowIndex:1,endRowIndex:daysInMonth+1,startColumnIndex:2+i*2,endColumnIndex:3+i*2}]}}}))}},position:{overlayPosition:{anchorCell:{sheetId:sids[2],rowIndex:daysInMonth+3,columnIndex:0},widthPixels:700,heightPixels:350}}}}});}
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:reqs})});
       }
 
-      Alert.alert('✅ Report ready!',mn+' '+year+' added to "'+ssTitle+'" in your Drive.');
+      // Write data
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+"'!A1?valueInputOption=RAW",{
+        method:'PUT',headers:auth,body:JSON.stringify({values:vals})});
+
+      // ── Formatting ──
+      const fmtR=[];
+      // Title row bold + dark bg
+      fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:2,startColumnIndex:1,endColumnIndex:6},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:14},backgroundColor:{red:0.24,green:0.24,blue:0.24},foregroundColorStyle:{rgbColor:{red:1,green:1,blue:1}}}},fields:'userEnteredFormat'}});
+      // Header row (HABIT/GOAL/days) bold + grey bg
+      fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:4,endRowIndex:6,startColumnIndex:1,endColumnIndex:4+dim*2+2},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:9},backgroundColor:{red:0.85,green:0.85,blue:0.85}}},fields:'userEnteredFormat'}});
+      // Weekend columns — pink bg
+      dates.forEach(({we},i)=>{if(we){
+        fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:4,endRowIndex:V.length,startColumnIndex:4+i*2,endColumnIndex:5+i*2},cell:{userEnteredFormat:{backgroundColor:{red:1,green:0.7,blue:0.72}}},fields:'userEnteredFormat'}});
+      }});
+      // Section headers (QUICK TASKS, PROJECTS) — dark bg
+      [qtHdrRow,pjHdrRow].forEach(r=>{
+        fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:r,endRowIndex:r+1,startColumnIndex:1,endColumnIndex:4},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:{red:1,green:1,blue:1}}},backgroundColor:{red:0.46,green:0.44,blue:0.44}}},fields:'userEnteredFormat'}});
+      });
+      // Alternating habit rows — light bg
+      for(let r=habitStartRow;r<qtHdrRow-1;r++){
+        if((r-habitStartRow)%2===0){
+          fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:r,endRowIndex:r+1,startColumnIndex:1,endColumnIndex:4+dim*2+2},cell:{userEnteredFormat:{backgroundColor:{red:0.95,green:0.95,blue:0.95}}},fields:'userEnteredFormat'}});
+        }
+      }
+      // Auto-resize
+      fmtR.push({autoResizeDimensions:{dimensions:{sheetId:sid,dimension:'COLUMNS',startIndex:0,endIndex:4}}});
+      // Column width for day columns (narrow)
+      fmtR.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:4,endIndex:4+dim*2+1},properties:{pixelSize:28},fields:'pixelSize'}});
+
+      // Chart: habit completion
+      if(habits.length>0){
+        fmtR.push({addChart:{chart:{spec:{title:mn+' Success Rate',basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',
+          axis:[{position:'BOTTOM_AXIS'},{position:'LEFT_AXIS',title:'%'}],
+          domains:[{domain:{sourceRange:{sources:[{sheetId:sid,startRowIndex:4,endRowIndex:5,startColumnIndex:4,endColumnIndex:4+dim*2}]}}}],
+          series:[{series:{sourceRange:{sources:[{sheetId:sid,startRowIndex:habitStartRow,endRowIndex:habitStartRow+habits.length,startColumnIndex:4+dim*2,endColumnIndex:4+dim*2+1}]}}}]
+        }},position:{overlayPosition:{anchorCell:{sheetId:sid,rowIndex:V.length+2,columnIndex:1},widthPixels:800,heightPixels:300}}}}});
+      }
+
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:fmtR})});
+
+      Alert.alert('✅ Report ready!',mn+' '+year+' added to "'+ssTitle+'"');
       await sv('pv-last-report',year+'-'+String(month+1).padStart(2,'0'));
     }catch(e){Alert.alert('Report error',e?.message||'Could not generate report');}
   },[habits,log,projects,projLog,adHocTasks,getFreshToken]);
