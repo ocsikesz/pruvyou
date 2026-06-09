@@ -5,7 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
@@ -507,13 +507,8 @@ export default function App(){
   // Auto-backup on every app open if connected to Drive
   useEffect(()=>{
     if(!loaded||!driveToken)return;
-    (async()=>{
-      const last=await ld('pv-drive-lastbackup',null);
-      if(last!==fmt(today())){
-        const ok=await driveWrite(false);
-        if(ok)setDriveStatus('ok');
-      }
-    })();
+    // Always backup on open — files have timestamps, 7-file rotation handles cleanup
+    driveWrite(false);
   },[loaded,driveToken]);
 
 
