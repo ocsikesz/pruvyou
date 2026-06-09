@@ -337,21 +337,17 @@ export default function App(){
       const dim=new Date(year,month+1,0).getDate();
       const dates=[];for(let i=1;i<=dim;i++){const d=new Date(year,month,i);dates.push({d,str:fmt(d),dn:['S','M','T','W','T','F','S'][d.getDay()],we:d.getDay()===0||d.getDay()===6});}
       const auth={Authorization:'Bearer '+token,'Content-Type':'application/json'};
-
-      // ═══ BUILD ROWS ═══
-      const V=[];
-      // R0: Title
-      V.push(['Tracker Lunar de Productivitate — '+MNF[month]+' '+year]);
-      // R1: Day letters
-      const dlR=['',''];dates.forEach(({dn})=>dlR.push(dn));dlR.push('');dlR.push('');dlR.push('');V.push(dlR);
-      // R2: Header
-      const hR=['Secțiune','Activitate / Element'];for(let i=1;i<=dim;i++)hR.push(String(i));hR.push('Total');hR.push('Obiectiv');hR.push('Progres');V.push(hR);
-      // Column indices: A=0(section), B=1(name), C..=2..(days), total=2+dim, obj=3+dim, prog=4+dim
-      const cT=2+dim, cO=3+dim, cP=4+dim;
       const colL=n=>{let s='';while(n>=0){s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)-1;}return s;};
+      const cT=2+dim,cO=3+dim,cP=4+dim;
+
+      const V=[];
+      V.push(['Tracker Lunar de Productivitate — '+MNF[month]+' '+year]);
+      const dlR=['',''];dates.forEach(({dn})=>dlR.push(dn));dlR.push('');dlR.push('');dlR.push('');V.push(dlR);
+      const hR=['Secțiune','Activitate / Element'];for(let i=1;i<=dim;i++)hR.push(String(i));hR.push('Total');hR.push('Obiectiv');hR.push('Progres');V.push(hR);
 
       // ── HABITS ──
       const hStart=V.length;
+      const habitColors=['#1ABC9C','#3498DB','#9B59B6','#E67E22','#E74C3C','#2ECC71','#F39C12','#1ABC9C','#3498DB','#9B59B6'];
       habits.forEach((h,hi)=>{
         const row=['Habits',h.icon+' '+h.name];
         dates.forEach(({str,d:dt})=>{
@@ -360,9 +356,10 @@ export default function App(){
           const entry=log[str]?.[h.id];
           if(!active){row.push('');return;}
           if(h.type==='timer'){row.push(entry?.minutes?fmtMins(entry.minutes):'');}
-          else{row.push(entry?.done?'TRUE':'FALSE');}
+          else{row.push(entry?.done?true:false);}
         });
         const rn=V.length+1;const cS=colL(2),cE=colL(1+dim);
+        const color=habitColors[hi%habitColors.length];
         if(h.type==='timer'){
           row.push('=COUNTA('+cS+rn+':'+cE+rn+')');
           row.push(String(h.targetMinutes?Math.round(h.targetMinutes/60*10)/10:dim));
@@ -370,7 +367,7 @@ export default function App(){
           row.push('=COUNTIF('+cS+rn+':'+cE+rn+',TRUE)');
           row.push(String(dim));
         }
-        row.push('=IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0)');
+        row.push('=SPARKLINE(IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0),{"charttype","bar";"max",1;"color1","'+color+'";"color2","#EEEEEE"})');
         V.push(row);
       });
 
@@ -379,37 +376,36 @@ export default function App(){
       const qtMap={};
       dates.forEach(({str},i)=>{(adHocTasks[str]||[]).forEach(t=>{
         if(!qtMap[t.text])qtMap[t.text]=Array(dim).fill('');
-        qtMap[t.text][i]=t.done?'TRUE':'FALSE';
+        qtMap[t.text][i]=t.done?true:false;
       });});
-      Object.entries(qtMap).forEach(([text,cells])=>{
+      const qtKeys=Object.keys(qtMap);
+      qtKeys.forEach(text=>{
+        const cells=qtMap[text];
         const row=['Quick Tasks',text,...cells];
         const rn=V.length+1;const cS=colL(2),cE=colL(1+dim);
         row.push('=COUNTIF('+cS+rn+':'+cE+rn+',TRUE)');
-        row.push(String(cells.filter(c=>c).length));
-        row.push('=IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0)');
+        row.push(String(cells.filter(c=>c!=='').length));
+        row.push('=SPARKLINE(IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0),{"charttype","bar";"max",1;"color1","#F39C12";"color2","#EEEEEE"})');
         V.push(row);
       });
-      if(Object.keys(qtMap).length===0){
-        const row=['Quick Tasks','(none)',...Array(dim).fill(''),'','',''];V.push(row);
-      }
+      if(qtKeys.length===0){V.push(['Quick Tasks','(none)',...Array(dim).fill(''),'','','']);}
 
       // ── PROJECTS ──
       const pjStart=V.length;
-      projects.forEach(p=>{
+      projects.forEach((p,pi)=>{
         const row=['Projects',p.name];
         dates.forEach(({str})=>{
           const dm=projLog[str]?.[p.id]?.minutes||0;
           row.push(dm>0?String(Math.round(dm/60*10)/10):'');
         });
         const rn=V.length+1;const cS=colL(2),cE=colL(1+dim);
-        row.push('=SUM('+cS+rn+':'+cE+rn+')');
-        row.push('40'); // default goal hours
-        row.push('=IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0)');
+        const color=['#3498DB','#2ECC71','#9B59B6','#E67E22'][pi%4];
+        row.push('=ROUND(SUM('+cS+rn+':'+cE+rn+'),1)');
+        row.push('40');
+        row.push('=SPARKLINE(IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0),{"charttype","bar";"max",1;"color1","'+color+'";"color2","#EEEEEE"})');
         V.push(row);
       });
-      if(projects.length===0){
-        const row=['Projects','(none)',...Array(dim).fill(''),'','',''];V.push(row);
-      }
+      if(projects.length===0){V.push(['Projects','(none)',...Array(dim).fill(''),'','','']);}
 
       // ═══ FIND/CREATE SPREADSHEET ═══
       const ssTitle='PruvYou '+year;
@@ -434,67 +430,83 @@ export default function App(){
         }catch(e){}
       }
 
-      // Write data
+      // Write data (USER_ENTERED so formulas and booleans work)
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+"'!A1?valueInputOption=USER_ENTERED",{
         method:'PUT',headers:auth,body:JSON.stringify({values:V})});
 
       // ═══ FORMATTING ═══
-      const dkBlue={red:0.17,green:0.24,blue:0.31}; // 2C3E50
+      const dkBlue={red:0.17,green:0.24,blue:0.31};
       const wht={red:1,green:1,blue:1};
-      const pink={red:1,green:0.6,blue:0.6}; // FF9999
-      const hGreen={red:0.91,green:0.97,blue:0.96}; // E8F8F5
-      const qtYellow={red:1,green:0.98,blue:0.91}; // FEF9E7
-      const pjBlue={red:0.92,green:0.95,blue:0.97}; // EAF2F8
+      const pink={red:1,green:0.6,blue:0.6};
+      const hGreen={red:0.91,green:0.97,blue:0.96};
+      const qtYellow={red:1,green:0.98,blue:0.91};
+      const pjBlue={red:0.92,green:0.95,blue:0.97};
       const totalCols=cP+1;
       const R=[];
 
-      // Title row merge + bold
+      // Title merge + bold
       R.push({mergeCells:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:totalCols},mergeType:'MERGE_ALL'}});
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:13}}},fields:'userEnteredFormat'}});
 
-      // Day letters row (R1) — bold, pink for weekends
+      // Day letters bold center
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:2,startColumnIndex:2,endColumnIndex:2+dim},cell:{userEnteredFormat:{textFormat:{bold:true},horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
 
-      // Header row (R2) — dark blue bg, white text, bold
+      // Header dark blue
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:2,endRowIndex:3,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:wht}},backgroundColor:dkBlue,horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
 
-      // Weekend columns pink (R1 through last data row)
+      // Section backgrounds
+      if(habits.length>0)R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:hStart+habits.length,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:hGreen}},fields:'userEnteredFormat'}});
+      const qtCount=Math.max(1,qtKeys.length);
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:qtStart,endRowIndex:qtStart+qtCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:qtYellow}},fields:'userEnteredFormat'}});
+      const pjCount=Math.max(1,projects.length);
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+pjCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:pjBlue}},fields:'userEnteredFormat'}});
+
+      // Weekend pink (over everything)
       dates.forEach(({we},i)=>{if(we){
         R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink}},fields:'userEnteredFormat'}});
       }});
 
-      // Habits rows — green bg
-      if(habits.length>0)R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:hStart+habits.length,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:hGreen}},fields:'userEnteredFormat'}});
-
-      // Quick Tasks rows — yellow bg
-      const qtCount=Math.max(1,Object.keys(qtMap).length);
-      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:qtStart,endRowIndex:qtStart+qtCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:qtYellow}},fields:'userEnteredFormat'}});
-
-      // Projects rows — blue bg
-      const pjCount=Math.max(1,projects.length);
-      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+pjCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:pjBlue}},fields:'userEnteredFormat'}});
+      // Checkboxes for habit boolean cells
+      habits.forEach((h,hi)=>{if(h.type!=='timer'){
+        R.push({setDataValidation:{range:{sheetId:sid,startRowIndex:hStart+hi,endRowIndex:hStart+hi+1,startColumnIndex:2,endColumnIndex:2+dim},rule:{condition:{type:'BOOLEAN'},showCustomUi:true}}});
+      }});
+      // Checkboxes for quick task cells
+      qtKeys.forEach((_,qi)=>{
+        R.push({setDataValidation:{range:{sheetId:sid,startRowIndex:qtStart+qi,endRowIndex:qtStart+qi+1,startColumnIndex:2,endColumnIndex:2+dim},rule:{condition:{type:'BOOLEAN'},showCustomUi:true}}});
+      });
 
       // Total column bold
-      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:cT,endColumnIndex:cT+1},cell:{userEnteredFormat:{textFormat:{bold:true}}},fields:'userEnteredFormat'}});
-
-      // Progress column as %
-      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:cP,endColumnIndex:cP+1},cell:{userEnteredFormat:{numberFormat:{type:'PERCENT',pattern:'0%'}}},fields:'userEnteredFormat'}});
-
-      // Day data center align
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:cT,endColumnIndex:cT+1},cell:{userEnteredFormat:{textFormat:{bold:true},horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
+      // Center day cells
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:2,endColumnIndex:2+dim},cell:{userEnteredFormat:{horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
 
       // Column widths
-      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:0,endIndex:1},properties:{pixelSize:90},fields:'pixelSize'}});
-      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:1,endIndex:2},properties:{pixelSize:180},fields:'pixelSize'}});
-      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:2,endIndex:2+dim},properties:{pixelSize:32},fields:'pixelSize'}});
-      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cT,endIndex:cT+1},properties:{pixelSize:50},fields:'pixelSize'}});
-      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cO,endIndex:cO+1},properties:{pixelSize:55},fields:'pixelSize'}});
-      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cP,endIndex:cP+1},properties:{pixelSize:55},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:0,endIndex:1},properties:{pixelSize:85},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:1,endIndex:2},properties:{pixelSize:170},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:2,endIndex:2+dim},properties:{pixelSize:30},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cT,endIndex:cT+1},properties:{pixelSize:45},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cO,endIndex:cO+1},properties:{pixelSize:50},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cP,endIndex:cP+1},properties:{pixelSize:100},fields:'pixelSize'}});
 
-      // Re-apply weekend pink over section colors
-      dates.forEach(({we},i)=>{if(we){
-        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink}},fields:'userEnteredFormat'}});
-      }});
+      // ═══ PIE CHARTS ═══
+      // Habits pie chart
+      if(habits.length>0){
+        R.push({addChart:{chart:{spec:{title:'Habits Progress',pieChart:{
+          legendPosition:'LABELED_LEGEND',
+          domain:{sourceRange:{sources:[{sheetId:sid,startRowIndex:hStart,endRowIndex:hStart+habits.length,startColumnIndex:1,endColumnIndex:2}]}},
+          series:{sourceRange:{sources:[{sheetId:sid,startRowIndex:hStart,endRowIndex:hStart+habits.length,startColumnIndex:cT,endColumnIndex:cT+1}]}},
+          pieHole:0.4
+        }},position:{overlayPosition:{anchorCell:{sheetId:sid,rowIndex:V.length+2,columnIndex:0},widthPixels:400,heightPixels:280}}}}});
+      }
+      // Projects pie chart
+      if(projects.length>0){
+        R.push({addChart:{chart:{spec:{title:'Project Hours',pieChart:{
+          legendPosition:'LABELED_LEGEND',
+          domain:{sourceRange:{sources:[{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+projects.length,startColumnIndex:1,endColumnIndex:2}]}},
+          series:{sourceRange:{sources:[{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+projects.length,startColumnIndex:cT,endColumnIndex:cT+1}]}},
+          pieHole:0.4
+        }},position:{overlayPosition:{anchorCell:{sheetId:sid,rowIndex:V.length+2,columnIndex:5+Math.floor(dim/2)},widthPixels:400,heightPixels:280}}}}});
+      }
 
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:R})});
 
