@@ -336,130 +336,97 @@ export default function App(){
       Alert.alert('Generating...','Creating '+mn+' '+year+' report...');
       const dim=new Date(year,month+1,0).getDate();
       const dates=[];for(let i=1;i<=dim;i++){const d=new Date(year,month,i);dates.push({d,str:fmt(d),dn:['S','M','T','W','T','F','S'][d.getDay()],we:d.getDay()===0||d.getDay()===6});}
+      const auth={Authorization:'Bearer '+token,'Content-Type':'application/json'};
 
-      // Build rows for single sheet (horizontal: days as columns)
+      // ═══ BUILD ROWS ═══
       const V=[];
-      const _=v=>({userEnteredValue:{stringValue:String(v??'')}});
-      const _n=v=>({userEnteredValue:{numberValue:v}});
-      const _f=v=>({userEnteredValue:{formulaValue:v}});
-      const _b=()=>({userEnteredValue:{stringValue:''}});
-      const C=2+dim*2; // total cols needed
-
-      // Row 0: empty
-      V.push(Array(C).fill(_b()));
-      // Row 1: PRUVYOU header
-      const r1=Array(C).fill(_b());r1[1]=_('PruvYou Report');r1[3]=_(MNF[month]+' '+year);V.push(r1);
-      // Row 2: Success Rate label
-      const r2=Array(C).fill(_b());r2[1]=_('Success Rate:');V.push(r2);
-      // Row 3: empty spacer
-      V.push(Array(C).fill(_b()));
-      // Row 4: header — HABIT | GOAL | day numbers...  | PROGRESS
-      const hdr=Array(C).fill(_b());hdr[1]=_('HABIT');hdr[3]=_('GOAL');
-      for(let i=0;i<dim;i++)hdr[4+i*2]=_(String(i+1));
-      hdr[4+dim*2]=_('PROGRESS');V.push(hdr);
-      // Row 5: day letters
-      const dlr=Array(C).fill(_b());
-      for(let i=0;i<dim;i++)dlr[4+i*2]=_(dates[i].dn);
-      V.push(dlr);
+      // R0: Title
+      V.push(['Tracker Lunar de Productivitate — '+MNF[month]+' '+year]);
+      // R1: Day letters
+      const dlR=['',''];dates.forEach(({dn})=>dlR.push(dn));dlR.push('');dlR.push('');dlR.push('');V.push(dlR);
+      // R2: Header
+      const hR=['Secțiune','Activitate / Element'];for(let i=1;i<=dim;i++)hR.push(String(i));hR.push('Total');hR.push('Obiectiv');hR.push('Progres');V.push(hR);
+      // Column indices: A=0(section), B=1(name), C..=2..(days), total=2+dim, obj=3+dim, prog=4+dim
+      const cT=2+dim, cO=3+dim, cP=4+dim;
+      const colL=n=>{let s='';while(n>=0){s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)-1;}return s;};
 
       // ── HABITS ──
-      const habitStartRow=V.length;
-      let totalH=0,doneH=0;
-      habits.forEach(h=>{
-        const row=Array(C).fill(_b());
-        row[1]=_(h.icon+' '+h.name);row[3]=_(h.type==='timer'?fmtMins(h.targetMinutes):'daily');
-        let hDone=0,hTotal=0;
-        dates.forEach(({str,d:dt},i)=>{
+      const hStart=V.length;
+      habits.forEach((h,hi)=>{
+        const row=['Habits',h.icon+' '+h.name];
+        dates.forEach(({str,d:dt})=>{
           const dayIdx=dt.getDay()===0?6:dt.getDay()-1;
           const active=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
           const entry=log[str]?.[h.id];
-          if(!active){row[4+i*2]=_('—');return;}
-          hTotal++;totalH++;
-          if(h.type==='timer'){
-            const mins=entry?.minutes||0;
-            row[4+i*2]=_(mins>0?fmtMins(mins):'—');
-            if(entry?.done){hDone++;doneH++;}
-          }else{
-            const done=!!entry?.done;
-            row[4+i*2]=_(done?'✓':'✗');
-            if(done){hDone++;doneH++;}
-          }
+          if(!active){row.push('');return;}
+          if(h.type==='timer'){row.push(entry?.minutes?fmtMins(entry.minutes):'');}
+          else{row.push(entry?.done?'TRUE':'FALSE');}
         });
-        const pct=hTotal>0?Math.round(hDone/hTotal*100):0;
-        row[4+dim*2]=_(pct+'%');
+        const rn=V.length+1;const cS=colL(2),cE=colL(1+dim);
+        if(h.type==='timer'){
+          row.push('=COUNTA('+cS+rn+':'+cE+rn+')');
+          row.push(String(h.targetMinutes?Math.round(h.targetMinutes/60*10)/10:dim));
+        }else{
+          row.push('=COUNTIF('+cS+rn+':'+cE+rn+',TRUE)');
+          row.push(String(dim));
+        }
+        row.push('=IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0)');
         V.push(row);
       });
 
-      // ── SPACER + QUICK TASKS header ──
-      V.push(Array(C).fill(_b()));
-      const qtHdrRow=V.length;
-      const qth=Array(C).fill(_b());qth[1]=_('QUICK TASKS');V.push(qth);
-
-      // Quick tasks — one row per unique task, days marked
-      const allQT={};
+      // ── QUICK TASKS ──
+      const qtStart=V.length;
+      const qtMap={};
       dates.forEach(({str},i)=>{(adHocTasks[str]||[]).forEach(t=>{
-        if(!allQT[t.text])allQT[t.text]={cells:Array(dim).fill(''),done:0,total:0};
-        allQT[t.text].cells[i]=t.done?'✓':'✗';
-        allQT[t.text].total++;if(t.done)allQT[t.text].done++;
+        if(!qtMap[t.text])qtMap[t.text]=Array(dim).fill('');
+        qtMap[t.text][i]=t.done?'TRUE':'FALSE';
       });});
-      Object.entries(allQT).forEach(([text,{cells,done,total}])=>{
-        const row=Array(C).fill(_b());
-        row[1]=_(text);row[3]=_(String(total));
-        cells.forEach((c,i)=>{if(c)row[4+i*2]=_(c);});
-        row[4+dim*2]=_(total>0?Math.round(done/total*100)+'%':'');
+      Object.entries(qtMap).forEach(([text,cells])=>{
+        const row=['Quick Tasks',text,...cells];
+        const rn=V.length+1;const cS=colL(2),cE=colL(1+dim);
+        row.push('=COUNTIF('+cS+rn+':'+cE+rn+',TRUE)');
+        row.push(String(cells.filter(c=>c).length));
+        row.push('=IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0)');
         V.push(row);
       });
-      if(Object.keys(allQT).length===0){const r=Array(C).fill(_b());r[1]=_('No quick tasks');V.push(r);}
+      if(Object.keys(qtMap).length===0){
+        const row=['Quick Tasks','(none)',...Array(dim).fill(''),'','',''];V.push(row);
+      }
 
-      // ── SPACER + PROJECTS header ──
-      V.push(Array(C).fill(_b()));
-      const pjHdrRow=V.length;
-      const pjh=Array(C).fill(_b());pjh[1]=_('PROJECTS');V.push(pjh);
-
+      // ── PROJECTS ──
+      const pjStart=V.length;
       projects.forEach(p=>{
-        const row=Array(C).fill(_b());
-        row[1]=_(p.name);
-        let totalM=0;
-        dates.forEach(({str},i)=>{
+        const row=['Projects',p.name];
+        dates.forEach(({str})=>{
           const dm=projLog[str]?.[p.id]?.minutes||0;
-          if(dm>0){row[4+i*2]=_(fmtMins(dm));totalM+=dm;}
+          row.push(dm>0?String(Math.round(dm/60*10)/10):'');
         });
-        row[4+dim*2]=_(fmtMins(totalM));
+        const rn=V.length+1;const cS=colL(2),cE=colL(1+dim);
+        row.push('=SUM('+cS+rn+':'+cE+rn+')');
+        row.push('40'); // default goal hours
+        row.push('=IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0)');
         V.push(row);
       });
-      if(projects.length===0){const r=Array(C).fill(_b());r[1]=_('No projects');V.push(r);}
+      if(projects.length===0){
+        const row=['Projects','(none)',...Array(dim).fill(''),'','',''];V.push(row);
+      }
 
-      // Success rate
-      const sr=totalH>0?Math.round(doneH/totalH*100):0;
-      V[2][3]=_(sr+'%');
-      V[2][5]=_(sr>95?'🏆🏆🏆':sr>80?'❤️❤️':sr>50?'💪':sr>30?'👎':'⚠️');
-      V[2][7]=_(sr>95?'EXCELLENT':sr>80?'GOOD JOB':sr>50?'DO BETTER':sr>30?'NO EFFORT':'DISASTER');
-
-      // Convert to simple values for values API
-      const vals=V.map(row=>row.map(c=>c.userEnteredValue?.stringValue??c.userEnteredValue?.numberValue??c.userEnteredValue?.formulaValue??''));
-
-      // ── Find or create spreadsheet ──
+      // ═══ FIND/CREATE SPREADSHEET ═══
       const ssTitle='PruvYou '+year;
-      const auth={Authorization:'Bearer '+token,'Content-Type':'application/json'};
-      let ssId=null;
+      let ssId=null;const sid=month*10+1;
       const search=await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D'"+encodeURIComponent(ssTitle)+"'%20and%20mimeType%3D'application%2Fvnd.google-apps.spreadsheet'%20and%20trashed%3Dfalse&fields=files(id)",{headers:{Authorization:'Bearer '+token}});
       const {files}=await search.json();
-      const sid=month*10+1;
-
       if(files&&files.length>0){
         ssId=files[0].id;
         const ssInfo=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'?fields=sheets.properties',{headers:{Authorization:'Bearer '+token}});
         const ssData=await ssInfo.json();
-        const delReqs=[];
-        (ssData.sheets||[]).forEach(s=>{if(s.properties.title===mn)delReqs.push({deleteSheet:{sheetId:s.properties.sheetId}});});
+        const delReqs=[];(ssData.sheets||[]).forEach(s=>{if(s.properties.title===mn)delReqs.push({deleteSheet:{sheetId:s.properties.sheetId}});});
         await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,
-          body:JSON.stringify({requests:[...delReqs,{addSheet:{properties:{sheetId:sid,title:mn,gridProperties:{frozenRowCount:6,frozenColumnCount:4}}}}]})});
+          body:JSON.stringify({requests:[...delReqs,{addSheet:{properties:{sheetId:sid,title:mn}}}]})});
       }else{
-        const body={properties:{title:ssTitle},sheets:[
-          {properties:{sheetId:sid,title:mn,gridProperties:{frozenRowCount:6,frozenColumnCount:4}}}
-        ]};
-        const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',headers:auth,body:JSON.stringify(body)});
-        if(!res.ok){Alert.alert('Error',await res.text());return;}
+        const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',headers:auth,
+          body:JSON.stringify({properties:{title:ssTitle},sheets:[{properties:{sheetId:sid,title:mn}}]})});
+        if(!res.ok){Alert.alert('Error',(await res.text()).substring(0,200));return;}
         ssId=(await res.json()).spreadsheetId;
         try{const info=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'?fields=sheets.properties',{headers:{Authorization:'Bearer '+token}});
           const sd=await info.json();const def=sd.sheets?.find(s=>s.properties.title==='Sheet1');
@@ -468,46 +435,70 @@ export default function App(){
       }
 
       // Write data
-      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+"'!A1?valueInputOption=RAW",{
-        method:'PUT',headers:auth,body:JSON.stringify({values:vals})});
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+"'!A1?valueInputOption=USER_ENTERED",{
+        method:'PUT',headers:auth,body:JSON.stringify({values:V})});
 
-      // ── Formatting ──
-      const fmtR=[];
-      // Title row bold + dark bg
-      fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:2,startColumnIndex:1,endColumnIndex:6},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:14},backgroundColor:{red:0.24,green:0.24,blue:0.24},foregroundColorStyle:{rgbColor:{red:1,green:1,blue:1}}}},fields:'userEnteredFormat'}});
-      // Header row (HABIT/GOAL/days) bold + grey bg
-      fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:4,endRowIndex:6,startColumnIndex:1,endColumnIndex:4+dim*2+2},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:9},backgroundColor:{red:0.85,green:0.85,blue:0.85}}},fields:'userEnteredFormat'}});
-      // Weekend columns — pink bg
+      // ═══ FORMATTING ═══
+      const dkBlue={red:0.17,green:0.24,blue:0.31}; // 2C3E50
+      const wht={red:1,green:1,blue:1};
+      const pink={red:1,green:0.6,blue:0.6}; // FF9999
+      const hGreen={red:0.91,green:0.97,blue:0.96}; // E8F8F5
+      const qtYellow={red:1,green:0.98,blue:0.91}; // FEF9E7
+      const pjBlue={red:0.92,green:0.95,blue:0.97}; // EAF2F8
+      const totalCols=cP+1;
+      const R=[];
+
+      // Title row merge + bold
+      R.push({mergeCells:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:totalCols},mergeType:'MERGE_ALL'}});
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:13}}},fields:'userEnteredFormat'}});
+
+      // Day letters row (R1) — bold, pink for weekends
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:2,startColumnIndex:2,endColumnIndex:2+dim},cell:{userEnteredFormat:{textFormat:{bold:true},horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
+
+      // Header row (R2) — dark blue bg, white text, bold
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:2,endRowIndex:3,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:wht}},backgroundColor:dkBlue,horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
+
+      // Weekend columns pink (R1 through last data row)
       dates.forEach(({we},i)=>{if(we){
-        fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:4,endRowIndex:V.length,startColumnIndex:4+i*2,endColumnIndex:5+i*2},cell:{userEnteredFormat:{backgroundColor:{red:1,green:0.7,blue:0.72}}},fields:'userEnteredFormat'}});
+        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink}},fields:'userEnteredFormat'}});
       }});
-      // Section headers (QUICK TASKS, PROJECTS) — dark bg
-      [qtHdrRow,pjHdrRow].forEach(r=>{
-        fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:r,endRowIndex:r+1,startColumnIndex:1,endColumnIndex:4},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:{red:1,green:1,blue:1}}},backgroundColor:{red:0.46,green:0.44,blue:0.44}}},fields:'userEnteredFormat'}});
-      });
-      // Alternating habit rows — light bg
-      for(let r=habitStartRow;r<qtHdrRow-1;r++){
-        if((r-habitStartRow)%2===0){
-          fmtR.push({repeatCell:{range:{sheetId:sid,startRowIndex:r,endRowIndex:r+1,startColumnIndex:1,endColumnIndex:4+dim*2+2},cell:{userEnteredFormat:{backgroundColor:{red:0.95,green:0.95,blue:0.95}}},fields:'userEnteredFormat'}});
-        }
-      }
-      // Auto-resize
-      fmtR.push({autoResizeDimensions:{dimensions:{sheetId:sid,dimension:'COLUMNS',startIndex:0,endIndex:4}}});
-      // Column width for day columns (narrow)
-      fmtR.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:4,endIndex:4+dim*2+1},properties:{pixelSize:28},fields:'pixelSize'}});
 
-      // Chart: habit completion
-      if(habits.length>0){
-        fmtR.push({addChart:{chart:{spec:{title:mn+' Success Rate',basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',
-          axis:[{position:'BOTTOM_AXIS'},{position:'LEFT_AXIS',title:'%'}],
-          domains:[{domain:{sourceRange:{sources:[{sheetId:sid,startRowIndex:4,endRowIndex:5,startColumnIndex:4,endColumnIndex:4+dim*2}]}}}],
-          series:[{series:{sourceRange:{sources:[{sheetId:sid,startRowIndex:habitStartRow,endRowIndex:habitStartRow+habits.length,startColumnIndex:4+dim*2,endColumnIndex:4+dim*2+1}]}}}]
-        }},position:{overlayPosition:{anchorCell:{sheetId:sid,rowIndex:V.length+2,columnIndex:1},widthPixels:800,heightPixels:300}}}}});
-      }
+      // Habits rows — green bg
+      if(habits.length>0)R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:hStart+habits.length,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:hGreen}},fields:'userEnteredFormat'}});
 
-      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:fmtR})});
+      // Quick Tasks rows — yellow bg
+      const qtCount=Math.max(1,Object.keys(qtMap).length);
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:qtStart,endRowIndex:qtStart+qtCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:qtYellow}},fields:'userEnteredFormat'}});
 
-      Alert.alert('✅ Report ready!',mn+' '+year+' added to "'+ssTitle+'"');
+      // Projects rows — blue bg
+      const pjCount=Math.max(1,projects.length);
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+pjCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:pjBlue}},fields:'userEnteredFormat'}});
+
+      // Total column bold
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:cT,endColumnIndex:cT+1},cell:{userEnteredFormat:{textFormat:{bold:true}}},fields:'userEnteredFormat'}});
+
+      // Progress column as %
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:cP,endColumnIndex:cP+1},cell:{userEnteredFormat:{numberFormat:{type:'PERCENT',pattern:'0%'}}},fields:'userEnteredFormat'}});
+
+      // Day data center align
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:2,endColumnIndex:2+dim},cell:{userEnteredFormat:{horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
+
+      // Column widths
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:0,endIndex:1},properties:{pixelSize:90},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:1,endIndex:2},properties:{pixelSize:180},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:2,endIndex:2+dim},properties:{pixelSize:32},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cT,endIndex:cT+1},properties:{pixelSize:50},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cO,endIndex:cO+1},properties:{pixelSize:55},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:cP,endIndex:cP+1},properties:{pixelSize:55},fields:'pixelSize'}});
+
+      // Re-apply weekend pink over section colors
+      dates.forEach(({we},i)=>{if(we){
+        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink}},fields:'userEnteredFormat'}});
+      }});
+
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:R})});
+
+      Alert.alert('✅ Report ready!',mn+' '+year+' → "'+ssTitle+'"');
       await sv('pv-last-report',year+'-'+String(month+1).padStart(2,'0'));
     }catch(e){Alert.alert('Report error',e?.message||'Could not generate report');}
   },[habits,log,projects,projLog,adHocTasks,getFreshToken]);
