@@ -360,12 +360,19 @@ export default function App(){
         });
         const rn=V.length+1;const cS=colL(2),cE=colL(1+dim);
         const color=habitColors[hi%habitColors.length];
+        // Count actual active days for this habit in this month
+        let activeDays=0;
+        dates.forEach(({d:dt})=>{
+          const dayIdx=dt.getDay()===0?6:dt.getDay()-1;
+          const active=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
+          if(active)activeDays++;
+        });
         if(h.type==='timer'){
           row.push('=COUNTA('+cS+rn+':'+cE+rn+')');
-          row.push(String(h.targetMinutes?Math.round(h.targetMinutes/60*10)/10:dim));
+          row.push(String(h.targetMinutes?Math.round(h.targetMinutes/60*10)/10:activeDays));
         }else{
           row.push('=COUNTIF('+cS+rn+':'+cE+rn+',TRUE)');
-          row.push(String(dim));
+          row.push(String(activeDays));
         }
         row.push('=SPARKLINE(IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0),{"charttype","bar";"max",1;"color1","'+color+'";"color2","#EEEEEE"})');
         V.push(row);
@@ -461,9 +468,9 @@ export default function App(){
       const pjCount=Math.max(1,projects.length);
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+pjCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:pjBlue}},fields:'userEnteredFormat'}});
 
-      // Weekend pink (over everything)
+      // Weekend pink + bold (all rows including data)
       dates.forEach(({we},i)=>{if(we){
-        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink}},fields:'userEnteredFormat'}});
+        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink,textFormat:{bold:true}}},fields:'userEnteredFormat'}});
       }});
 
       // Checkboxes for habit boolean cells
