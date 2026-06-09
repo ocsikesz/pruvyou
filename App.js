@@ -1698,6 +1698,31 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
 
     {/* Backup */}
     <View style={s.statsCard}>
+      <Text style={s.statsTitle}>📝 Manage Habits</Text>
+      <Text style={{fontSize:11,color:C.textDim,marginBottom:10}}>Add, edit, or remove habits.</Text>
+      {habits.map(h=>{
+        const cat=CATS.find(c=>c.id===h.categoryId)||CATS[0];
+        return(
+          <View key={h.id} style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:8,
+            backgroundColor:cat.bg,borderRadius:8,padding:10,borderWidth:1,borderColor:cat.border,
+            borderLeftWidth:3,borderLeftColor:cat.color}}>
+            <Text style={{flex:1,fontSize:13,color:C.text}}>{h.icon} {h.name}</Text>
+            <Text style={{fontSize:9,color:C.textDim}}>{h.frequency}{h.type==='timer'?' · '+fmtMins(h.targetMinutes):''}</Text>
+            <TouchableOpacity onPress={()=>setEditHabit(h)} style={{padding:6,borderRadius:6,backgroundColor:'#E3F2FD'}}>
+              <Text style={{fontSize:11}}>✏️</Text></TouchableOpacity>
+            <TouchableOpacity onPress={()=>Alert.alert('Delete '+h.name+'?','Remove this habit?',[
+              {text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>deleteHabit(h.id)}])}
+              style={{padding:6,borderRadius:6,backgroundColor:'#FEE'}}>
+              <Text style={{fontSize:11}}>🗑️</Text></TouchableOpacity>
+          </View>);
+      })}
+      <TouchableOpacity onPress={()=>setShowAdd(true)}
+        style={{marginTop:8,padding:13,borderRadius:10,backgroundColor:brand.blue,alignItems:'center'}}>
+        <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>+ Add new habit</Text>
+      </TouchableOpacity>
+    </View>
+
+    <View style={s.statsCard}>
       <Text style={s.statsTitle}>☁️ Backup & Sync</Text>
 
       {/* Google Drive section */}
