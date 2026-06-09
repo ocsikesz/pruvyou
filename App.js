@@ -445,17 +445,30 @@ export default function App(){
           method:'POST',headers:auth,body:JSON.stringify({requests:[...fmtReqs,...chartReqs]})});
 
       }else{
-        // ── CREATE NEW spreadsheet ──
+        // ── CREATE NEW spreadsheet with blank month sheets ──
+        const sids=[month*10+1,month*10+2,month*10+3];
         const body={properties:{title:ssTitle},sheets:[
-          {properties:{sheetId:month*10+1,title:mn+' Habits',gridProperties:{frozenRowCount:1}},data:[{startRow:0,startColumn:0,rowData:habitRows}]},
-          {properties:{sheetId:month*10+2,title:mn+' Tasks',gridProperties:{frozenRowCount:1}},data:[{startRow:0,startColumn:0,rowData:qtRows}]},
-          {properties:{sheetId:month*10+3,title:mn+' Projects',gridProperties:{frozenRowCount:1}},data:[{startRow:0,startColumn:0,rowData:projRows}]}
+          {properties:{sheetId:sids[0],title:mn+' Habits',gridProperties:{frozenRowCount:1}}},
+          {properties:{sheetId:sids[1],title:mn+' Tasks',gridProperties:{frozenRowCount:1}}},
+          {properties:{sheetId:sids[2],title:mn+' Projects',gridProperties:{frozenRowCount:1}}}
         ]};
         const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',headers:auth,body:JSON.stringify(body)});
-        if(!res.ok){Alert.alert('Error',await res.text());return;}
+        if(!res.ok){const e=await res.text();Alert.alert('Error creating sheet',e.substring(0,200));return;}
         const sheet=await res.json();ssId=sheet.spreadsheetId;
+        // Delete the default 'Sheet1' that gets auto-created
+        try{const info=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'?fields=sheets.properties',{headers:{Authorization:'Bearer '+token}});
+          const sd=await info.json();const def=sd.sheets?.find(s=>s.properties.title==='Sheet1');
+          if(def)await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:[{deleteSheet:{sheetId:def.properties.sheetId}}]})});
+        }catch(e){}
+        // Write data using values API (same as existing file path)
+        const toVals=(rows)=>rows.map(r=>r.map(c=>c.userEnteredValue?.stringValue??c.userEnteredValue?.numberValue??''));
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+" Habits'!A1?valueInputOption=RAW",{
+          method:'PUT',headers:auth,body:JSON.stringify({values:toVals(habitRows)})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+" Tasks'!A1?valueInputOption=RAW",{
+          method:'PUT',headers:auth,body:JSON.stringify({values:toVals(qtRows)})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'"+mn+" Projects'!A1?valueInputOption=RAW",{
+          method:'PUT',headers:auth,body:JSON.stringify({values:toVals(projRows)})});
         // Format + charts
-        const sids=[month*10+1,month*10+2,month*10+3];
         const reqs=[
           {repeatCell:{range:{sheetId:sids[0],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.9,green:0.95,blue:1}}},fields:'userEnteredFormat'}},
           {repeatCell:{range:{sheetId:sids[1],startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.95,green:0.95,blue:0.9}}},fields:'userEnteredFormat'}},
