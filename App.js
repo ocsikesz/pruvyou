@@ -382,20 +382,31 @@ export default function App(){
       const qtStart=V.length;
       const qtMap={};
       dates.forEach(({str},i)=>{(adHocTasks[str]||[]).forEach(t=>{
-        if(!qtMap[t.text])qtMap[t.text]=Array(dim).fill('');
-        qtMap[t.text][i]=t.done?true:false;
+        if(!qtMap[t.text])qtMap[t.text]={cells:Array(dim).fill(''),done:0,total:0};
+        qtMap[t.text].cells[i]=t.done?true:false;
+        qtMap[t.text].total++;if(t.done)qtMap[t.text].done++;
       });});
       const qtKeys=Object.keys(qtMap);
       qtKeys.forEach(text=>{
-        const cells=qtMap[text];
+        const cells=qtMap[text].cells;
         const row=['Quick Tasks',text,...cells];
         const rn=V.length+1;const cS=colL(2),cE=colL(1+dim);
         row.push('=COUNTIF('+cS+rn+':'+cE+rn+',TRUE)');
         row.push(String(cells.filter(c=>c!=='').length));
-        row.push('=SPARKLINE(IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0),{"charttype","bar";"max",1;"color1","#F39C12";"color2","#EEEEEE"})');
+        row.push(''); // no individual progress bar
         V.push(row);
       });
       if(qtKeys.length===0){V.push(['Quick Tasks','(none)',...Array(dim).fill(''),'','','']);}
+      // TOTAL row for Quick Tasks
+      {
+        const totalDone=Object.values(qtMap).reduce((s,v)=>s+v.done,0);
+        const totalAll=Object.values(qtMap).reduce((s,v)=>s+v.total,0);
+        const totalRow=['Quick Tasks','📊 TOTAL',...Array(dim).fill('')];
+        totalRow.push(String(totalDone));
+        totalRow.push(String(totalAll));
+        totalRow.push('=SPARKLINE(IF('+colL(cO)+(V.length+1)+'>0,'+colL(cT)+(V.length+1)+'/'+colL(cO)+(V.length+1)+',0),{"charttype","bar";"max",1;"color1","#F39C12";"color2","#EEEEEE"})');
+        V.push(totalRow);
+      }
 
       // ── PROJECTS ──
       const pjStart=V.length;
@@ -471,8 +482,12 @@ export default function App(){
 
       // Section backgrounds
       if(habits.length>0)R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:hStart+habits.length,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:hGreen}},fields:'userEnteredFormat'}});
-      const qtCount=Math.max(1,qtKeys.length);
+      const qtCount=qtKeys.length>0?qtKeys.length+1:1; // +1 for TOTAL row
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:qtStart,endRowIndex:qtStart+qtCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:qtYellow}},fields:'userEnteredFormat'}});
+      // TOTAL row bold
+      if(qtKeys.length>0){
+        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:qtStart+qtKeys.length,endRowIndex:qtStart+qtKeys.length+1,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{textFormat:{bold:true}}},fields:'userEnteredFormat'}});
+      }
       const pjCount=Math.max(1,projects.length);
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+pjCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:pjBlue}},fields:'userEnteredFormat'}});
 
