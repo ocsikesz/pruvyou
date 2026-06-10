@@ -695,6 +695,19 @@ export default function App(){
       }catch(e){Alert.alert('Report error',e?.message||'Could not generate annual report');}
   },[habits,log,projects,projLog,adHocTasks,getFreshToken]);
 
+  const generateFullYear=useCallback(async(year)=>{
+    const token=await getFreshToken();
+    if(!token){Alert.alert('Not connected','Connect Google Drive first.');return;}
+    Alert.alert('Generating full year...','Creating all 12 months + Annual for '+year+'. May take ~2 minutes.');
+    try{
+      for(let m=0;m<12;m++){
+        await generateMonthlyReport(year,m);
+        await new Promise(r=>setTimeout(r,1500));
+      }
+      await generateAnnualReport(year);
+      Alert.alert('✅ Done!','All 12 months + Annual for '+year+' generated in "PruvYou '+year+'"');
+    }catch(e){Alert.alert('Error',e?.message||'Could not generate full year report');}
+  },[generateMonthlyReport,generateAnnualReport,getFreshToken]);
 
   // Auto-generate last month's report on 1st-3rd of new month
   useEffect(()=>{
