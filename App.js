@@ -1208,6 +1208,8 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
   const [name,setName]=useState('');const [color,setColor]=useState(brand.blue);
   const [startD,setStartD]=useState('');const [endD,setEndD]=useState('');
   const [editProj,setEditProj]=useState(null);
+  const [editProjStart,setEditProjStart]=useState('');
+  const [editProjEnd,setEditProjEnd]=useState('');
   const [weekOff,setWeekOff]=useState(0);
   const [selDay,setSelDay]=useState(todayStr);
   const [expandedProj,setExpandedProj]=useState(null);
@@ -1246,7 +1248,27 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
         <TouchableOpacity onPress={addProject} style={[s.saveBtn,{backgroundColor:color}]}><Text style={s.saveBtnT}>Create</Text></TouchableOpacity></View>
     </View>)}
 
-    {!projects.length&&!showAdd&&<View style={s.empty}><Text style={{fontSize:36,marginBottom:12}}>📁</Text>
+    {/* Edit project dates modal */}
+    {editProj&&(<View style={s.form}>
+      <Text style={s.formTitle}>Edit: {editProj.name}</Text>
+      <Text style={s.label}>START DATE (YYYY-MM-DD)</Text>
+      <TextInput value={editProjStart} onChangeText={setEditProjStart}
+        placeholder="e.g. 2026-06-01" placeholderTextColor={C.textDark} style={s.input}/>
+      <Text style={s.label}>END DATE — leave empty if ongoing</Text>
+      <TextInput value={editProjEnd} onChangeText={setEditProjEnd}
+        placeholder="e.g. 2026-06-30 or empty" placeholderTextColor={C.textDark} style={s.input}/>
+      <View style={{flexDirection:'row',gap:10,marginTop:8}}>
+        <TouchableOpacity onPress={()=>setEditProj(null)} style={s.cancelBtn}>
+          <Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
+        <TouchableOpacity onPress={()=>{
+          setProjects(p=>p.map(x=>x.id===editProj.id?{...x,startDate:editProjStart||x.startDate,endDate:editProjEnd}:x));
+          setEditProj(null);}}
+          style={[s.saveBtn,{backgroundColor:editProj.color}]}>
+          <Text style={s.saveBtnT}>Save dates</Text></TouchableOpacity>
+      </View>
+    </View>)}
+
+        {!projects.length&&!showAdd&&<View style={s.empty}><Text style={{fontSize:36,marginBottom:12}}>📁</Text>
       <Text style={s.emptySub}>Add your first project</Text></View>}
 
     {projects.length>0&&(<>
@@ -1731,7 +1753,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
               <Text style={{fontSize:11}}>🗑️</Text></TouchableOpacity>
           </View>);
       })}
-      <TouchableOpacity onPress={()=>setShowAdd(true)}
+      <TouchableOpacity onPress={()=>{setEditHabit(null);setShowAdd(true);}}
         style={{marginTop:8,padding:13,borderRadius:10,backgroundColor:brand.blue,alignItems:'center'}}>
         <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>+ Add new habit</Text>
       </TouchableOpacity>
