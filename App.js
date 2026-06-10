@@ -475,11 +475,6 @@ export default function App(){
       const pjCount=Math.max(1,projects.length);
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+pjCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:pjBlue}},fields:'userEnteredFormat'}});
 
-      // Weekend pink + bold + centered (all rows from day letters to last data)
-      dates.forEach(({we},i)=>{if(we){
-        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink,textFormat:{bold:true},horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
-      }});
-
       // Checkboxes for habit boolean cells
       habits.forEach((h,hi)=>{if(h.type!=='timer'){
         R.push({setDataValidation:{range:{sheetId:sid,startRowIndex:hStart+hi,endRowIndex:hStart+hi+1,startColumnIndex:2,endColumnIndex:2+dim},rule:{condition:{type:'BOOLEAN'},showCustomUi:true}}});
@@ -493,6 +488,12 @@ export default function App(){
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:cT,endColumnIndex:cT+1},cell:{userEnteredFormat:{textFormat:{bold:true},horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
       // Center day cells
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:V.length,startColumnIndex:2,endColumnIndex:2+dim},cell:{userEnteredFormat:{horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
+
+      // Weekend pink LAST (overrides section colors)
+      dates.forEach(({we},i)=>{if(we){
+        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},
+          cell:{userEnteredFormat:{backgroundColor:pink,textFormat:{bold:true},horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
+      }});
 
       // Column widths
       R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:0,endIndex:1},properties:{pixelSize:85},fields:'pixelSize'}});
