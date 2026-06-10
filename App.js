@@ -412,10 +412,12 @@ export default function App(){
       const pjStart=V.length;
       const activeProjects=projects.filter(p=>{
         if(!p.startDate)return true;
-        const pStart=p.startDate.substring(0,7); // YYYY-MM
-        const pEnd=p.endDate?p.endDate.substring(0,7):'9999-12';
-        const thisMonth=year+'-'+String(month+1).padStart(2,'0');
-        return thisMonth>=pStart&&thisMonth<=pEnd;
+        // Check if project overlaps with this month (day-level precision)
+        const monthStart=fmt(new Date(year,month,1));
+        const monthEnd=fmt(new Date(year,month+1,0));
+        const pStart=p.startDate;
+        const pEnd=p.endDate||'9999-12-31';
+        return pStart<=monthEnd&&pEnd>=monthStart;
       });
       activeProjects.forEach((p,pi)=>{
         const row=['Projects',p.name];
@@ -594,7 +596,10 @@ export default function App(){
       const projStartRow=V.length;
       const activeProjects=projects.filter(p=>{
         if(!p.startDate)return true;
-        return p.startDate.substring(0,4)<=String(year)&&(!p.endDate||p.endDate.substring(0,4)>=String(year));
+        const yearStart=String(year)+'-01-01';
+        const yearEnd=String(year)+'-12-31';
+        const pEnd=p.endDate||'9999-12-31';
+        return p.startDate<=yearEnd&&pEnd>=yearStart;
       });
       activeProjects.forEach(p=>{
         const row=['Projects',p.name];
@@ -718,8 +723,8 @@ export default function App(){
   if(!loaded)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
 
-  const TABS=[{id:'home',label:'Home'},{id:'habits',label:'Habits'},{id:'projects',label:'Projects'},
-    {id:'stats',label:'Stats'},{id:'settings',label:'Settings'}];
+  const TABS=[{id:'home',label:'Home'},{id:'projects',label:'Projects'},
+    {id:'stats',label:'Stats'},{id:'habits',label:'Habits'},{id:'settings',label:'Settings'}];
 
   return(
     <SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}>
@@ -743,7 +748,7 @@ export default function App(){
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport} generateFullYear={generateFullYear}/>}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1817,7 +1822,7 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,generateAnnualReport}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,generateAnnualReport,generateFullYear}){
   const [bgEnabled,setBgEnabled]=useState(false);
   const [rptYear,setRptYear]=useState(new Date().getFullYear());
   const [rptMonth,setRptMonth]=useState(new Date().getMonth());
@@ -2031,8 +2036,12 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
         </Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={()=>generateAnnualReport(rptYear)}
-        style={{padding:14,borderRadius:10,backgroundColor:'#2C3E50',alignItems:'center'}}>
+        style={{padding:14,borderRadius:10,backgroundColor:'#2C3E50',alignItems:'center',marginBottom:8}}>
         <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>📈 Generate Annual {rptYear}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={()=>generateFullYear(rptYear)}
+        style={{padding:14,borderRadius:10,backgroundColor:'#6C3483',alignItems:'center'}}>
+        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>🗓️ Generate Full Year {rptYear} (12 months + Annual)</Text>
       </TouchableOpacity>
     </View>
 
