@@ -143,12 +143,40 @@ export default function App(){
   const [driveUser,setDriveUser]=useState(null);
   const [driveStatus,setDriveStatus]=useState('');
   const [adHocTasks,setAdHocTasks]=useState({}); // {dateStr:[{id,text,done}]}
+  const [license,setLicense]=useState(null); // null=loading, {type:'trial'|'paid',trialStart?}
 
   useEffect(()=>{(async()=>{
     setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
     setAdHocTasks(await ld('pv-adhoc',{}));
     setLoaded(true);})();},[]);
+
+  // ── License check on startup ──
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const stored=await ld('pv-license',null);
+        if(stored?.type==='paid'){setLicense({type:'paid'});return;}
+        await RNIap.initConnection();
+        const purchases=await RNIap.getAvailablePurchases();
+        if(purchases.some(p=>p.productId===PRODUCT_ID)){
+          await sv('pv-license',{type:'paid'});
+          setLicense({type:'paid'});return;
+        }
+        if(!stored?.trialStart){
+          const ts=new Date().toISOString();
+          await sv('pv-license',{type:'trial',trialStart:ts});
+          setLicense({type:'trial',trialStart:ts});
+        }else{
+          setLicense({type:'trial',trialStart:stored.trialStart});
+        }
+      }catch(e){
+        const stored=await ld('pv-license',null);
+        if(stored){setLicense(stored);}
+        else{const ts=new Date().toISOString();await sv('pv-license',{type:'trial',trialStart:ts});setLicense({type:'trial',trialStart:ts});}
+      }
+    })();
+  },[]);
   useEffect(()=>{if(loaded)sv('pv-habits',habits);},[habits,loaded]);
   useEffect(()=>{if(loaded)sv('pv-log',log);},[log,loaded]);
   useEffect(()=>{if(loaded)sv('pv-projects',projects);},[projects,loaded]);
@@ -234,6 +262,31 @@ export default function App(){
     try{await GoogleSignin.signOut();}catch(e){}
     setDriveToken(null);setDriveUser(null);setDriveStatus('');
     await sv('pv-drive-token',null);
+  },[]);
+
+  const purchaseApp=useCallback(async()=>{
+    try{
+      await RNIap.initConnection();
+      await RNIap.requestPurchase({sku:PRODUCT_ID,andDangerouslyFinishTransactionAutomaticallyIOS:false});
+    }catch(e){
+      if(e.code!=='E_USER_CANCELLED')Alert.alert('Purchase failed',e?.message||'Could not complete purchase');
+    }
+  },[]);
+
+  // Handle purchase updates
+  useEffect(()=>{
+    const sub=RNIap.purchaseUpdatedListener(async(purchase)=>{
+      if(purchase.productId===PRODUCT_ID){
+        try{await RNIap.finishTransaction({purchase,isConsumable:false});}catch(e){}
+        await sv('pv-license',{type:'paid'});
+        setLicense({type:'paid'});
+        Alert.alert('🎉 Thank you!','PruvYou is now unlocked. Enjoy!');
+      }
+    });
+    const errSub=RNIap.purchaseErrorListener((e)=>{
+      if(e.code!=='E_USER_CANCELLED')Alert.alert('Purchase error',e?.message||'Unknown error');
+    });
+    return()=>{sub.remove();errSub.remove();};
   },[]);
 
   const getFreshToken=useCallback(async()=>{
@@ -732,6 +785,42 @@ export default function App(){
   },[loaded,driveToken]);
 
 
+
+  // Compute trial status
+  const trialDaysLeft=license?.type==='trial'?Math.max(0,TRIAL_DAYS-Math.floor((Date.now()-new Date(license.trialStart).getTime())/(1000*60*60*24))):-1;
+  const isPaid=license?.type==='paid';
+  const isExpired=license?.type==='trial'&&trialDaysLeft<=0;
+
+  // Show loading screen while license loads
+  if(!license)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
+
+  // Show paywall if trial expired
+  if(isExpired)return(
+    <SafeAreaProvider><SafeAreaView style={[s.root,{justifyContent:'center',padding:28}]} edges={['top','left','right','bottom']}>
+      <View style={{alignItems:'center',marginBottom:32}}>
+        <Image source={require('./assets/PruvYou_logo.png')} style={{width:120,height:60,resizeMode:'contain',marginBottom:16}}/>
+        <Text style={{fontSize:26,fontWeight:'900',color:C.text,textAlign:'center',marginBottom:8}}>Free Trial Ended</Text>
+        <Text style={{fontSize:14,color:C.textDim,textAlign:'center',lineHeight:22}}>Your 7-day free trial has ended.{'\n'}Unlock PruvYou to keep all your data and features.</Text>
+      </View>
+      <View style={{backgroundColor:'#F8F9FA',borderRadius:16,padding:20,marginBottom:24}}>
+        <Text style={{fontSize:18,fontWeight:'800',color:C.text,marginBottom:12}}>PruvYou Lifetime</Text>
+        {['✅ Unlimited habits & projects','✅ Google Drive backup','✅ Monthly & annual reports','✅ All future updates','✅ No subscription ever'].map((f,i)=>(
+          <Text key={i} style={{fontSize:13,color:C.text,marginBottom:6}}>{f}</Text>))}
+      </View>
+      <TouchableOpacity onPress={purchaseApp}
+        style={{backgroundColor:brand.blue,borderRadius:14,padding:18,alignItems:'center',marginBottom:12}}>
+        <Text style={{fontSize:18,fontWeight:'800',color:'#fff'}}>Unlock PruvYou — 4.99 €</Text>
+        <Text style={{fontSize:11,color:'rgba(255,255,255,0.8)',marginTop:2}}>One-time purchase · no subscription</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={async()=>{
+        try{await RNIap.initConnection();await RNIap.getAvailablePurchases().then(async ps=>{
+          if(ps.some(p=>p.productId===PRODUCT_ID)){await sv('pv-license',{type:'paid'});setLicense({type:'paid'});Alert.alert('✅ Restored','Purchase restored!');}
+          else Alert.alert('Nothing to restore','No previous purchase found.');
+        });}catch(e){Alert.alert('Error',e?.message||'Could not restore');}}}
+        style={{alignItems:'center',padding:12}}>
+        <Text style={{fontSize:13,color:brand.blue,fontWeight:'600'}}>Restore purchase</Text>
+      </TouchableOpacity>
+    </SafeAreaView></SafeAreaProvider>);
 
   if(!loaded)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
