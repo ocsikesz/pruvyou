@@ -468,9 +468,9 @@ export default function App(){
       const pjCount=Math.max(1,projects.length);
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+pjCount,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:pjBlue}},fields:'userEnteredFormat'}});
 
-      // Weekend pink + bold (all rows including data)
+      // Weekend pink + bold + centered (all rows from day letters to last data)
       dates.forEach(({we},i)=>{if(we){
-        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink,textFormat:{bold:true}}},fields:'userEnteredFormat'}});
+        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:V.length,startColumnIndex:2+i,endColumnIndex:3+i},cell:{userEnteredFormat:{backgroundColor:pink,textFormat:{bold:true},horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
       }});
 
       // Checkboxes for habit boolean cells
@@ -551,7 +551,7 @@ export default function App(){
   if(!loaded)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
 
-  const TABS=[{id:'home',label:'Home'},{id:'projects',label:'Projects'},
+  const TABS=[{id:'home',label:'Habits'},{id:'projects',label:'Projects'},
     {id:'stats',label:'Stats'},{id:'settings',label:'Settings'}];
 
   return(
