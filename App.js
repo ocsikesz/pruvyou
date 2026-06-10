@@ -462,11 +462,12 @@ export default function App(){
       R.push({mergeCells:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:totalCols},mergeType:'MERGE_ALL'}});
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:13}}},fields:'userEnteredFormat'}});
 
-      // Day letters bold center
+      // Day letters row — bold + centered ALL columns
       R.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,endRowIndex:2,startColumnIndex:2,endColumnIndex:2+dim},cell:{userEnteredFormat:{textFormat:{bold:true},horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
-
-      // Header dark blue
-      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:2,endRowIndex:3,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:wht}},backgroundColor:dkBlue,horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
+      // Header row — bold + centered ALL day number cells
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:2,endRowIndex:3,startColumnIndex:2,endColumnIndex:2+dim},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:wht}},backgroundColor:dkBlue,horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:2,endRowIndex:3,startColumnIndex:0,endColumnIndex:2},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:wht}},backgroundColor:dkBlue}},fields:'userEnteredFormat'}});
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:2,endRowIndex:3,startColumnIndex:2+dim,endColumnIndex:totalCols},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:wht}},backgroundColor:dkBlue,horizontalAlignment:'CENTER'}},fields:'userEnteredFormat'}});
 
       // Section backgrounds
       if(habits.length>0)R.push({repeatCell:{range:{sheetId:sid,startRowIndex:hStart,endRowIndex:hStart+habits.length,startColumnIndex:0,endColumnIndex:totalCols},cell:{userEnteredFormat:{backgroundColor:hGreen}},fields:'userEnteredFormat'}});
