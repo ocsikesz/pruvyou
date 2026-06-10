@@ -26,7 +26,6 @@
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
         "WAKE_LOCK",
-        "USE_EXACT_ALARM",
         "com.android.vending.BILLING"
       ],
       "intentFilters": [
