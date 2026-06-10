@@ -399,7 +399,14 @@ export default function App(){
 
       // ── PROJECTS ──
       const pjStart=V.length;
-      projects.forEach((p,pi)=>{
+      const activeProjects=projects.filter(p=>{
+        if(!p.startDate)return true;
+        const pStart=p.startDate.substring(0,7); // YYYY-MM
+        const pEnd=p.endDate?p.endDate.substring(0,7):'9999-12';
+        const thisMonth=year+'-'+String(month+1).padStart(2,'0');
+        return thisMonth>=pStart&&thisMonth<=pEnd;
+      });
+      activeProjects.forEach((p,pi)=>{
         const row=['Projects',p.name];
         dates.forEach(({str})=>{
           const dm=projLog[str]?.[p.id]?.minutes||0;
@@ -412,7 +419,7 @@ export default function App(){
         row.push('=SPARKLINE(IF('+colL(cO)+rn+'>0,'+colL(cT)+rn+'/'+colL(cO)+rn+',0),{"charttype","bar";"max",1;"color1","'+color+'";"color2","#EEEEEE"})');
         V.push(row);
       });
-      if(projects.length===0){V.push(['Projects','(none)',...Array(dim).fill(''),'','','']);}
+      if(activeProjects.length===0){V.push(['Projects','(none)',...Array(dim).fill(''),'','','']);}
 
       // ═══ FIND/CREATE SPREADSHEET ═══
       const ssTitle='PruvYou '+year;
@@ -506,11 +513,11 @@ export default function App(){
         }},position:{overlayPosition:{anchorCell:{sheetId:sid,rowIndex:V.length+2,columnIndex:0},widthPixels:400,heightPixels:280}}}}});
       }
       // Projects pie chart
-      if(projects.length>0){
+      if(activeProjects.length>0){
         R.push({addChart:{chart:{spec:{title:'Project Hours',pieChart:{
           legendPosition:'LABELED_LEGEND',
-          domain:{sourceRange:{sources:[{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+projects.length,startColumnIndex:1,endColumnIndex:2}]}},
-          series:{sourceRange:{sources:[{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+projects.length,startColumnIndex:cT,endColumnIndex:cT+1}]}},
+          domain:{sourceRange:{sources:[{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+activeProjects.length,startColumnIndex:1,endColumnIndex:2}]}},
+          series:{sourceRange:{sources:[{sheetId:sid,startRowIndex:pjStart,endRowIndex:pjStart+activeProjects.length,startColumnIndex:cT,endColumnIndex:cT+1}]}},
           pieHole:0.4
         }},position:{overlayPosition:{anchorCell:{sheetId:sid,rowIndex:V.length+2,columnIndex:5+Math.floor(dim/2)},widthPixels:400,heightPixels:280}}}}});
       }
@@ -1077,7 +1084,7 @@ function ProjTask({t,i,color,onToggle,onDelete,onEdit}){
     </View>);
 }
 
-function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTasks,onDelete}){
+function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTasks,onDelete,projects,setProjects}){
   // Read live from projLog so updates reflect immediately
   const dayData=projLog[ds]?.[pid]||{};
   const dm=dayData.minutes||0;
@@ -1197,6 +1204,8 @@ function ProjDayPanel({pid,ds,projLog,color,setProjMinutes,setProjNote,setProjTa
 function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,setProjMinutes,setProjTasks,todayStr}){
   const [showAdd,setShowAdd]=useState(false);
   const [name,setName]=useState('');const [color,setColor]=useState(brand.blue);
+  const [startD,setStartD]=useState('');const [endD,setEndD]=useState('');
+  const [editProj,setEditProj]=useState(null);
   const [weekOff,setWeekOff]=useState(0);
   const [selDay,setSelDay]=useState(todayStr);
   const [expandedProj,setExpandedProj]=useState(null);
@@ -1206,8 +1215,8 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
   const selDate=new Date(selDay.split('-')[0],parseInt(selDay.split('-')[1])-1,selDay.split('-')[2]);
 
   const addProject=()=>{if(!name.trim())return;
-    setProjects(p=>[...p,{id:Date.now().toString(),name:name.trim(),color,startDate:todayStr,status:'active'}]);
-    setName('');setShowAdd(false);};
+    setProjects(p=>[...p,{id:Date.now().toString(),name:name.trim(),color,startDate:startD||todayStr,endDate:endD||'',status:'active'}]);
+    setName('');setStartD('');setEndD('');setShowAdd(false);};
 
   // Summary for each project on selected day
   const dayMins=(pid)=>projLog[selDay]?.[pid]?.minutes||0;
@@ -1222,6 +1231,10 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
       <Text style={s.formTitle}>New Project</Text>
       <Text style={s.label}>PROJECT NAME</Text>
       <TextInput value={name} onChangeText={setName} placeholder="e.g. PruvYou App" placeholderTextColor={C.textDark} style={s.input}/>
+      <Text style={s.label}>START DATE</Text>
+      <TextInput value={startD} onChangeText={setStartD} placeholder={todayStr+' (auto)'} placeholderTextColor={C.textDark} style={s.input}/>
+      <Text style={s.label}>END DATE (optional — leave empty if ongoing)</Text>
+      <TextInput value={endD} onChangeText={setEndD} placeholder="YYYY-MM-DD or empty" placeholderTextColor={C.textDark} style={s.input}/>
       <Text style={s.label}>COLOR</Text>
       <View style={{flexDirection:'row',gap:8,marginBottom:12}}>{PCOLORS.map(c=>(
         <TouchableOpacity key={c} onPress={()=>setColor(c)}
