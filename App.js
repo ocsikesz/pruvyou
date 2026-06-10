@@ -546,6 +546,149 @@ export default function App(){
     }catch(e){Alert.alert('Report error',e?.message||'Could not generate report');}
   },[habits,log,projects,projLog,adHocTasks,getFreshToken]);
 
+  // ══════════════════════════════════════════════════════════
+  // GENERATE ANNUAL REPORT
+  // ══════════════════════════════════════════════════════════
+  const generateAnnualReport=useCallback(async(year)=>{
+    const token=await getFreshToken();
+    if(!token){Alert.alert('Not connected','Connect Google Drive first.');return;}
+    try{
+      const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      Alert.alert('Generating...','Creating Annual '+year+' report...');
+      const auth={Authorization:'Bearer '+token,'Content-Type':'application/json'};
+      const colL=n=>{let s='';while(n>=0){s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)-1;}return s;};
+
+      const V=[];
+      V.push(['PruvYou Annual Report — '+year]);
+      V.push([]);
+      V.push(['HABITS SUMMARY','','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','YEAR %']);
+
+      // Habit rows — monthly % per habit
+      const habitStartRow=V.length;
+      habits.forEach((h,hi)=>{
+        const row=['Habits',h.icon+' '+h.name];
+        let yearDone=0,yearTotal=0;
+        for(let m=0;m<12;m++){
+          const dim=new Date(year,m+1,0).getDate();
+          let done=0,total=0;
+          for(let day=1;day<=dim;day++){
+            const d=new Date(year,m,day);
+            const ds=fmt(d);
+            const dayIdx=d.getDay()===0?6:d.getDay()-1;
+            const active=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
+            if(!active)continue;
+            total++;
+            if(log[ds]?.[h.id]?.done){done++;yearDone++;}
+            yearTotal++;
+          }
+          row.push(total>0?Math.round(done/total*100)+'%':'—');
+        }
+        row.push(yearTotal>0?Math.round(yearDone/yearTotal*100)+'%':'—');
+        V.push(row);
+      });
+
+      V.push([]);
+      V.push(['PROJECTS SUMMARY','','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','TOTAL h']);
+
+      // Project rows — monthly hours
+      const projStartRow=V.length;
+      const activeProjects=projects.filter(p=>{
+        if(!p.startDate)return true;
+        return p.startDate.substring(0,4)<=String(year)&&(!p.endDate||p.endDate.substring(0,4)>=String(year));
+      });
+      activeProjects.forEach(p=>{
+        const row=['Projects',p.name];
+        let yearMins=0;
+        for(let m=0;m<12;m++){
+          const dim=new Date(year,m+1,0).getDate();
+          let mMins=0;
+          for(let day=1;day<=dim;day++){
+            const ds=fmt(new Date(year,m,day));
+            mMins+=projLog[ds]?.[p.id]?.minutes||0;
+          }
+          yearMins+=mMins;
+          row.push(mMins>0?Math.round(mMins/60*10)/10:'');
+        }
+        row.push(Math.round(yearMins/60*10)/10);
+        V.push(row);
+      });
+
+      V.push([]);
+      V.push(['QUICK TASKS SUMMARY','','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','TOTAL']);
+
+      // Quick tasks — monthly count done
+      const qtRow=['Quick Tasks','All tasks done'];
+      let qtYearTotal=0;
+      for(let m=0;m<12;m++){
+        const dim=new Date(year,m+1,0).getDate();
+        let cnt=0;
+        for(let day=1;day<=dim;day++){
+          const ds=fmt(new Date(year,m,day));
+          cnt+=(adHocTasks[ds]||[]).filter(t=>t.done).length;
+        }
+        qtYearTotal+=cnt;
+        qtRow.push(cnt>0?String(cnt):'');
+      }
+      qtRow.push(String(qtYearTotal));
+      V.push(qtRow);
+
+      // ── Find or create spreadsheet ──
+      const ssTitle='PruvYou '+year;
+      let ssId=null;const sid=999;
+      const search=await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D'"+encodeURIComponent(ssTitle)+"'%20and%20mimeType%3D'application%2Fvnd.google-apps.spreadsheet'%20and%20trashed%3Dfalse&fields=files(id)",{headers:{Authorization:'Bearer '+token}});
+      const {files}=await search.json();
+      if(files&&files.length>0){
+        ssId=files[0].id;
+        const ssInfo=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+'?fields=sheets.properties',{headers:{Authorization:'Bearer '+token}});
+        const ssData=await ssInfo.json();
+        const delReqs=[];
+        (ssData.sheets||[]).forEach(s=>{if(s.properties.title==='Annual')delReqs.push({deleteSheet:{sheetId:s.properties.sheetId}});});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,
+          body:JSON.stringify({requests:[...delReqs,{addSheet:{properties:{sheetId:sid,title:'Annual'}}}]})});
+      }else{
+        const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',headers:auth,
+          body:JSON.stringify({properties:{title:ssTitle},sheets:[{properties:{sheetId:sid,title:'Annual'}}]})});
+        if(!res.ok){Alert.alert('Error',(await res.text()).substring(0,200));return;}
+        ssId=(await res.json()).spreadsheetId;
+      }
+
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+"/values/'Annual'!A1?valueInputOption=RAW",{
+        method:'PUT',headers:auth,body:JSON.stringify({values:V})});
+
+      // Formatting
+      const dkBlue={red:0.17,green:0.24,blue:0.31};const wht={red:1,green:1,blue:1};
+      const hGreen={red:0.91,green:0.97,blue:0.96};const pjBlue={red:0.92,green:0.95,blue:0.97};
+      const R=[];
+      // Title
+      R.push({mergeCells:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:15},mergeType:'MERGE_ALL'}});
+      R.push({repeatCell:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:14}}},fields:'userEnteredFormat'}});
+      // Section headers
+      [2,habitStartRow+habits.length+1,habitStartRow+habits.length+3].forEach(r=>{
+        R.push({repeatCell:{range:{sheetId:sid,startRowIndex:r,endRowIndex:r+1,startColumnIndex:0,endColumnIndex:15},cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColorStyle:{rgbColor:wht}},backgroundColor:dkBlue}},fields:'userEnteredFormat'}});
+      });
+      // Habit rows green
+      if(habits.length>0)R.push({repeatCell:{range:{sheetId:sid,startRowIndex:habitStartRow,endRowIndex:habitStartRow+habits.length,startColumnIndex:0,endColumnIndex:15},cell:{userEnteredFormat:{backgroundColor:hGreen}},fields:'userEnteredFormat'}});
+      // Project rows blue
+      if(activeProjects.length>0)R.push({repeatCell:{range:{sheetId:sid,startRowIndex:projStartRow,endRowIndex:projStartRow+activeProjects.length,startColumnIndex:0,endColumnIndex:15},cell:{userEnteredFormat:{backgroundColor:pjBlue}},fields:'userEnteredFormat'}});
+      // Column widths
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:0,endIndex:1},properties:{pixelSize:80},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:1,endIndex:2},properties:{pixelSize:160},fields:'pixelSize'}});
+      R.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:2,endIndex:15},properties:{pixelSize:55},fields:'pixelSize'}});
+
+      // Annual bar chart for habits
+      if(habits.length>0){
+        R.push({addChart:{chart:{spec:{title:'Annual Habit Completion %',basicChart:{chartType:'COLUMN',legendPosition:'BOTTOM_LEGEND',
+          axis:[{position:'BOTTOM_AXIS'},{position:'LEFT_AXIS',title:'%'}],
+          domains:[{domain:{sourceRange:{sources:[{sheetId:sid,startRowIndex:2,endRowIndex:3,startColumnIndex:2,endColumnIndex:14}]}}}],
+          series:habits.map((_,hi)=>({series:{sourceRange:{sources:[{sheetId:sid,startRowIndex:habitStartRow+hi,endRowIndex:habitStartRow+hi+1,startColumnIndex:2,endColumnIndex:14}]}}}))
+        }},position:{overlayPosition:{anchorCell:{sheetId:sid,rowIndex:V.length+2,columnIndex:0},widthPixels:900,heightPixels:320}}}}});
+      }
+
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+ssId+':batchUpdate',{method:'POST',headers:auth,body:JSON.stringify({requests:R})});
+
+      Alert.alert('✅ Annual report ready!','Annual '+year+' tab added to "'+ssTitle+'"');
+      }catch(e){Alert.alert('Report error',e?.message||'Could not generate annual report');}
+  },[habits,log,projects,projLog,adHocTasks,getFreshToken]);
 
 
   // Auto-generate last month's report on 1st-3rd of new month
@@ -575,7 +718,7 @@ export default function App(){
   if(!loaded)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}>
     <Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
 
-  const TABS=[{id:'home',label:'Habits'},{id:'projects',label:'Projects'},
+  const TABS=[{id:'home',label:'Home'},{id:'habits',label:'Habits'},{id:'projects',label:'Projects'},
     {id:'stats',label:'Stats'},{id:'settings',label:'Settings'}];
 
   return(
@@ -590,13 +733,17 @@ export default function App(){
         {tab==='home'&&<HomeTab habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} todayStr={todayStr}
           setNote={setNote} log={log} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}/>}
+        {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
+          addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit}
+          updateHabit={updateHabit} deleteHabit={deleteHabit}
+          toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes}
+          setNote={setNote} todayStr={todayStr} weekDates={weekDates}/>}
         {tab==='projects'&&<ProjectsTab projects={projects} setProjects={setProjects}
           projLog={projLog} addProjMinutes={addProjMinutes} setProjNote={setProjNote} setProjMinutes={setProjMinutes} setProjTasks={setProjTasks}
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport}
-          showAdd={showAdd} setShowAdd={setShowAdd} addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit} updateHabit={updateHabit} deleteHabit={deleteHabit}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport}/>}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1347,13 +1494,21 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
                 {dm>0?fmtMins(dm)+' today · ':'No time today · '}{Math.round(totalMins/60*10)/10}h total
                 {tasks.length>0?` · ${done}/${tasks.length} tasks`:''}
               </Text>
+              <Text style={{fontSize:9,color:p.color,marginTop:1}}>
+                {p.startDate||'no start date'}{p.endDate?' → '+p.endDate:' → ongoing'}
+              </Text>
             </View>
+            <TouchableOpacity onPress={(e)=>{e.stopPropagation?.();setEditProj(p);setEditProjStart(p.startDate||'');setEditProjEnd(p.endDate||'');}}
+              style={{padding:6,borderRadius:6,backgroundColor:'#E3F2FD',marginRight:4}}>
+              <Text style={{fontSize:11}}>✏️</Text>
+            </TouchableOpacity>
             <Text style={{fontSize:14,color:C.textDark,paddingHorizontal:6}}>{isExp?'▾':'▸'}</Text>
           </TouchableOpacity>
           {isExp&&<ProjDayPanel pid={p.id} ds={selDay} projLog={projLog}
             color={p.color}
             setProjMinutes={setProjMinutes}
             setProjNote={setProjNote} setProjTasks={setProjTasks}
+            projects={projects} setProjects={setProjects}
             onDelete={()=>Alert.alert('Delete',`Delete "${p.name}"?`,[{text:'Cancel',style:'cancel'},
               {text:'Delete',style:'destructive',onPress:()=>{setExpandedProj(null);setProjects(pr=>pr.filter(x=>x.id!==p.id));}}])}
           />}
@@ -1662,7 +1817,7 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,updateHabit,deleteHabit}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,generateAnnualReport}){
   const [bgEnabled,setBgEnabled]=useState(false);
   const [rptYear,setRptYear]=useState(new Date().getFullYear());
   const [rptMonth,setRptMonth]=useState(new Date().getMonth());
@@ -1751,31 +1906,6 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     </View>
 
     {/* Backup */}
-    <View style={s.statsCard}>
-      <Text style={s.statsTitle}>📝 Manage Habits</Text>
-      <Text style={{fontSize:11,color:C.textDim,marginBottom:10}}>Add, edit, or remove habits.</Text>
-      {habits.map(h=>{
-        const cat=CATS.find(c=>c.id===h.categoryId)||CATS[0];
-        return(
-          <View key={h.id} style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:8,
-            backgroundColor:cat.bg,borderRadius:8,padding:10,borderWidth:1,borderColor:cat.border,
-            borderLeftWidth:3,borderLeftColor:cat.color}}>
-            <Text style={{flex:1,fontSize:13,color:C.text}}>{h.icon} {h.name}</Text>
-            <Text style={{fontSize:9,color:C.textDim}}>{h.frequency}{h.type==='timer'?' · '+fmtMins(h.targetMinutes):''}</Text>
-            <TouchableOpacity onPress={()=>setEditHabit(h)} style={{padding:6,borderRadius:6,backgroundColor:'#E3F2FD'}}>
-              <Text style={{fontSize:11}}>✏️</Text></TouchableOpacity>
-            <TouchableOpacity onPress={()=>Alert.alert('Delete '+h.name+'?','Remove this habit?',[
-              {text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>deleteHabit(h.id)}])}
-              style={{padding:6,borderRadius:6,backgroundColor:'#FEE'}}>
-              <Text style={{fontSize:11}}>🗑️</Text></TouchableOpacity>
-          </View>);
-      })}
-      <TouchableOpacity onPress={()=>{setEditHabit(null);setShowAdd(true);}}
-        style={{marginTop:8,padding:13,borderRadius:10,backgroundColor:brand.blue,alignItems:'center'}}>
-        <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>+ Add new habit</Text>
-      </TouchableOpacity>
-    </View>
-
     <View style={s.statsCard}>
       <Text style={s.statsTitle}>☁️ Backup & Sync</Text>
 
@@ -1895,10 +2025,14 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View>
 
       <TouchableOpacity onPress={()=>generateMonthlyReport(rptYear,rptMonth)}
-        style={{padding:14,borderRadius:10,backgroundColor:brand.blue,alignItems:'center'}}>
+        style={{padding:14,borderRadius:10,backgroundColor:brand.blue,alignItems:'center',marginBottom:8}}>
         <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>
           📊 Generate {'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')[rptMonth]} {rptYear}
         </Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={()=>generateAnnualReport(rptYear)}
+        style={{padding:14,borderRadius:10,backgroundColor:'#2C3E50',alignItems:'center'}}>
+        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>📈 Generate Annual {rptYear}</Text>
       </TouchableOpacity>
     </View>
 
