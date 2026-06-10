@@ -1664,6 +1664,8 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,updateHabit,deleteHabit}){
   const [bgEnabled,setBgEnabled]=useState(false);
+  const [rptYear,setRptYear]=useState(new Date().getFullYear());
+  const [rptMonth,setRptMonth]=useState(new Date().getMonth());
   const [bgLastRun,setBgLastRun]=useState(null);
   const [reminderEnabled,setReminderEnabled]=useState(false);
   const [reminderTime,setReminderTime]=useState('20:00');
@@ -1866,19 +1868,38 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
     {/* Monthly Report */}
     <View style={s.statsCard}>
       <Text style={s.statsTitle}>📋 Monthly Report</Text>
-      <Text style={{fontSize:11,color:C.textDim,marginBottom:12}}>Generate a Google Sheets report with habits, tasks, projects, and charts.</Text>
-      <View style={{flexDirection:'row',gap:8}}>
-        <TouchableOpacity onPress={()=>{
-          const d=new Date();const pm=d.getMonth()===0?11:d.getMonth()-1;const py=d.getMonth()===0?d.getFullYear()-1:d.getFullYear();
-          generateMonthlyReport(py,pm);}}
-          style={{flex:1,padding:13,borderRadius:10,backgroundColor:brand.blue,alignItems:'center'}}>
-          <Text style={{fontSize:13,fontWeight:'700',color:'#fff'}}>📊 Last month</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={()=>generateMonthlyReport(new Date().getFullYear(),new Date().getMonth())}
-          style={{flex:1,padding:13,borderRadius:10,backgroundColor:brand.green+'20',alignItems:'center',borderWidth:1,borderColor:brand.green}}>
-          <Text style={{fontSize:13,fontWeight:'700',color:brand.green}}>📊 This month</Text>
-        </TouchableOpacity>
+      <Text style={{fontSize:11,color:C.textDim,marginBottom:12}}>Select year and month, then generate report to Google Sheets.</Text>
+
+      {/* Year selector */}
+      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>YEAR</Text>
+      <View style={{flexDirection:'row',gap:6,marginBottom:12}}>
+        {[new Date().getFullYear()-1,new Date().getFullYear(),new Date().getFullYear()+1].map(y=>(
+          <TouchableOpacity key={y} onPress={()=>setRptYear(y)}
+            style={{flex:1,padding:10,borderRadius:8,alignItems:'center',
+              backgroundColor:rptYear===y?brand.blue:C.bg,
+              borderWidth:1,borderColor:rptYear===y?brand.blue:C.border}}>
+            <Text style={{fontSize:13,fontWeight:'700',color:rptYear===y?'#fff':C.textDim}}>{y}</Text>
+          </TouchableOpacity>))}
       </View>
+
+      {/* Month selector */}
+      <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,marginBottom:6,letterSpacing:1}}>MONTH</Text>
+      <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginBottom:14}}>
+        {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((mn,mi)=>(
+          <TouchableOpacity key={mi} onPress={()=>setRptMonth(mi)}
+            style={{width:'23%',padding:9,borderRadius:8,alignItems:'center',
+              backgroundColor:rptMonth===mi?brand.blue:C.bg,
+              borderWidth:1,borderColor:rptMonth===mi?brand.blue:C.border}}>
+            <Text style={{fontSize:12,fontWeight:'700',color:rptMonth===mi?'#fff':C.textDim}}>{mn}</Text>
+          </TouchableOpacity>))}
+      </View>
+
+      <TouchableOpacity onPress={()=>generateMonthlyReport(rptYear,rptMonth)}
+        style={{padding:14,borderRadius:10,backgroundColor:brand.blue,alignItems:'center'}}>
+        <Text style={{fontSize:14,fontWeight:'700',color:'#fff'}}>
+          📊 Generate {'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')[rptMonth]} {rptYear}
+        </Text>
+      </TouchableOpacity>
     </View>
 
         <View style={s.statsCard}><Text style={s.statsTitle}>📊 Your Data</Text>
