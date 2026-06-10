@@ -154,26 +154,30 @@ export default function App(){
   // ── License check on startup ──
   useEffect(()=>{
     (async()=>{
+      const stored=await ld('pv-license',null);
+      // Already paid — no need to check Play Store
+      if(stored?.type==='paid'){setLicense({type:'paid'});return;}
+      // Try Play Store check (only works when installed via Play Store)
       try{
-        const stored=await ld('pv-license',null);
-        if(stored?.type==='paid'){setLicense({type:'paid'});return;}
-        await RNIap.initConnection();
+        const conn=await Promise.race([
+          RNIap.initConnection(),
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),3000))
+        ]);
         const purchases=await RNIap.getAvailablePurchases();
         if(purchases.some(p=>p.productId===PRODUCT_ID)){
           await sv('pv-license',{type:'paid'});
           setLicense({type:'paid'});return;
         }
-        if(!stored?.trialStart){
-          const ts=new Date().toISOString();
-          await sv('pv-license',{type:'trial',trialStart:ts});
-          setLicense({type:'trial',trialStart:ts});
-        }else{
-          setLicense({type:'trial',trialStart:stored.trialStart});
-        }
       }catch(e){
-        const stored=await ld('pv-license',null);
-        if(stored){setLicense(stored);}
-        else{const ts=new Date().toISOString();await sv('pv-license',{type:'trial',trialStart:ts});setLicense({type:'trial',trialStart:ts});}
+        // Play Store not available (sideloaded APK) - continue with trial
+      }
+      // Start or continue trial
+      if(!stored?.trialStart){
+        const ts=new Date().toISOString();
+        await sv('pv-license',{type:'trial',trialStart:ts});
+        setLicense({type:'trial',trialStart:ts});
+      }else{
+        setLicense({type:'trial',trialStart:stored.trialStart});
       }
     })();
   },[]);
@@ -273,9 +277,11 @@ export default function App(){
     }
   },[]);
 
-  // Handle purchase updates
+  // Handle purchase updates (only when Play Store available)
   useEffect(()=>{
-    const sub=RNIap.purchaseUpdatedListener(async(purchase)=>{
+    let sub, errSub;
+    try{
+    sub=RNIap.purchaseUpdatedListener(async(purchase)=>{
       if(purchase.productId===PRODUCT_ID){
         try{await RNIap.finishTransaction({purchase,isConsumable:false});}catch(e){}
         await sv('pv-license',{type:'paid'});
@@ -283,10 +289,11 @@ export default function App(){
         Alert.alert('🎉 Thank you!','PruvYou is now unlocked. Enjoy!');
       }
     });
-    const errSub=RNIap.purchaseErrorListener((e)=>{
+    errSub=RNIap.purchaseErrorListener((e)=>{
       if(e.code!=='E_USER_CANCELLED')Alert.alert('Purchase error',e?.message||'Unknown error');
     });
-    return()=>{sub.remove();errSub.remove();};
+    }catch(e){}
+    return()=>{try{sub?.remove();errSub?.remove();}catch(e){}};
   },[]);
 
   const getFreshToken=useCallback(async()=>{
