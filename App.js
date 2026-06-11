@@ -12,10 +12,7 @@ import * as Notifications from 'expo-notifications';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 
-WebBrowser.maybeCompleteAuthSession();
 Notifications.setNotificationHandler({handleNotification:async()=>({shouldShowAlert:true,shouldPlaySound:true,shouldSetBadge:false})});
 // Setup Android notification channel
 if(Platform.OS==='android'){
@@ -155,22 +152,7 @@ export default function App(){
   useEffect(()=>{
     (async()=>{
       const stored=await ld('pv-license',null);
-      // Already paid — no need to check Play Store
       if(stored?.type==='paid'){setLicense({type:'paid'});return;}
-      // Try Play Store check (only works when installed via Play Store)
-      try{
-        const conn=await Promise.race([
-          RNIap.initConnection(),
-          new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),3000))
-        ]);
-        const purchases=await RNIap.getAvailablePurchases();
-        if(purchases.some(p=>p.productId===PRODUCT_ID)){
-          await sv('pv-license',{type:'paid'});
-          setLicense({type:'paid'});return;
-        }
-      }catch(e){
-        // Play Store not available (sideloaded APK) - continue with trial
-      }
       // Start or continue trial
       if(!stored?.trialStart){
         const ts=new Date().toISOString();
@@ -218,7 +200,7 @@ export default function App(){
           ...(Platform.OS==='android'&&{channelId:'pruvyou'})},
         trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour:hr,minute:min},
       });
-    }catch(e){console.log('Notification error',e);}
+    }catch(e){}
   },[]);
   const cancelDailyReminder=useCallback(async()=>{
     try{const scheduled=await Notifications.getAllScheduledNotificationsAsync();
@@ -269,31 +251,7 @@ export default function App(){
   },[]);
 
   const purchaseApp=useCallback(async()=>{
-    try{
-      await RNIap.initConnection();
-      await RNIap.requestPurchase({sku:PRODUCT_ID,andDangerouslyFinishTransactionAutomaticallyIOS:false});
-    }catch(e){
-      if(e.code!=='E_USER_CANCELLED')Alert.alert('Purchase failed',e?.message||'Could not complete purchase');
-    }
-  },[]);
-
-  // Handle purchase updates (only when Play Store available)
-  useEffect(()=>{
-    let sub, errSub;
-    try{
-    sub=RNIap.purchaseUpdatedListener(async(purchase)=>{
-      if(purchase.productId===PRODUCT_ID){
-        try{await RNIap.finishTransaction({purchase,isConsumable:false});}catch(e){}
-        await sv('pv-license',{type:'paid'});
-        setLicense({type:'paid'});
-        Alert.alert('🎉 Thank you!','PruvYou is now unlocked. Enjoy!');
-      }
-    });
-    errSub=RNIap.purchaseErrorListener((e)=>{
-      if(e.code!=='E_USER_CANCELLED')Alert.alert('Purchase error',e?.message||'Unknown error');
-    });
-    }catch(e){}
-    return()=>{try{sub?.remove();errSub?.remove();}catch(e){}};
+    Alert.alert('Get PruvYou','To purchase, find PruvYou on Google Play Store and tap "Buy".');
   },[]);
 
   const getFreshToken=useCallback(async()=>{
@@ -819,11 +777,7 @@ export default function App(){
         <Text style={{fontSize:18,fontWeight:'800',color:'#fff'}}>Unlock PruvYou — 4.99 €</Text>
         <Text style={{fontSize:11,color:'rgba(255,255,255,0.8)',marginTop:2}}>One-time purchase · no subscription</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={async()=>{
-        try{await RNIap.initConnection();await RNIap.getAvailablePurchases().then(async ps=>{
-          if(ps.some(p=>p.productId===PRODUCT_ID)){await sv('pv-license',{type:'paid'});setLicense({type:'paid'});Alert.alert('✅ Restored','Purchase restored!');}
-          else Alert.alert('Nothing to restore','No previous purchase found.');
-        });}catch(e){Alert.alert('Error',e?.message||'Could not restore');}}}
+      <TouchableOpacity onPress={()=>Alert.alert('Restore purchase','Install PruvYou from Google Play Store and your purchase will be restored automatically.')}
         style={{alignItems:'center',padding:12}}>
         <Text style={{fontSize:13,color:brand.blue,fontWeight:'600'}}>Restore purchase</Text>
       </TouchableOpacity>
@@ -1099,7 +1053,7 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
         trigger:{type:Notifications.SchedulableTriggerInputTypes.DATE,date:notifDate.getTime()},
       });
       return id;
-    }catch(e){console.log('Notif schedule error:',e);return null;}
+    }catch(e){return null;}
   };
 
   const cancelTaskNotif=async(notifId)=>{
@@ -2162,7 +2116,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       </View></View>
     <View style={[s.statsCard,{alignItems:'center'}]}>
       <Image source={require('./assets/PruvYou_logo.png')} style={{width:140,height:35}} resizeMode="contain"/>
-      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v2.0.0</Text></View>
+      <Text style={{fontSize:9,color:C.textLight,marginTop:4}}>v2.1.0</Text></View>
     <TouchableOpacity onPress={()=>Alert.alert('Reset','Delete ALL data?',[{text:'Cancel',style:'cancel'},
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
