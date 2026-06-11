@@ -25,8 +25,7 @@
         "RECEIVE_BOOT_COMPLETED",
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
-        "WAKE_LOCK",
-        "com.android.vending.BILLING"
+        "WAKE_LOCK"
       ],
       "intentFilters": [
         {
