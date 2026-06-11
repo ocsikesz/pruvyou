@@ -29,7 +29,7 @@ const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.g
 const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
 const GOOGLE_WEB_SECRET=_GS.join('');
 const IS_TESTING=true; // Feature Toggle: set to false before production launch
-const TRIAL_DAYS=7; // Trial days (active when IS_TESTING=false)
+const TRIAL_DAYS=30; // Will change to 7 before production // Trial days (active when IS_TESTING=false)
 const PRODUCT_ID='pruvyou_lifetime';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const SHEETS_SCOPE='https://www.googleapis.com/auth/spreadsheets';
