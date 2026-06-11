@@ -66,7 +66,7 @@ const sv=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch
 const BG_BACKUP_TASK='pruvyou-bg-backup';
 const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
 
-try{TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
+TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
   try{
     const cfg=await ld('pv-bg-config',null);
     if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.NoData;
