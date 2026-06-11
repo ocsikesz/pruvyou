@@ -66,7 +66,7 @@ const sv=async(k,v)=>{try{await AsyncStorage.setItem(k,JSON.stringify(v));}catch
 const BG_BACKUP_TASK='pruvyou-bg-backup';
 const fmtDate=(d)=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
 
-TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
+try{TaskManager.defineTask(BG_BACKUP_TASK,async()=>{
   try{
     const cfg=await ld('pv-bg-config',null);
     if(!cfg||!cfg.enabled)return BackgroundTask.BackgroundTaskResult.NoData;
@@ -2123,6 +2123,11 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       {text:'Delete Everything',style:'destructive',onPress:async()=>{setHabits([]);setLog({});setProjects([]);setProjLog({});await AsyncStorage.clear();}}])}
       style={{padding:14,borderRadius:12,backgroundColor:'#FEE',alignItems:'center',marginTop:8,borderWidth:1,borderColor:'#FCC'}}>
       <Text style={{fontSize:13,fontWeight:'600',color:'#C44'}}>🗑 Reset all data</Text></TouchableOpacity>
+    <TouchableOpacity onPress={()=>Alert.alert('Reset Trial','Restart your free trial? Use for testing only.',[{text:'Cancel',style:'cancel'},
+      {text:'Reset',onPress:async()=>{await AsyncStorage.removeItem('pv-license');Alert.alert('Done','Restart the app to begin a fresh trial.');}}])}
+      style={{padding:12,borderRadius:12,backgroundColor:'#F5F5F5',alignItems:'center',marginTop:8}}>
+      <Text style={{fontSize:11,color:'#999'}}>🔄 Reset trial (testing only)</Text>
+    </TouchableOpacity>
   </View>);
 }
 
