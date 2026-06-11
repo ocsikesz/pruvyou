@@ -754,9 +754,9 @@ export default function App(){
 
 
   // Compute trial status
-  const trialDaysLeft=license?.type==='trial'?Math.max(0,TRIAL_DAYS-Math.floor((Date.now()-new Date(license.trialStart).getTime())/(1000*60*60*24))):-1;
-  const isPaid=license?.type==='paid';
-  const isExpired=license?.type==='trial'&&trialDaysLeft<=0;
+  const trialDaysLeft=30; // Billing not yet active
+  const isPaid=true; // Paywall disabled until Play Billing v6 implemented
+  const isExpired=false;
 
   // Show loading screen while license loads
   if(!license)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
