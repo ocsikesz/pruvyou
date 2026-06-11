@@ -28,7 +28,8 @@ const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googl
 const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.googleusercontent.com';
 const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
 const GOOGLE_WEB_SECRET=_GS.join('');
-const TRIAL_DAYS=30; // 30 days for testing, change to 7 before production launch
+const IS_TESTING=true; // Feature Toggle: set to false before production launch
+const TRIAL_DAYS=7; // Trial days (active when IS_TESTING=false)
 const PRODUCT_ID='pruvyou_lifetime';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const SHEETS_SCOPE='https://www.googleapis.com/auth/spreadsheets';
@@ -754,9 +755,11 @@ export default function App(){
 
 
   // Compute trial status
-  const trialDaysLeft=30; // Billing not yet active
-  const isPaid=true; // Paywall disabled until Play Billing v6 implemented
-  const isExpired=false;
+  // Feature Toggle: IS_TESTING bypasses paywall for testers
+  const trialDaysLeft=IS_TESTING?999:(
+    license?.type==='trial'?Math.max(0,TRIAL_DAYS-Math.floor((Date.now()-new Date(license.trialStart).getTime())/(1000*60*60*24))):0);
+  const isPaid=IS_TESTING||license?.type==='paid';
+  const isExpired=!IS_TESTING&&license?.type==='trial'&&trialDaysLeft<=0;
 
   // Show loading screen while license loads
   if(!license)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
