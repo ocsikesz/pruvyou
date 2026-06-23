@@ -128,6 +128,50 @@ const TAB_ICONS={home:require('./assets/Home.png'),habits:require('./assets/Habi
   projects:require('./assets/Projects.png'),stats:require('./assets/Stats.png'),settings:require('./assets/Setting.png')};
 
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// ONBOARDING SCREEN
+// ═══════════════════════════════════════════════════════════════════
+const SLIDES=[
+  {icon:'✅',title:'Welcome to PruvYou',subtitle:'Prove Yourself Daily',desc:'Track your habits, manage projects, and log quick tasks — all in one place. Your personal productivity companion.',color:'#1A4F8A'},
+  {icon:'🎯',title:'Track Your Habits',subtitle:'Build consistency',desc:'Add daily or weekly habits — checkboxes or timers. Tap the checkbox to mark done, tap the middle to add notes. See your progress on the home screen.',color:'#34C79F'},
+  {icon:'📁',title:'Manage Projects',subtitle:'Log time and tasks',desc:'Create projects with start and end dates. Log time daily, add tasks, and carry over unfinished work. Generate monthly reports to Google Sheets.',color:'#9B59B6'},
+  {icon:'⚡',title:'Quick Tasks',subtitle:'Plan ahead',desc:'Add one-off tasks for today, tomorrow or any future date. Set a time and reminder notification so you never miss an important appointment.',color:'#E67E22'},
+  {icon:'☁️',title:'Backup to Drive',subtitle:'Your data is safe',desc:'Connect Google Drive to auto-backup every time you open the app. Generate monthly and annual Google Sheets reports with one tap.',color:'#27AE60'},
+];
+
+function OnboardingScreen({onDone}){
+  const [idx,setIdx]=useState(0);
+  const slide=SLIDES[idx];
+  const isLast=idx===SLIDES.length-1;
+  return(
+    <SafeAreaProvider>
+      <SafeAreaView style={{flex:1,backgroundColor:slide.color}} edges={['top','left','right','bottom']}>
+        <TouchableOpacity onPress={onDone} style={{alignSelf:'flex-end',padding:20}}>
+          <Text style={{color:'rgba(255,255,255,0.7)',fontSize:14,fontWeight:'600'}}>Skip</Text>
+        </TouchableOpacity>
+        <View style={{flex:1,alignItems:'center',justifyContent:'center',paddingHorizontal:32}}>
+          <Text style={{fontSize:80,marginBottom:24}}>{slide.icon}</Text>
+          <Text style={{fontSize:28,fontWeight:'900',color:'#fff',textAlign:'center',marginBottom:8}}>{slide.title}</Text>
+          <Text style={{fontSize:15,fontWeight:'600',color:'rgba(255,255,255,0.7)',textAlign:'center',marginBottom:24,letterSpacing:1,textTransform:'uppercase'}}>{slide.subtitle}</Text>
+          <Text style={{fontSize:16,color:'rgba(255,255,255,0.9)',textAlign:'center',lineHeight:26}}>{slide.desc}</Text>
+        </View>
+        <View style={{flexDirection:'row',justifyContent:'center',gap:8,marginBottom:24}}>
+          {SLIDES.map((_,i)=>(
+            <View key={i} style={{width:i===idx?24:8,height:8,borderRadius:4,
+              backgroundColor:i===idx?'#fff':'rgba(255,255,255,0.3)'}}/>))}
+        </View>
+        <View style={{paddingHorizontal:24,paddingBottom:32}}>
+          <TouchableOpacity onPress={()=>{if(isLast)onDone();else setIdx(i=>i+1);}}
+            style={{backgroundColor:'#fff',borderRadius:16,padding:18,alignItems:'center'}}>
+            <Text style={{fontSize:16,fontWeight:'800',color:slide.color}}>
+              {isLast?'Get Started':'Next'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </SafeAreaProvider>);
+}
+
 export default function App(){
   const [tab,setTab]=useState('home');
   const [habits,setHabits]=useState([]);
@@ -143,12 +187,15 @@ export default function App(){
   const [driveUser,setDriveUser]=useState(null);
   const [driveStatus,setDriveStatus]=useState('');
   const [adHocTasks,setAdHocTasks]=useState({}); // {dateStr:[{id,text,done}]}
-  const [license,setLicense]=useState(null); // null=loading, {type:'trial'|'paid',trialStart?}
+  const [license,setLicense]=useState(null);
+  const [showOnboarding,setShowOnboarding]=useState(false); // null=loading, {type:'trial'|'paid',trialStart?}
 
   useEffect(()=>{(async()=>{
     setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
     setAdHocTasks(await ld('pv-adhoc',{}));
+    const seen=await ld('pv-onboarding-seen',false);
+    if(!seen)setShowOnboarding(true);
     setLoaded(true);})();},[]);
 
   // ── License check on startup ──
@@ -762,7 +809,7 @@ export default function App(){
   const isExpired=!IS_TESTING&&license?.type==='trial'&&trialDaysLeft<=0;
 
   // Show loading screen while license loads
-  if(!license)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
+  if(showOnboarding)return<OnboardingScreen onDone={async()=>{await sv('pv-onboarding-seen',true);setShowOnboarding(false);}}/>;  if(!license)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
 
   // Show paywall if trial expired
   if(isExpired)return(
