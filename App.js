@@ -261,7 +261,7 @@ export default function App(){
   const purchaseApp=useCallback(async()=>{
     try{
       await RNIap.initConnection();
-      await RNIap.requestPurchase({skus:[PRODUCT_ID]});
+      await RNIap.requestPurchase({sku:PRODUCT_ID,andDangerouslyFinishTransactionAutomaticallyIOS:false});
     }catch(e){
       if(e?.code!=='E_USER_CANCELLED')Alert.alert('Purchase failed',e?.message||'Please try again.');
     }
