@@ -266,7 +266,7 @@ export default function App(){
       await RNIap.getProducts({ sku: [PRODUCT_ID] });
       
       // 2. Lansează cererea de cumpărare
-      await RNIap.requestPurchase({ sku: PRODUCT_ID });
+      await RNIap.requestPurchase({request:{google:{skus:[PRODUCT_ID]}},type:'inapp'});
     } catch (e) {
       if (e?.code !== 'E_USER_CANCELLED') {
         Alert.alert('Purchase failed', e?.message || 'Could not complete purchase. Please try again.');
