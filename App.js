@@ -258,14 +258,22 @@ export default function App(){
     await sv('pv-drive-token',null);
   },[]);
 
-  const purchaseApp=useCallback(async()=>{
-    try{
+    const purchaseApp = useCallback(async () => {
+    try {
       await RNIap.initConnection();
-      await RNIap.requestPurchase({sku:PRODUCT_ID,andDangerouslyFinishTransactionAutomaticallyIOS:false});
-    }catch(e){
-      if(e?.code!=='E_USER_CANCELLED')Alert.alert('Purchase failed',e?.message||'Please try again.');
+      
+      // 1. Preia mai întâi detaliile produsului de la Google Play (obligatoriu în versiunile noi)
+      await RNIap.getProducts({ sku: [PRODUCT_ID] });
+      
+      // 2. Lansează cererea de cumpărare
+      await RNIap.requestPurchase({ sku: PRODUCT_ID });
+    } catch (e) {
+      if (e?.code !== 'E_USER_CANCELLED') {
+        Alert.alert('Purchase failed', e?.message || 'Could not complete purchase. Please try again.');
+      }
     }
-  },[]);
+  }, []);
+
 
   const restorePurchases=useCallback(async()=>{
     try{
