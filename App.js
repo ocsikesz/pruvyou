@@ -10,6 +10,7 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import * as RNIap from 'react-native-iap';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 
@@ -28,7 +29,7 @@ const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googl
 const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.googleusercontent.com';
 const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
 const GOOGLE_WEB_SECRET=_GS.join('');
-const IS_TESTING=true; // Feature Toggle: set to false before production launch
+const IS_TESTING=false; // Production mode
 const TRIAL_DAYS=7; // Trial days (active when IS_TESTING=false)
 const PRODUCT_ID='pruvyou_lifetime';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
@@ -131,6 +132,10 @@ const TAB_ICONS={home:require('./assets/Home.png'),habits:require('./assets/Habi
 export default function App(){
   const [tab,setTab]=useState('home');
   const [habits,setHabits]=useState([]);
+  const [monthlyHabits,setMonthlyHabits]=useState({});
+  const [habitExceptions,setHabitExceptions]=useState({});
+  const [showMonthPlan,setShowMonthPlan]=useState(false);
+  const [planMonth,setPlanMonth]=useState(null);
   const [log,setLog]=useState({}); // {dateStr:{habitId:{done,minutes,notes}}}
   const [projects,setProjects]=useState([]);
   const [projLog,setProjLog]=useState({}); // {dateStr:{projId:{minutes,notes}}}
@@ -254,7 +259,39 @@ export default function App(){
   },[]);
 
   const purchaseApp=useCallback(async()=>{
-    Alert.alert('Get PruvYou','To purchase, find PruvYou on Google Play Store and tap "Buy".');
+    try{
+      await RNIap.initConnection();
+      await RNIap.requestPurchase({skus:[PRODUCT_ID]});
+    }catch(e){
+      if(e?.code!=='E_USER_CANCELLED')Alert.alert('Purchase failed',e?.message||'Please try again.');
+    }
+  },[]);
+
+  const restorePurchases=useCallback(async()=>{
+    try{
+      await RNIap.initConnection();
+      const purchases=await RNIap.getAvailablePurchases();
+      if(purchases?.some(p=>p.productId===PRODUCT_ID)){
+        await sv('pv-license',{type:'paid'});setLicense({type:'paid'});
+        Alert.alert('✅ Restored','Purchase restored!');
+      }else Alert.alert('Nothing to restore','No purchase found.');
+    }catch(e){Alert.alert('Restore failed',e?.message||'Error');}
+  },[]);
+
+  useEffect(()=>{
+    let sub,errSub;
+    (async()=>{try{
+      await RNIap.initConnection();
+      sub=RNIap.purchaseUpdatedListener(async(p)=>{
+        if(p?.productId===PRODUCT_ID){
+          try{await RNIap.finishTransaction({purchase:p,isConsumable:false});}catch(e){}
+          await sv('pv-license',{type:'paid'});setLicense({type:'paid'});
+          Alert.alert('🎉 Thank you!','PruvYou is now unlocked!');
+        }
+      });
+      errSub=RNIap.purchaseErrorListener((e)=>{if(e?.code!=='E_USER_CANCELLED')Alert.alert('Error',e?.message);});
+    }catch(e){}})();
+    return()=>{try{sub?.remove();errSub?.remove();}catch(e){}RNIap.endConnection().catch(()=>{});};
   },[]);
 
   const getFreshToken=useCallback(async()=>{
@@ -782,7 +819,7 @@ export default function App(){
         <Text style={{fontSize:18,fontWeight:'800',color:'#fff'}}>Unlock PruvYou — 4.99 €</Text>
         <Text style={{fontSize:11,color:'rgba(255,255,255,0.8)',marginTop:2}}>One-time purchase · no subscription</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={()=>Alert.alert('Restore purchase','Install PruvYou from Google Play Store and your purchase will be restored automatically.')}
+      <TouchableOpacity onPress={()=>restorePurchases()}
         style={{alignItems:'center',padding:12}}>
         <Text style={{fontSize:13,color:brand.blue,fontWeight:'600'}}>Restore purchase</Text>
       </TouchableOpacity>
