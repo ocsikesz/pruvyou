@@ -31,7 +31,7 @@ const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
 const GOOGLE_WEB_SECRET=_GS.join('');
 const IS_TESTING=true; // Set to false for production Play Store build
 const TRIAL_DAYS=7; // Trial days (active when IS_TESTING=false)
-const PRODUCT_ID='pruvyou_lifetime';
+const PRODUCT_ID='pruvyou_lifetime_v2';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const SHEETS_SCOPE='https://www.googleapis.com/auth/spreadsheets';
 const BACKUP_FILENAME='pruvyou_backup.json';
