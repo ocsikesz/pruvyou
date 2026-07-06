@@ -129,12 +129,101 @@ const TAB_ICONS={home:require('./assets/Home.png'),habits:require('./assets/Habi
   projects:require('./assets/Projects.png'),stats:require('./assets/Stats.png'),settings:require('./assets/Setting.png')};
 
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// ONBOARDING SCREEN
+// ═══════════════════════════════════════════════════════════════════
+const SLIDES=[
+  {icon:'✅',title:'Welcome to PruvYou',subtitle:'Prove Yourself Daily',desc:'Track your habits, manage projects, and log quick tasks — all in one place.',color:'#1A4F8A'},
+  {icon:'🎯',title:'Track Your Habits',subtitle:'Build consistency',desc:'Add daily or weekly habits — checkboxes or timers. Tap to mark done or open notes.',color:'#34C79F'},
+  {icon:'📁',title:'Manage Projects',subtitle:'Log time and tasks',desc:'Create projects, log time daily, manage tasks, and generate monthly reports.',color:'#9B59B6'},
+  {icon:'⚡',title:'Quick Tasks',subtitle:'Plan ahead',desc:'Add one-off tasks for any day with time and reminder notifications.',color:'#E67E22'},
+  {icon:'☁️',title:'Backup to Drive',subtitle:'Your data is safe',desc:'Connect Google Drive for auto-backup. Generate monthly and annual Sheets reports.',color:'#27AE60'},
+];
+function OnboardingScreen({onDone}){
+  const [idx,setIdx]=useState(0);
+  const slide=SLIDES[idx];const isLast=idx===SLIDES.length-1;
+  return(<SafeAreaProvider><SafeAreaView style={{flex:1,backgroundColor:slide.color}} edges={['top','left','right','bottom']}>
+    <TouchableOpacity onPress={onDone} style={{alignSelf:'flex-end',padding:20}}>
+      <Text style={{color:'rgba(255,255,255,0.7)',fontSize:14,fontWeight:'600'}}>Skip</Text>
+    </TouchableOpacity>
+    <View style={{flex:1,alignItems:'center',justifyContent:'center',paddingHorizontal:32}}>
+      <Text style={{fontSize:80,marginBottom:24}}>{slide.icon}</Text>
+      <Text style={{fontSize:28,fontWeight:'900',color:'#fff',textAlign:'center',marginBottom:8}}>{slide.title}</Text>
+      <Text style={{fontSize:14,fontWeight:'600',color:'rgba(255,255,255,0.7)',textAlign:'center',marginBottom:20,letterSpacing:1,textTransform:'uppercase'}}>{slide.subtitle}</Text>
+      <Text style={{fontSize:16,color:'rgba(255,255,255,0.9)',textAlign:'center',lineHeight:26}}>{slide.desc}</Text>
+    </View>
+    <View style={{flexDirection:'row',justifyContent:'center',gap:8,marginBottom:20}}>
+      {SLIDES.map((_,i)=>(<View key={i} style={{width:i===idx?24:8,height:8,borderRadius:4,backgroundColor:i===idx?'#fff':'rgba(255,255,255,0.3)'}}/>))}
+    </View>
+    <View style={{paddingHorizontal:24,paddingBottom:32}}>
+      <TouchableOpacity onPress={()=>{if(isLast)onDone();else setIdx(i=>i+1);}}
+        style={{backgroundColor:'#fff',borderRadius:16,padding:18,alignItems:'center'}}>
+        <Text style={{fontSize:16,fontWeight:'800',color:slide.color}}>{isLast?'Get Started':'Next'}</Text>
+      </TouchableOpacity>
+    </View>
+  </SafeAreaView></SafeAreaProvider>);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MONTH PLAN SCREEN
+// ═══════════════════════════════════════════════════════════════════
+const MNF_FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function MonthPlanScreen({habits,monthlyHabits,year,month,onSave,onClose}){
+  const key=year+'-'+String(month+1).padStart(2,'0');
+  const prevKey=month===0?(year-1)+'-12':year+'-'+String(month).padStart(2,'0');
+  const prevActive=monthlyHabits[prevKey]||habits.map(h=>h.id);
+  const [activeIds,setActiveIds]=useState(monthlyHabits[key]||prevActive);
+  const toggle=(id)=>setActiveIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  return(
+    <View style={{flex:1,backgroundColor:'rgba(0,0,0,0.5)',justifyContent:'flex-end'}}>
+      <View style={{backgroundColor:'#F5F7FA',borderTopLeftRadius:24,borderTopRightRadius:24,maxHeight:'90%'}}>
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',padding:20,borderBottomWidth:1,borderBottomColor:'#E0E4EA'}}>
+          <View>
+            <Text style={{fontSize:18,fontWeight:'800',color:'#1A2E45'}}>Plan Month</Text>
+            <Text style={{fontSize:13,color:'#5A7A8A'}}>{MNF_FULL[month]} {year}</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={{padding:8,borderRadius:8,backgroundColor:'#E0E4EA'}}>
+            <Text style={{fontSize:13,fontWeight:'700',color:'#5A7A8A'}}>✕ Close</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={{padding:16}} showsVerticalScrollIndicator={false}>
+          <Text style={{fontSize:11,fontWeight:'700',color:'#5A7A8A',letterSpacing:1,marginBottom:12}}>SELECT ACTIVE HABITS FOR THIS MONTH</Text>
+          {habits.map(h=>{
+            const active=activeIds.includes(h.id);
+            return(<TouchableOpacity key={h.id} onPress={()=>toggle(h.id)}
+              style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,marginBottom:8,
+                backgroundColor:active?'#fff':'#EEE',borderRadius:12,borderWidth:2,
+                borderColor:active?'#34C79F':'transparent',opacity:active?1:0.6}}>
+              <View style={{width:28,height:28,borderRadius:8,borderWidth:2,borderColor:active?'#34C79F':'#AAA',
+                backgroundColor:active?'#34C79F':'transparent',alignItems:'center',justifyContent:'center'}}>
+                {active&&<Text style={{color:'#fff',fontSize:14,fontWeight:'800'}}>✓</Text>}
+              </View>
+              <View style={{flex:1}}>
+                <Text style={{fontSize:14,fontWeight:'600',color:active?'#1A2E45':'#888'}}>{h.icon} {h.name}</Text>
+                <Text style={{fontSize:11,color:'#5A7A8A'}}>{h.frequency}{h.type==='timer'?' · '+fmtMins(h.targetMinutes):''}</Text>
+              </View>
+            </TouchableOpacity>);})}
+          {habits.length===0&&<Text style={{textAlign:'center',color:'#888',padding:20}}>No habits yet.</Text>}
+          <View style={{height:20}}/>
+        </ScrollView>
+        <View style={{padding:16,borderTopWidth:1,borderTopColor:'#E0E4EA',gap:8}}>
+          <Text style={{fontSize:11,color:'#5A7A8A',textAlign:'center'}}>{activeIds.length} of {habits.length} habits active for {MNF_FULL[month]}</Text>
+          <TouchableOpacity onPress={()=>onSave(activeIds)}
+            style={{padding:16,borderRadius:12,backgroundColor:'#1A4F8A',alignItems:'center'}}>
+            <Text style={{fontSize:15,fontWeight:'700',color:'#fff'}}>💾 Save Plan for {MNF_FULL[month]}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>);
+}
+
 export default function App(){
   const [tab,setTab]=useState('home');
   const [habits,setHabits]=useState([]);
   const [monthlyHabits,setMonthlyHabits]=useState({});
   const [habitExceptions,setHabitExceptions]=useState({});
   const [showMonthPlan,setShowMonthPlan]=useState(false);
+  const [showOnboarding,setShowOnboarding]=useState(false);
   const [planMonth,setPlanMonth]=useState(null);
   const [log,setLog]=useState({}); // {dateStr:{habitId:{done,minutes,notes}}}
   const [projects,setProjects]=useState([]);
@@ -807,7 +896,7 @@ export default function App(){
   const isExpired=!IS_TESTING&&license?.type==='trial'&&trialDaysLeft<=0;
 
   // Show loading screen while license loads
-  if(!license)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
+  if(showOnboarding)return<OnboardingScreen onDone={async()=>{await sv('pv-onboarding-seen',true);setShowOnboarding(false);}}/>;  if(!license)return<SafeAreaProvider><SafeAreaView style={s.root} edges={['top','left','right','bottom']}><View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text style={{fontSize:40}}>⏳</Text></View></SafeAreaView></SafeAreaProvider>;
 
   // Show paywall if trial expired
   if(isExpired)return(
