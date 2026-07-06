@@ -130,6 +130,80 @@ const TAB_ICONS={home:require('./assets/Home.png'),habits:require('./assets/Habi
 
 // ═══════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════
+// MONTH PLAN SCREEN
+// ═══════════════════════════════════════════════════════════════════
+function MonthPlanScreen({habits,monthlyHabits,year,month,onSave,onClose}){
+  const MNF=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const key=year+'-'+String(month+1).padStart(2,'0');
+  const prev=monthlyHabits[key];
+  // Default: inherit from previous month or all active
+  const prevKey=month===0?(year-1)+'-12':year+'-'+String(month).padStart(2,'0');
+  const prevActive=monthlyHabits[prevKey]||habits.map(h=>h.id);
+  const [activeIds,setActiveIds]=useState(prev||prevActive);
+  const CATS=require('./App').CATS||[];
+
+  const toggle=(id)=>setActiveIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+
+  return(
+    <View style={{flex:1,backgroundColor:'rgba(0,0,0,0.5)',justifyContent:'flex-end'}}>
+      <View style={{backgroundColor:'#F5F7FA',borderTopLeftRadius:24,borderTopRightRadius:24,maxHeight:'90%'}}>
+        {/* Header */}
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',
+          padding:20,borderBottomWidth:1,borderBottomColor:'#E0E4EA'}}>
+          <View>
+            <Text style={{fontSize:18,fontWeight:'800',color:'#1A2E45'}}>Plan Month</Text>
+            <Text style={{fontSize:13,color:'#5A7A8A'}}>{MNF[month]} {year}</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={{padding:8,borderRadius:8,backgroundColor:'#E0E4EA'}}>
+            <Text style={{fontSize:14,fontWeight:'700',color:'#5A7A8A'}}>✕ Close</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Habit list */}
+        <ScrollView style={{padding:16}} showsVerticalScrollIndicator={false}>
+          <Text style={{fontSize:11,fontWeight:'700',color:'#5A7A8A',letterSpacing:1,marginBottom:12}}>
+            SELECT ACTIVE HABITS FOR THIS MONTH
+          </Text>
+          {habits.map(h=>{
+            const active=activeIds.includes(h.id);
+            return(
+              <TouchableOpacity key={h.id} onPress={()=>toggle(h.id)}
+                style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,marginBottom:8,
+                  backgroundColor:active?'#fff':'#EEEEEE',borderRadius:12,
+                  borderWidth:2,borderColor:active?'#34C79F':'transparent',
+                  opacity:active?1:0.6}}>
+                <View style={{width:28,height:28,borderRadius:8,borderWidth:2,
+                  borderColor:active?'#34C79F':'#AAAAAA',
+                  backgroundColor:active?'#34C79F':'transparent',
+                  alignItems:'center',justifyContent:'center'}}>
+                  {active&&<Text style={{color:'#fff',fontSize:14,fontWeight:'800'}}>✓</Text>}
+                </View>
+                <View style={{flex:1}}>
+                  <Text style={{fontSize:14,fontWeight:'600',color:active?'#1A2E45':'#888'}}>{h.icon} {h.name}</Text>
+                  <Text style={{fontSize:11,color:'#5A7A8A'}}>{h.frequency}{h.type==='timer'?' · '+fmtMins(h.targetMinutes):''}</Text>
+                </View>
+              </TouchableOpacity>);
+          })}
+          {habits.length===0&&(
+            <Text style={{textAlign:'center',color:'#888',padding:20}}>No habits yet. Add habits first from the Habits tab.</Text>)}
+          <View style={{height:20}}/>
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={{padding:16,borderTopWidth:1,borderTopColor:'#E0E4EA',gap:8}}>
+          <Text style={{fontSize:11,color:'#5A7A8A',textAlign:'center'}}>
+            {activeIds.length} of {habits.length} habits active for {MNF[month]}
+          </Text>
+          <TouchableOpacity onPress={()=>onSave(activeIds)}
+            style={{padding:16,borderRadius:12,backgroundColor:'#1A4F8A',alignItems:'center'}}>
+            <Text style={{fontSize:15,fontWeight:'700',color:'#fff'}}>💾 Save Plan for {MNF[month]}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>);
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // ONBOARDING SCREEN
 // ═══════════════════════════════════════════════════════════════════
 const SLIDES=[
@@ -176,6 +250,9 @@ function OnboardingScreen({onDone}){
 export default function App(){
   const [tab,setTab]=useState('home');
   const [habits,setHabits]=useState([]);
+  const [monthlyHabits,setMonthlyHabits]=useState({}); // {YYYY-MM: [habitId, ...]}
+  const [showMonthPlan,setShowMonthPlan]=useState(false);
+  const [planMonth,setPlanMonth]=useState(null); // {year, month}
   const [log,setLog]=useState({}); // {dateStr:{habitId:{done,minutes,notes}}}
   const [projects,setProjects]=useState([]);
   const [projLog,setProjLog]=useState({}); // {dateStr:{projId:{minutes,notes}}}
@@ -195,6 +272,7 @@ export default function App(){
     setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
     setAdHocTasks(await ld('pv-adhoc',{}));
+    setMonthlyHabits(await ld('pv-monthly-habits',{}));
     const seen=await ld('pv-onboarding-seen',false);
     if(!seen)setShowOnboarding(true);
     setLoaded(true);})();},[]);
@@ -215,6 +293,7 @@ export default function App(){
     })();
   },[]);
   useEffect(()=>{if(loaded)sv('pv-habits',habits);},[habits,loaded]);
+  useEffect(()=>{if(loaded)sv('pv-monthly-habits',monthlyHabits);},[monthlyHabits,loaded]);
   useEffect(()=>{if(loaded)sv('pv-log',log);},[log,loaded]);
   useEffect(()=>{if(loaded)sv('pv-projects',projects);},[projects,loaded]);
   useEffect(()=>{if(loaded)sv('pv-projlog',projLog);},[projLog,loaded]);
@@ -261,6 +340,18 @@ export default function App(){
   const addHabit=(h)=>{const nh={...h,id:Date.now().toString()};setHabits(p=>[...p,nh]);setShowAdd(false);};
   const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));setEditHabit(null);};
   const deleteHabit=(id)=>{setHabits(p=>p.filter(x=>x.id!==id));};
+
+  // Get active habits for a month key (YYYY-MM)
+  // If no plan exists for the month, all habits are active (backwards compatible)
+  const getActiveHabits=(monthKey)=>{
+    if(!monthlyHabits[monthKey])return habits; // no plan = all active
+    return habits.filter(h=>monthlyHabits[monthKey].includes(h.id));
+  };
+
+  const saveMonthPlan=(year,month,activeIds)=>{
+    const key=year+'-'+String(month+1).padStart(2,'0');
+    setMonthlyHabits(p=>({...p,[key]:activeIds}));
+  };
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
@@ -906,7 +997,8 @@ export default function App(){
           <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain"/>
           <Text style={s.logoSub}>PROVE YOURSELF DAILY</Text>
         </View>
-        {tab==='home'&&<HomeTab habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
+        {tab==='home'&&<HomeTab habits={(()=>{const k=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');return monthlyHabits[k]?habits.filter(h=>monthlyHabits[k].includes(h.id)):habits;})()}
+          onPlanMonth={()=>{const n=new Date();setPlanMonth({year:n.getFullYear(),month:n.getMonth()});setShowMonthPlan(true);}} log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} todayStr={todayStr}
           setNote={setNote} log={log} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}/>}
         {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
@@ -998,7 +1090,7 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
 // ═══════════════════════════════════════════════════════════════════
 // HOME TAB
 // ═══════════════════════════════════════════════════════════════════
-function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay}){
+function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay,onPlanMonth}){
   const [selDay,setSelDay]=useState(todayStr); // which day strip is selected
   const [expandedHabit,setExpandedHabit]=useState(null);
 
