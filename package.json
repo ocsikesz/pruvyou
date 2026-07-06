@@ -23,7 +23,9 @@
     "expo-asset": "~12.0.13",
     "@react-native-google-signin/google-signin": "16.1.2",
     "expo-background-task": "~1.0.10",
-    "expo-task-manager": "~14.0.9"
+    "expo-task-manager": "~14.0.9",
+    "react-native-iap": "15.3.6",
+    "react-native-nitro-modules": "0.35.10"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0"

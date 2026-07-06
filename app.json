@@ -2,7 +2,7 @@
   "expo": {
     "name": "PruvYou",
     "slug": "pruvyou",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,7 +25,8 @@
         "RECEIVE_BOOT_COMPLETED",
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "com.android.vending.BILLING"
       ],
       "intentFilters": [
         {
