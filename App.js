@@ -29,7 +29,7 @@ const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googl
 const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.googleusercontent.com';
 const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
 const GOOGLE_WEB_SECRET=_GS.join('');
-const IS_TESTING=false; // Production mode
+const IS_TESTING=true; // Testing APK
 const TRIAL_DAYS=7; // Trial days (active when IS_TESTING=false)
 const PRODUCT_ID='pruvyou_lifetime_v2';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
