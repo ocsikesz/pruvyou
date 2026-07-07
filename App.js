@@ -1997,32 +1997,7 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
   return(<View>
     {/* Reminder */}
     <View style={s.statsCard}>
-      {/* Premium Section */}
-      {!isPaid&&<View style={[s.statsCard,{borderWidth:2,borderColor:brand.gold}]}>
-        <Text style={[s.statsTitle,{color:brand.gold}]}>⭐ PruvYou Premium</Text>
-        <Text style={{fontSize:12,color:C.textDim,marginBottom:12}}>
-          {(trialDaysLeft||0)>0?`${trialDaysLeft} days left in your free trial`:'Your free trial has ended'}
-        </Text>
-        {['Unlimited habits & projects','Google Drive backup','Monthly & annual reports','All future updates','No subscription ever'].map((f,i)=>(
-          <Text key={i} style={{fontSize:13,color:C.text,marginBottom:5}}>✅ {f}</Text>))}
-        <TouchableOpacity onPress={purchaseApp||(() => {})}
-          style={{marginTop:16,padding:16,borderRadius:12,backgroundColor:brand.gold,alignItems:'center'}}>
-          <Text style={{fontSize:16,fontWeight:'800',color:'#fff'}}>Unlock PruvYou — 4.99 €</Text>
-          <Text style={{fontSize:11,color:'rgba(255,255,255,0.8)',marginTop:2}}>One-time · no subscription</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={restorePurchases||(() => {})} style={{alignItems:'center',padding:10}}>
-          <Text style={{fontSize:12,color:brand.blue,fontWeight:'600'}}>Restore purchase</Text>
-        </TouchableOpacity>
-      </View>}
-      {isPaid&&<View style={[s.statsCard,{borderWidth:2,borderColor:'#34C79F',backgroundColor:'#E8F5E9'}]}>
-        <View style={{flexDirection:'row',alignItems:'center',gap:12}}>
-          <Text style={{fontSize:36}}>🏆</Text>
-          <View>
-            <Text style={{fontSize:16,fontWeight:'800',color:'#2E7D32'}}>Premium Unlocked!</Text>
-            <Text style={{fontSize:12,color:'#388E3C'}}>Thank you for supporting PruvYou</Text>
-          </View>
-        </View>
-      </View>}
+      {/* Premium Section - temporarily disabled for debugging */}
 
       <Text style={s.statsTitle}>🔔 Daily Reminder</Text>
       <Text style={{fontSize:11,color:C.textDim,marginBottom:14}}>Get one daily notification to remember to log your habits and tasks.</Text>
