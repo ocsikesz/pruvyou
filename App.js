@@ -187,6 +187,9 @@ export default function App(){
   const [driveUser,setDriveUser]=useState(null);
   const [driveStatus,setDriveStatus]=useState('');
   const [adHocTasks,setAdHocTasks]=useState({}); // {dateStr:[{id,text,done}]}
+  const [monthlyHabits,setMonthlyHabits]=useState({}); // {YYYY-MM:[habitId,...]}
+  const [showMonthPlan,setShowMonthPlan]=useState(false);
+  const [planMonth,setPlanMonth]=useState(null);
   const [license,setLicense]=useState(null);
   const [showOnboarding,setShowOnboarding]=useState(false); // null=loading, {type:'trial'|'paid',trialStart?}
 
@@ -194,6 +197,7 @@ export default function App(){
     setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
     setAdHocTasks(await ld('pv-adhoc',{}));
+    setMonthlyHabits(await ld('pv-monthly-habits',{}));
     const seen=await ld('pv-onboarding-seen',false);
     if(!seen)setShowOnboarding(true);
     setLoaded(true);})();},[]);
@@ -218,6 +222,7 @@ export default function App(){
   useEffect(()=>{if(loaded)sv('pv-projects',projects);},[projects,loaded]);
   useEffect(()=>{if(loaded)sv('pv-projlog',projLog);},[projLog,loaded]);
   useEffect(()=>{if(loaded)sv('pv-adhoc',adHocTasks);},[adHocTasks,loaded]);
+  useEffect(()=>{if(loaded)sv('pv-monthly-habits',monthlyHabits);},[monthlyHabits,loaded]);
 
   const toggleDay=useCallback((hid,ds)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     const cur=c[ds][hid];c[ds]={...c[ds],[hid]:{...cur,done:!cur?.done}};return c;});},[]);
@@ -260,6 +265,11 @@ export default function App(){
   const addHabit=(h)=>{const nh={...h,id:Date.now().toString()};setHabits(p=>[...p,nh]);setShowAdd(false);};
   const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));setEditHabit(null);};
   const deleteHabit=(id)=>{setHabits(p=>p.filter(x=>x.id!==id));};
+
+  const saveMonthPlan=(year,month,activeIds)=>{
+    const key=year+'-'+String(month+1).padStart(2,'0');
+    setMonthlyHabits(p=>({...p,[key]:activeIds}));
+  };
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
