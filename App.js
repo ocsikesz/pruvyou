@@ -389,19 +389,33 @@ export default function App(){
   },[]);
 
   useEffect(()=>{
-    let sub,errSub;
-    (async()=>{try{
-      await RNIap.initConnection();
-      sub=RNIap.purchaseUpdatedListener(async(p)=>{
-        if(p?.productId===PRODUCT_ID){
-          try{await RNIap.finishTransaction({purchase:p,isConsumable:false});}catch(e){}
-          await sv('pv-license',{type:'paid'});setLicense({type:'paid'});
-          Alert.alert('🏆 Premium Unlocked!','Welcome to PruvYou Premium! All features are now unlocked. Thank you for your support! 🎉');
-        }
-      });
-      errSub=RNIap.purchaseErrorListener((e)=>{if(e?.code!=='E_USER_CANCELLED')Alert.alert('Error',e?.message);});
-    }catch(e){}})();
-    return()=>{try{sub?.remove();errSub?.remove();}catch(e){}RNIap.endConnection().catch(()=>{});};
+    let sub,errSub,connected=false;
+    const setup=async()=>{
+      try{
+        await RNIap.initConnection();
+        connected=true;
+        sub=RNIap.purchaseUpdatedListener(async(p)=>{
+          try{
+            if(p?.productId===PRODUCT_ID){
+              try{await RNIap.finishTransaction({purchase:p,isConsumable:false});}catch(e){}
+              await sv('pv-license',{type:'paid'});setLicense({type:'paid'});
+              Alert.alert('🏆 Premium Unlocked!','Thank you for supporting PruvYou! 🎉');
+            }
+          }catch(e){}
+        });
+        errSub=RNIap.purchaseErrorListener((e)=>{
+          try{if(e?.code!=='E_USER_CANCELLED')Alert.alert('Error',e?.message||'Purchase error');}catch(e2){}
+        });
+      }catch(e){
+        // IAP not available (sideloaded APK or no Play Store)
+      }
+    };
+    setup();
+    return()=>{
+      try{sub?.remove();}catch(e){}
+      try{errSub?.remove();}catch(e){}
+      if(connected)RNIap.endConnection().catch(()=>{});
+    };
   },[]);
 
   const getFreshToken=useCallback(async()=>{
