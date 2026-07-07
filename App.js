@@ -304,6 +304,10 @@ export default function App(){
     Alert.alert('Get PruvYou','To purchase, find PruvYou on Google Play Store and tap "Buy".');
   },[]);
 
+  const restorePurchases=useCallback(async()=>{
+    Alert.alert('Restore purchase','If you previously purchased PruvYou, reinstall from Google Play Store to restore access.');
+  },[]);
+
   const getFreshToken=useCallback(async()=>{
     try{
       const tokens=await GoogleSignin.getTokens();
