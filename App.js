@@ -172,6 +172,56 @@ function OnboardingScreen({onDone}){
     </SafeAreaProvider>);
 }
 
+const MNF_FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function MonthPlanScreen({habits,monthlyHabits,year,month,onSave,onClose}){
+  const key=year+'-'+String(month+1).padStart(2,'0');
+  const prevKey=month===0?(year-1)+'-12':year+'-'+String(month).padStart(2,'0');
+  const prevActive=monthlyHabits[prevKey]||habits.map(h=>h.id);
+  const [activeIds,setActiveIds]=useState(monthlyHabits[key]||prevActive);
+  const toggle=(id)=>setActiveIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  return(
+    <View style={{flex:1,backgroundColor:'rgba(0,0,0,0.5)',justifyContent:'flex-end'}}>
+      <View style={{backgroundColor:'#F5F7FA',borderTopLeftRadius:24,borderTopRightRadius:24,maxHeight:'90%'}}>
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',padding:20,borderBottomWidth:1,borderBottomColor:'#E0E4EA'}}>
+          <View>
+            <Text style={{fontSize:18,fontWeight:'800',color:'#1A2E45'}}>Plan Month</Text>
+            <Text style={{fontSize:13,color:'#5A7A8A'}}>{MNF_FULL[month]} {year}</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={{padding:8,borderRadius:8,backgroundColor:'#E0E4EA'}}>
+            <Text style={{fontSize:13,fontWeight:'700',color:'#5A7A8A'}}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={{padding:16}} showsVerticalScrollIndicator={false}>
+          <Text style={{fontSize:11,fontWeight:'700',color:'#5A7A8A',letterSpacing:1,marginBottom:12}}>SELECT ACTIVE HABITS FOR THIS MONTH</Text>
+          {habits.map(h=>{
+            const active=activeIds.includes(h.id);
+            return(<TouchableOpacity key={h.id} onPress={()=>toggle(h.id)}
+              style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,marginBottom:8,
+                backgroundColor:active?'#fff':'#EEE',borderRadius:12,borderWidth:2,
+                borderColor:active?'#34C79F':'transparent',opacity:active?1:0.6}}>
+              <View style={{width:28,height:28,borderRadius:8,borderWidth:2,borderColor:active?'#34C79F':'#AAA',
+                backgroundColor:active?'#34C79F':'transparent',alignItems:'center',justifyContent:'center'}}>
+                {active&&<Text style={{color:'#fff',fontSize:14,fontWeight:'800'}}>✓</Text>}
+              </View>
+              <View style={{flex:1}}>
+                <Text style={{fontSize:14,fontWeight:'600',color:active?'#1A2E45':'#888'}}>{h.icon} {h.name}</Text>
+                <Text style={{fontSize:11,color:'#5A7A8A'}}>{h.frequency}{h.type==='timer'?' · '+fmtMins(h.targetMinutes):''}</Text>
+              </View>
+            </TouchableOpacity>);})}
+          {habits.length===0&&<Text style={{textAlign:'center',color:'#888',padding:20}}>No habits yet.</Text>}
+          <View style={{height:20}}/>
+        </ScrollView>
+        <View style={{padding:16,borderTopWidth:1,borderTopColor:'#E0E4EA',gap:8}}>
+          <Text style={{fontSize:11,color:'#5A7A8A',textAlign:'center'}}>{activeIds.length} of {habits.length} habits active for {MNF_FULL[month]}</Text>
+          <TouchableOpacity onPress={()=>onSave(activeIds)}
+            style={{padding:16,borderRadius:12,backgroundColor:'#1A4F8A',alignItems:'center'}}>
+            <Text style={{fontSize:15,fontWeight:'700',color:'#fff'}}>💾 Save Plan for {MNF_FULL[month]}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>);
+}
+
 export default function App(){
   const [tab,setTab]=useState('home');
   const [habits,setHabits]=useState([]);
