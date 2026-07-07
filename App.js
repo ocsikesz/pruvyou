@@ -914,9 +914,11 @@ export default function App(){
           <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain"/>
           <Text style={s.logoSub}>PROVE YOURSELF DAILY</Text>
         </View>
-        {tab==='home'&&<HomeTab habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
+        {tab==='home'&&<HomeTab habits={(()=>{const k=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');return monthlyHabits[k]?habits.filter(h=>monthlyHabits[k].includes(h.id)):habits;})()}
+          log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} todayStr={todayStr}
-          setNote={setNote} log={log} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}/>}
+          setNote={setNote} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}
+          onPlanMonth={()=>{const n=new Date();setPlanMonth({year:n.getFullYear(),month:n.getMonth()});setShowMonthPlan(true);}}/>}
         {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
           addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit}
           updateHabit={updateHabit} deleteHabit={deleteHabit}
@@ -930,6 +932,16 @@ export default function App(){
           setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport} generateFullYear={generateFullYear} purchaseApp={purchaseApp} restorePurchases={restorePurchases} isPaid={isPaid} trialDaysLeft={trialDaysLeft}/>}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Month Plan Modal */}
+      {showMonthPlan&&planMonth&&(
+        <View style={{position:'absolute',top:0,left:0,right:0,bottom:0,zIndex:200}}>
+          <MonthPlanScreen
+            habits={habits} monthlyHabits={monthlyHabits}
+            year={planMonth.year} month={planMonth.month}
+            onSave={(ids)=>{saveMonthPlan(planMonth.year,planMonth.month,ids);setShowMonthPlan(false);Alert.alert('✅ Saved','Habit plan saved for '+MNF_FULL[planMonth.month]+'!');}}
+            onClose={()=>setShowMonthPlan(false)}/>
+        </View>)}
 
       {/* Tab Bar with PNG icons */}
       <View style={s.tabBar}>
@@ -1006,7 +1018,7 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
 // ═══════════════════════════════════════════════════════════════════
 // HOME TAB
 // ═══════════════════════════════════════════════════════════════════
-function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay}){
+function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay,onPlanMonth}){
   const [selDay,setSelDay]=useState(todayStr); // which day strip is selected
   const [expandedHabit,setExpandedHabit]=useState(null);
 
@@ -1028,6 +1040,14 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
     <Text style={s.tagline}>Track. <Text style={{color:brand.green}}>Achieve.</Text> <Text style={{color:brand.gold}}>Triumph.</Text></Text>
 
     {/* Week nav */}
+    {onPlanMonth&&<View style={{paddingHorizontal:16,marginBottom:8}}>
+      <TouchableOpacity onPress={onPlanMonth}
+        style={{flexDirection:'row',alignItems:'center',gap:6,alignSelf:'flex-start',
+          paddingHorizontal:12,paddingVertical:7,borderRadius:10,
+          backgroundColor:brand.blue+'15',borderWidth:1,borderColor:brand.blue+'40'}}>
+        <Text style={{fontSize:12,fontWeight:'700',color:brand.blue}}>📅 Plan Month</Text>
+      </TouchableOpacity>
+    </View>}
     <View style={s.weekNav}>
       <TouchableOpacity onPress={()=>{setWeekOff(w=>w-1);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
       <Text style={s.weekLabel}>{weekOff===0?'This week':
