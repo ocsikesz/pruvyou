@@ -243,6 +243,8 @@ export default function App(){
     setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
     setAdHocTasks(await ld('pv-adhoc',{}));
+    setMonthlyHabits(await ld('pv-monthly-habits',{}));
+    setHabitExceptions(await ld('pv-habit-exceptions',{}));
     setLoaded(true);})();},[]);
 
   // ── License check on startup ──
@@ -307,6 +309,17 @@ export default function App(){
   const addHabit=(h)=>{const nh={...h,id:Date.now().toString()};setHabits(p=>[...p,nh]);setShowAdd(false);};
   const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));setEditHabit(null);};
   const deleteHabit=(id)=>{setHabits(p=>p.filter(x=>x.id!==id));};
+
+  const saveMonthPlan=(year,month,activeIds)=>{
+    const key=year+'-'+String(month+1).padStart(2,'0');
+    setMonthlyHabits(p=>({...p,[key]:activeIds}));
+  };
+  const addHabitException=(dateStr,habitId)=>{
+    setHabitExceptions(p=>({...p,[dateStr]:[...new Set([...(p[dateStr]||[]),habitId])]}));
+  };
+  const removeHabitException=(dateStr,habitId)=>{
+    setHabitExceptions(p=>({...p,[dateStr]:(p[dateStr]||[]).filter(id=>id!==habitId)}));
+  };
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
@@ -937,7 +950,7 @@ export default function App(){
           <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain"/>
           <Text style={s.logoSub}>PROVE YOURSELF DAILY</Text>
         </View>
-        {tab==='home'&&<HomeTab habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
+        {tab==='home'&&<HomeTab allHabits={habits} habitExceptions={habitExceptions} addHabitException={addHabitException} removeHabitException={removeHabitException} onPlanMonth={()=>{const n=new Date();setPlanMonth({year:n.getFullYear(),month:n.getMonth()});setShowMonthPlan(true);}} habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} todayStr={todayStr}
           setNote={setNote} log={log} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}/>}
         {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
@@ -972,7 +985,7 @@ export default function App(){
 // ═══════════════════════════════════════════════════════════════════
 // HABIT DAY PANEL — inline expand card for habit log
 // ═══════════════════════════════════════════════════════════════════
-function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,color,bg,border}){
+function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,color,bg,border,isException,onAddException,onRemoveException}){
   const entry=log[ds]?.[h.id];
   const done=!!entry?.done;
   const curMins=entry?.minutes||0;
@@ -1023,6 +1036,14 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
           style={{padding:10,borderRadius:8,backgroundColor:color,alignItems:'center',marginBottom:4}}>
           <Text style={{fontSize:12,fontWeight:'700',color:'#fff'}}>Save Note</Text>
         </TouchableOpacity>)}
+      {h.frequency==='weekly'&&onAddException&&(
+        <TouchableOpacity onPress={isException?onRemoveException:onAddException}
+          style={{marginTop:8,paddingVertical:9,borderRadius:8,alignItems:'center',
+            backgroundColor:isException?'#FEE':'#F0FFF4',borderWidth:1,borderColor:isException?'#FCC':'#C8E6C9'}}>
+          <Text style={{fontSize:12,fontWeight:'600',color:isException?'#C44':'#2E7D32'}}>
+            {isException?'✕ Remove from this day':'+ Add for this day only'}
+          </Text>
+        </TouchableOpacity>)}
     </View>);
 }
 
@@ -1038,9 +1059,11 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
   const isToday=selDay===todayStr;
 
   // Habits for selected day
-  const selHabits=habits.filter(h=>
+  const dayExceptions=habitExceptions?.[selDay]||[];
+  const selHabits=(allHabits||habits).filter(h=>
     h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(selDayIdx))||
-    (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)
+    (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)||
+    dayExceptions.includes(h.id)
   );
   const doneCount=selHabits.filter(h=>log[selDay]?.[h.id]?.done).length;
 
@@ -1111,7 +1134,10 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
         </View>
         {isExp&&<HabitDayPanel h={h} ds={selDay} log={log} toggleDay={toggleDay}
           addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} setNote={setNote}
-          color={color} bg={cat?.bg} border={cat?.border}/>}
+          color={color} bg={cat?.bg} border={cat?.border}
+          isException={habitExceptions?.[selDay]?.includes(h.id)||false}
+          onAddException={()=>addHabitException(selDay,h.id)}
+          onRemoveException={()=>removeHabitException(selDay,h.id)}/>}
       </View>);
     })}
 
