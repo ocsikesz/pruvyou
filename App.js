@@ -2001,16 +2001,16 @@ function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,s
       {!isPaid&&<View style={[s.statsCard,{borderWidth:2,borderColor:brand.gold}]}>
         <Text style={[s.statsTitle,{color:brand.gold}]}>⭐ PruvYou Premium</Text>
         <Text style={{fontSize:12,color:C.textDim,marginBottom:12}}>
-          {trialDaysLeft>0?`${trialDaysLeft} days left in your free trial`:'Your free trial has ended'}
+          {(trialDaysLeft||0)>0?`${trialDaysLeft} days left in your free trial`:'Your free trial has ended'}
         </Text>
         {['Unlimited habits & projects','Google Drive backup','Monthly & annual reports','All future updates','No subscription ever'].map((f,i)=>(
           <Text key={i} style={{fontSize:13,color:C.text,marginBottom:5}}>✅ {f}</Text>))}
-        <TouchableOpacity onPress={purchaseApp}
+        <TouchableOpacity onPress={purchaseApp||(() => {})}
           style={{marginTop:16,padding:16,borderRadius:12,backgroundColor:brand.gold,alignItems:'center'}}>
           <Text style={{fontSize:16,fontWeight:'800',color:'#fff'}}>Unlock PruvYou — 4.99 €</Text>
           <Text style={{fontSize:11,color:'rgba(255,255,255,0.8)',marginTop:2}}>One-time · no subscription</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={restorePurchases} style={{alignItems:'center',padding:10}}>
+        <TouchableOpacity onPress={restorePurchases||(() => {})} style={{alignItems:'center',padding:10}}>
           <Text style={{fontSize:12,color:brand.blue,fontWeight:'600'}}>Restore purchase</Text>
         </TouchableOpacity>
       </View>}
