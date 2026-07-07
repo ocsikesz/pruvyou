@@ -10,7 +10,6 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import * as RNIap from 'react-native-iap';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 
@@ -29,9 +28,9 @@ const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googl
 const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.googleusercontent.com';
 const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
 const GOOGLE_WEB_SECRET=_GS.join('');
-const IS_TESTING=false; // Production mode
-const TRIAL_DAYS=7; // Trial days (active when IS_TESTING=false)
-const PRODUCT_ID='pruvyou_lifetime_v2';
+const IS_TESTING=true; // Feature Toggle: set to false before production launch
+const TRIAL_DAYS=30; // Will change to 7 before production // Trial days (active when IS_TESTING=false)
+const PRODUCT_ID='pruvyou_lifetime';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const SHEETS_SCOPE='https://www.googleapis.com/auth/spreadsheets';
 const BACKUP_FILENAME='pruvyou_backup.json';
@@ -133,98 +132,49 @@ const TAB_ICONS={home:require('./assets/Home.png'),habits:require('./assets/Habi
 // ONBOARDING SCREEN
 // ═══════════════════════════════════════════════════════════════════
 const SLIDES=[
-  {icon:'✅',title:'Welcome to PruvYou',subtitle:'Prove Yourself Daily',desc:'Track your habits, manage projects, and log quick tasks — all in one place.',color:'#1A4F8A'},
-  {icon:'🎯',title:'Track Your Habits',subtitle:'Build consistency',desc:'Add daily or weekly habits — checkboxes or timers. Tap to mark done or open notes.',color:'#34C79F'},
-  {icon:'📁',title:'Manage Projects',subtitle:'Log time and tasks',desc:'Create projects, log time daily, manage tasks, and generate monthly reports.',color:'#9B59B6'},
-  {icon:'⚡',title:'Quick Tasks',subtitle:'Plan ahead',desc:'Add one-off tasks for any day with time and reminder notifications.',color:'#E67E22'},
-  {icon:'☁️',title:'Backup to Drive',subtitle:'Your data is safe',desc:'Connect Google Drive for auto-backup. Generate monthly and annual Sheets reports.',color:'#27AE60'},
+  {icon:'✅',title:'Welcome to PruvYou',subtitle:'Prove Yourself Daily',desc:'Track your habits, manage projects, and log quick tasks — all in one place. Your personal productivity companion.',color:'#1A4F8A'},
+  {icon:'🎯',title:'Track Your Habits',subtitle:'Build consistency',desc:'Add daily or weekly habits — checkboxes or timers. Tap the checkbox to mark done, tap the middle to add notes. See your progress on the home screen.',color:'#34C79F'},
+  {icon:'📁',title:'Manage Projects',subtitle:'Log time and tasks',desc:'Create projects with start and end dates. Log time daily, add tasks, and carry over unfinished work. Generate monthly reports to Google Sheets.',color:'#9B59B6'},
+  {icon:'⚡',title:'Quick Tasks',subtitle:'Plan ahead',desc:'Add one-off tasks for today, tomorrow or any future date. Set a time and reminder notification so you never miss an important appointment.',color:'#E67E22'},
+  {icon:'☁️',title:'Backup to Drive',subtitle:'Your data is safe',desc:'Connect Google Drive to auto-backup every time you open the app. Generate monthly and annual Google Sheets reports with one tap.',color:'#27AE60'},
 ];
+
 function OnboardingScreen({onDone}){
   const [idx,setIdx]=useState(0);
-  const slide=SLIDES[idx];const isLast=idx===SLIDES.length-1;
-  return(<SafeAreaProvider><SafeAreaView style={{flex:1,backgroundColor:slide.color}} edges={['top','left','right','bottom']}>
-    <TouchableOpacity onPress={onDone} style={{alignSelf:'flex-end',padding:20}}>
-      <Text style={{color:'rgba(255,255,255,0.7)',fontSize:14,fontWeight:'600'}}>Skip</Text>
-    </TouchableOpacity>
-    <View style={{flex:1,alignItems:'center',justifyContent:'center',paddingHorizontal:32}}>
-      <Text style={{fontSize:80,marginBottom:24}}>{slide.icon}</Text>
-      <Text style={{fontSize:28,fontWeight:'900',color:'#fff',textAlign:'center',marginBottom:8}}>{slide.title}</Text>
-      <Text style={{fontSize:14,fontWeight:'600',color:'rgba(255,255,255,0.7)',textAlign:'center',marginBottom:20,letterSpacing:1,textTransform:'uppercase'}}>{slide.subtitle}</Text>
-      <Text style={{fontSize:16,color:'rgba(255,255,255,0.9)',textAlign:'center',lineHeight:26}}>{slide.desc}</Text>
-    </View>
-    <View style={{flexDirection:'row',justifyContent:'center',gap:8,marginBottom:20}}>
-      {SLIDES.map((_,i)=>(<View key={i} style={{width:i===idx?24:8,height:8,borderRadius:4,backgroundColor:i===idx?'#fff':'rgba(255,255,255,0.3)'}}/>))}
-    </View>
-    <View style={{paddingHorizontal:24,paddingBottom:32}}>
-      <TouchableOpacity onPress={()=>{if(isLast)onDone();else setIdx(i=>i+1);}}
-        style={{backgroundColor:'#fff',borderRadius:16,padding:18,alignItems:'center'}}>
-        <Text style={{fontSize:16,fontWeight:'800',color:slide.color}}>{isLast?'Get Started':'Next'}</Text>
-      </TouchableOpacity>
-    </View>
-  </SafeAreaView></SafeAreaProvider>);
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// MONTH PLAN SCREEN
-// ═══════════════════════════════════════════════════════════════════
-const MNF_FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
-function MonthPlanScreen({habits,monthlyHabits,year,month,onSave,onClose}){
-  const key=year+'-'+String(month+1).padStart(2,'0');
-  const prevKey=month===0?(year-1)+'-12':year+'-'+String(month).padStart(2,'0');
-  const prevActive=monthlyHabits[prevKey]||habits.map(h=>h.id);
-  const [activeIds,setActiveIds]=useState(monthlyHabits[key]||prevActive);
-  const toggle=(id)=>setActiveIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  const slide=SLIDES[idx];
+  const isLast=idx===SLIDES.length-1;
   return(
-    <View style={{flex:1,backgroundColor:'rgba(0,0,0,0.5)',justifyContent:'flex-end'}}>
-      <View style={{backgroundColor:'#F5F7FA',borderTopLeftRadius:24,borderTopRightRadius:24,maxHeight:'90%'}}>
-        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',padding:20,borderBottomWidth:1,borderBottomColor:'#E0E4EA'}}>
-          <View>
-            <Text style={{fontSize:18,fontWeight:'800',color:'#1A2E45'}}>Plan Month</Text>
-            <Text style={{fontSize:13,color:'#5A7A8A'}}>{MNF_FULL[month]} {year}</Text>
-          </View>
-          <TouchableOpacity onPress={onClose} style={{padding:8,borderRadius:8,backgroundColor:'#E0E4EA'}}>
-            <Text style={{fontSize:13,fontWeight:'700',color:'#5A7A8A'}}>✕ Close</Text>
+    <SafeAreaProvider>
+      <SafeAreaView style={{flex:1,backgroundColor:slide.color}} edges={['top','left','right','bottom']}>
+        <TouchableOpacity onPress={onDone} style={{alignSelf:'flex-end',padding:20}}>
+          <Text style={{color:'rgba(255,255,255,0.7)',fontSize:14,fontWeight:'600'}}>Skip</Text>
+        </TouchableOpacity>
+        <View style={{flex:1,alignItems:'center',justifyContent:'center',paddingHorizontal:32}}>
+          <Text style={{fontSize:80,marginBottom:24}}>{slide.icon}</Text>
+          <Text style={{fontSize:28,fontWeight:'900',color:'#fff',textAlign:'center',marginBottom:8}}>{slide.title}</Text>
+          <Text style={{fontSize:15,fontWeight:'600',color:'rgba(255,255,255,0.7)',textAlign:'center',marginBottom:24,letterSpacing:1,textTransform:'uppercase'}}>{slide.subtitle}</Text>
+          <Text style={{fontSize:16,color:'rgba(255,255,255,0.9)',textAlign:'center',lineHeight:26}}>{slide.desc}</Text>
+        </View>
+        <View style={{flexDirection:'row',justifyContent:'center',gap:8,marginBottom:24}}>
+          {SLIDES.map((_,i)=>(
+            <View key={i} style={{width:i===idx?24:8,height:8,borderRadius:4,
+              backgroundColor:i===idx?'#fff':'rgba(255,255,255,0.3)'}}/>))}
+        </View>
+        <View style={{paddingHorizontal:24,paddingBottom:32}}>
+          <TouchableOpacity onPress={()=>{if(isLast)onDone();else setIdx(i=>i+1);}}
+            style={{backgroundColor:'#fff',borderRadius:16,padding:18,alignItems:'center'}}>
+            <Text style={{fontSize:16,fontWeight:'800',color:slide.color}}>
+              {isLast?'Get Started':'Next'}
+            </Text>
           </TouchableOpacity>
         </View>
-        <ScrollView style={{padding:16}} showsVerticalScrollIndicator={false}>
-          <Text style={{fontSize:11,fontWeight:'700',color:'#5A7A8A',letterSpacing:1,marginBottom:12}}>SELECT ACTIVE HABITS FOR THIS MONTH</Text>
-          {habits.map(h=>{
-            const active=activeIds.includes(h.id);
-            return(<TouchableOpacity key={h.id} onPress={()=>toggle(h.id)}
-              style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,marginBottom:8,
-                backgroundColor:active?'#fff':'#EEE',borderRadius:12,borderWidth:2,
-                borderColor:active?'#34C79F':'transparent',opacity:active?1:0.6}}>
-              <View style={{width:28,height:28,borderRadius:8,borderWidth:2,borderColor:active?'#34C79F':'#AAA',
-                backgroundColor:active?'#34C79F':'transparent',alignItems:'center',justifyContent:'center'}}>
-                {active&&<Text style={{color:'#fff',fontSize:14,fontWeight:'800'}}>✓</Text>}
-              </View>
-              <View style={{flex:1}}>
-                <Text style={{fontSize:14,fontWeight:'600',color:active?'#1A2E45':'#888'}}>{h.icon} {h.name}</Text>
-                <Text style={{fontSize:11,color:'#5A7A8A'}}>{h.frequency}{h.type==='timer'?' · '+fmtMins(h.targetMinutes):''}</Text>
-              </View>
-            </TouchableOpacity>);})}
-          {habits.length===0&&<Text style={{textAlign:'center',color:'#888',padding:20}}>No habits yet.</Text>}
-          <View style={{height:20}}/>
-        </ScrollView>
-        <View style={{padding:16,borderTopWidth:1,borderTopColor:'#E0E4EA',gap:8}}>
-          <Text style={{fontSize:11,color:'#5A7A8A',textAlign:'center'}}>{activeIds.length} of {habits.length} habits active for {MNF_FULL[month]}</Text>
-          <TouchableOpacity onPress={()=>onSave(activeIds)}
-            style={{padding:16,borderRadius:12,backgroundColor:'#1A4F8A',alignItems:'center'}}>
-            <Text style={{fontSize:15,fontWeight:'700',color:'#fff'}}>💾 Save Plan for {MNF_FULL[month]}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>);
+      </SafeAreaView>
+    </SafeAreaProvider>);
 }
 
 export default function App(){
   const [tab,setTab]=useState('home');
   const [habits,setHabits]=useState([]);
-  const [monthlyHabits,setMonthlyHabits]=useState({});
-  const [habitExceptions,setHabitExceptions]=useState({});
-  const [showMonthPlan,setShowMonthPlan]=useState(false);
-  const [showOnboarding,setShowOnboarding]=useState(false);
-  const [planMonth,setPlanMonth]=useState(null);
   const [log,setLog]=useState({}); // {dateStr:{habitId:{done,minutes,notes}}}
   const [projects,setProjects]=useState([]);
   const [projLog,setProjLog]=useState({}); // {dateStr:{projId:{minutes,notes}}}
@@ -237,14 +187,15 @@ export default function App(){
   const [driveUser,setDriveUser]=useState(null);
   const [driveStatus,setDriveStatus]=useState('');
   const [adHocTasks,setAdHocTasks]=useState({}); // {dateStr:[{id,text,done}]}
-  const [license,setLicense]=useState(null); // null=loading, {type:'trial'|'paid',trialStart?}
+  const [license,setLicense]=useState(null);
+  const [showOnboarding,setShowOnboarding]=useState(false); // null=loading, {type:'trial'|'paid',trialStart?}
 
   useEffect(()=>{(async()=>{
     setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
     setAdHocTasks(await ld('pv-adhoc',{}));
-    setMonthlyHabits(await ld('pv-monthly-habits',{}));
-    setHabitExceptions(await ld('pv-habit-exceptions',{}));
+    const seen=await ld('pv-onboarding-seen',false);
+    if(!seen)setShowOnboarding(true);
     setLoaded(true);})();},[]);
 
   // ── License check on startup ──
@@ -309,17 +260,6 @@ export default function App(){
   const addHabit=(h)=>{const nh={...h,id:Date.now().toString()};setHabits(p=>[...p,nh]);setShowAdd(false);};
   const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));setEditHabit(null);};
   const deleteHabit=(id)=>{setHabits(p=>p.filter(x=>x.id!==id));};
-
-  const saveMonthPlan=(year,month,activeIds)=>{
-    const key=year+'-'+String(month+1).padStart(2,'0');
-    setMonthlyHabits(p=>({...p,[key]:activeIds}));
-  };
-  const addHabitException=(dateStr,habitId)=>{
-    setHabitExceptions(p=>({...p,[dateStr]:[...new Set([...(p[dateStr]||[]),habitId])]}));
-  };
-  const removeHabitException=(dateStr,habitId)=>{
-    setHabitExceptions(p=>({...p,[dateStr]:(p[dateStr]||[]).filter(id=>id!==habitId)}));
-  };
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
 
@@ -360,62 +300,8 @@ export default function App(){
     await sv('pv-drive-token',null);
   },[]);
 
-    const purchaseApp = useCallback(async () => {
-    try {
-      await RNIap.initConnection();
-      
-      // 1. Preia mai întâi detaliile produsului de la Google Play (obligatoriu în versiunile noi)
-      await RNIap.getProducts({ sku: [PRODUCT_ID] });
-      
-      // 2. Lansează cererea de cumpărare
-      await RNIap.requestPurchase({request:{google:{skus:[PRODUCT_ID]}},type:'inapp'});
-    } catch (e) {
-      if (e?.code !== 'E_USER_CANCELLED') {
-        Alert.alert('Purchase failed', e?.message || 'Could not complete purchase. Please try again.');
-      }
-    }
-  }, []);
-
-
-  const restorePurchases=useCallback(async()=>{
-    try{
-      await RNIap.initConnection();
-      const purchases=await RNIap.getAvailablePurchases();
-      if(purchases?.some(p=>p.productId===PRODUCT_ID)){
-        await sv('pv-license',{type:'paid'});setLicense({type:'paid'});
-        Alert.alert('✅ Restored','Purchase restored!');
-      }else Alert.alert('Nothing to restore','No purchase found.');
-    }catch(e){Alert.alert('Restore failed',e?.message||'Error');}
-  },[]);
-
-  useEffect(()=>{
-    let sub,errSub,connected=false;
-    const setup=async()=>{
-      try{
-        await RNIap.initConnection();
-        connected=true;
-        sub=RNIap.purchaseUpdatedListener(async(p)=>{
-          try{
-            if(p?.productId===PRODUCT_ID){
-              try{await RNIap.finishTransaction({purchase:p,isConsumable:false});}catch(e){}
-              await sv('pv-license',{type:'paid'});setLicense({type:'paid'});
-              Alert.alert('🏆 Premium Unlocked!','Thank you for supporting PruvYou! 🎉');
-            }
-          }catch(e){}
-        });
-        errSub=RNIap.purchaseErrorListener((e)=>{
-          try{if(e?.code!=='E_USER_CANCELLED')Alert.alert('Error',e?.message||'Purchase error');}catch(e2){}
-        });
-      }catch(e){
-        // IAP not available (sideloaded APK or no Play Store)
-      }
-    };
-    setup();
-    return()=>{
-      try{sub?.remove();}catch(e){}
-      try{errSub?.remove();}catch(e){}
-      if(connected)RNIap.endConnection().catch(()=>{});
-    };
+  const purchaseApp=useCallback(async()=>{
+    Alert.alert('Get PruvYou','To purchase, find PruvYou on Google Play Store and tap "Buy".');
   },[]);
 
   const getFreshToken=useCallback(async()=>{
@@ -943,7 +829,7 @@ export default function App(){
         <Text style={{fontSize:18,fontWeight:'800',color:'#fff'}}>Unlock PruvYou — 4.99 €</Text>
         <Text style={{fontSize:11,color:'rgba(255,255,255,0.8)',marginTop:2}}>One-time purchase · no subscription</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={()=>restorePurchases()}
+      <TouchableOpacity onPress={()=>Alert.alert('Restore purchase','Install PruvYou from Google Play Store and your purchase will be restored automatically.')}
         style={{alignItems:'center',padding:12}}>
         <Text style={{fontSize:13,color:brand.blue,fontWeight:'600'}}>Restore purchase</Text>
       </TouchableOpacity>
@@ -964,7 +850,7 @@ export default function App(){
           <Image source={require('./assets/PruvYou_logo.png')} style={s.logoImg} resizeMode="contain"/>
           <Text style={s.logoSub}>PROVE YOURSELF DAILY</Text>
         </View>
-        {tab==='home'&&<HomeTab allHabits={habits} habitExceptions={habitExceptions} addHabitException={addHabitException} removeHabitException={removeHabitException} onPlanMonth={()=>{const n=new Date();setPlanMonth({year:n.getFullYear(),month:n.getMonth()});setShowMonthPlan(true);}} habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
+        {tab==='home'&&<HomeTab habits={habits} log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} todayStr={todayStr}
           setNote={setNote} log={log} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}/>}
         {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
@@ -977,7 +863,7 @@ export default function App(){
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport} generateFullYear={generateFullYear} purchaseApp={purchaseApp} restorePurchases={restorePurchases} isPaid={isPaid} trialDaysLeft={trialDaysLeft}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport} generateFullYear={generateFullYear}/>}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -999,7 +885,7 @@ export default function App(){
 // ═══════════════════════════════════════════════════════════════════
 // HABIT DAY PANEL — inline expand card for habit log
 // ═══════════════════════════════════════════════════════════════════
-function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,color,bg,border,isException,onAddException,onRemoveException}){
+function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,color,bg,border}){
   const entry=log[ds]?.[h.id];
   const done=!!entry?.done;
   const curMins=entry?.minutes||0;
@@ -1050,14 +936,6 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
           style={{padding:10,borderRadius:8,backgroundColor:color,alignItems:'center',marginBottom:4}}>
           <Text style={{fontSize:12,fontWeight:'700',color:'#fff'}}>Save Note</Text>
         </TouchableOpacity>)}
-      {h.frequency==='weekly'&&onAddException&&(
-        <TouchableOpacity onPress={isException?onRemoveException:onAddException}
-          style={{marginTop:8,paddingVertical:9,borderRadius:8,alignItems:'center',
-            backgroundColor:isException?'#FEE':'#F0FFF4',borderWidth:1,borderColor:isException?'#FCC':'#C8E6C9'}}>
-          <Text style={{fontSize:12,fontWeight:'600',color:isException?'#C44':'#2E7D32'}}>
-            {isException?'✕ Remove from this day':'+ Add for this day only'}
-          </Text>
-        </TouchableOpacity>)}
     </View>);
 }
 
@@ -1073,11 +951,9 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
   const isToday=selDay===todayStr;
 
   // Habits for selected day
-  const dayExceptions=habitExceptions?.[selDay]||[];
-  const selHabits=(allHabits||habits).filter(h=>
+  const selHabits=habits.filter(h=>
     h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(selDayIdx))||
-    (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)||
-    dayExceptions.includes(h.id)
+    (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)
   );
   const doneCount=selHabits.filter(h=>log[selDay]?.[h.id]?.done).length;
 
@@ -1148,10 +1024,7 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
         </View>
         {isExp&&<HabitDayPanel h={h} ds={selDay} log={log} toggleDay={toggleDay}
           addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} setNote={setNote}
-          color={color} bg={cat?.bg} border={cat?.border}
-          isException={habitExceptions?.[selDay]?.includes(h.id)||false}
-          onAddException={()=>addHabitException(selDay,h.id)}
-          onRemoveException={()=>removeHabitException(selDay,h.id)}/>}
+          color={color} bg={cat?.bg} border={cat?.border}/>}
       </View>);
     })}
 
@@ -2064,7 +1937,7 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,generateAnnualReport,generateFullYear,purchaseApp,restorePurchases,isPaid,trialDaysLeft}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,generateAnnualReport,generateFullYear}){
   const [bgEnabled,setBgEnabled]=useState(false);
   const [rptYear,setRptYear]=useState(new Date().getFullYear());
   const [rptMonth,setRptMonth]=useState(new Date().getMonth());
