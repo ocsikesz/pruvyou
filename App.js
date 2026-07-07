@@ -29,7 +29,7 @@ const GOOGLE_CLIENT_ID='808492519505-4ij65ava1hve4b6ojpr7ober8is3tjst.apps.googl
 const GOOGLE_WEB_CLIENT_ID='808492519505-o1fk0tjfsbvc83l8jguf672f005gc8fi.apps.googleusercontent.com';
 const _GS=['GO','CSPX-nX','BBy5scq','QHkcfK_','EfSsJR7','3fiJ1'];
 const GOOGLE_WEB_SECRET=_GS.join('');
-const IS_TESTING=true; // Testing APK
+const IS_TESTING=false; // Production mode
 const TRIAL_DAYS=7; // Trial days (active when IS_TESTING=false)
 const PRODUCT_ID='pruvyou_lifetime_v2';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
@@ -383,7 +383,7 @@ export default function App(){
         if(p?.productId===PRODUCT_ID){
           try{await RNIap.finishTransaction({purchase:p,isConsumable:false});}catch(e){}
           await sv('pv-license',{type:'paid'});setLicense({type:'paid'});
-          Alert.alert('🎉 Thank you!','PruvYou is now unlocked!');
+          Alert.alert('🏆 Premium Unlocked!','Welcome to PruvYou Premium! All features are now unlocked. Thank you for your support! 🎉');
         }
       });
       errSub=RNIap.purchaseErrorListener((e)=>{if(e?.code!=='E_USER_CANCELLED')Alert.alert('Error',e?.message);});
@@ -950,7 +950,7 @@ export default function App(){
           todayStr={todayStr}/>}
         {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
-          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport} generateFullYear={generateFullYear}/>}
+          setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport} generateFullYear={generateFullYear} purchaseApp={purchaseApp} restorePurchases={restorePurchases} isPaid={isPaid} trialDaysLeft={trialDaysLeft}/>}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -2024,7 +2024,7 @@ function TimePicker({value,onChange,color}){
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
-function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,generateAnnualReport,generateFullYear}){
+function SettingsTab({habits,log,projects,projLog,setHabits,setLog,setProjects,setProjLog,adHocTasks,setAdHocTasks,scheduleDailyReminder,cancelDailyReminder,driveToken,driveUser,driveStatus,connectDrive,signOutDrive,driveBackup,driveRestore,generateMonthlyReport,generateAnnualReport,generateFullYear,purchaseApp,restorePurchases,isPaid,trialDaysLeft}){
   const [bgEnabled,setBgEnabled]=useState(false);
   const [rptYear,setRptYear]=useState(new Date().getFullYear());
   const [rptMonth,setRptMonth]=useState(new Date().getMonth());
