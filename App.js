@@ -1074,7 +1074,8 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
     {/* 7 Day Cards — tap to select day */}
     <View style={s.cardsRow}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
       const isSel=ds===selDay;
-      const act=habits.filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(i)));
+      const dsExceptions=habitExceptions?.[ds]||[];
+      const act=(allHabits||habits).filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(i))||dsExceptions.includes(h.id));
       const total=act.length;const done=act.filter(h=>log[ds]?.[h.id]?.done).length;
       const pct=total>0?Math.round((done/total)*100):0;const fill=compColor(done/Math.max(1,total));
       return(<TouchableOpacity key={i} activeOpacity={0.7}
