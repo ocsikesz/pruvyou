@@ -1153,7 +1153,16 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
             const done2=act.filter(h=>log[ds]?.[h.id]?.done).length;
             const ratio=act.length>0?done2/act.length:0;
             const bg=ratio>=1?brand.green+'30':ratio>=0.5?brand.gold+'25':ratio>0?'#E8956B20':C.bg;
-            return(<TouchableOpacity key={ci} onPress={()=>{setSelDay(ds);setMonthView(false);setWeekOff(0);}}
+            return(<TouchableOpacity key={ci} onPress={()=>{
+                setSelDay(ds);setMonthView(false);
+                // Calculate correct weekOff for selected day
+                const now=today();const nowDay=now.getDay()===0?6:now.getDay()-1;
+                const nowMon=new Date(now);nowMon.setDate(now.getDate()-nowDay);
+                const selD=d;const selDay2=selD.getDay()===0?6:selD.getDay()-1;
+                const selMon=new Date(selD);selMon.setDate(selD.getDate()-selDay2);
+                const diff=Math.round((selMon-nowMon)/(7*24*60*60*1000));
+                setWeekOff(diff);
+              }}
               style={{flex:1,height:36,borderRadius:6,justifyContent:'center',alignItems:'center',
                 backgroundColor:isSel?brand.blue+'20':bg,
                 borderWidth:isT?2:1,borderColor:isT?brand.gold:isSel?brand.blue:C.borderLight}}>
