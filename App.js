@@ -946,6 +946,20 @@ export default function App(){
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Trial banner */}
+      {!isPaid&&!isExpired&&trialDaysLeft<=7&&trialDaysLeft>0&&(
+        <TouchableOpacity onPress={purchaseApp}
+          style={{
+            backgroundColor:trialDaysLeft<=2?'#E74C3C':trialDaysLeft<=4?brand.gold:'#1A4F8A',
+            paddingHorizontal:16,paddingVertical:8,
+            flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
+          <Text style={{fontSize:12,fontWeight:'700',color:'#fff'}}>
+            {trialDaysLeft===1?'⚠️ Last day of free trial!':'🕐 Free trial: '+trialDaysLeft+' days left'}
+          </Text>
+          <Text style={{fontSize:11,color:'rgba(255,255,255,0.85)',fontWeight:'600',
+            textDecorationLine:'underline'}}>Unlock →</Text>
+        </TouchableOpacity>)}
+
       {/* Month Plan Modal */}
       {showMonthPlan&&planMonth&&(
         <View style={{position:'absolute',top:0,left:0,right:0,bottom:0,zIndex:200}}>
