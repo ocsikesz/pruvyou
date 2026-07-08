@@ -1549,7 +1549,7 @@ function HabitForm({habit,onSave,onCancel}){
           borderRadius:8,backgroundColor:cat.color+'20',borderWidth:1,borderColor:cat.color}}>
         <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>📅 {startDate}  ✕ clear</Text>
       </TouchableOpacity>}
-      <View style={{overflow:'hidden'}}>
+      <View style={{overflow:'hidden',borderRadius:12,borderWidth:1,borderColor:C.border,padding:8,marginBottom:8}}>
         <MiniCalendar selected={startDate} onSelect={setStartDate} color={cat.color}/>
       </View>
       <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
@@ -2463,7 +2463,7 @@ const s=StyleSheet.create({
   empty:{alignItems:'center',paddingVertical:50},emptyTitle:{fontSize:18,fontWeight:'700',color:C.textDim,marginBottom:8},emptySub:{fontSize:13,color:C.textDark,textAlign:'center'},
   actionBtn:{width:32,height:32,borderRadius:6,borderWidth:1,borderColor:C.border,justifyContent:'center',alignItems:'center',marginLeft:4},
   addBtn:{padding:14,borderRadius:12,backgroundColor:brand.blue,alignItems:'center',marginBottom:14},addBtnT:{fontSize:14,fontWeight:'700',color:'#fff'},
-  form:{backgroundColor:C.white,borderRadius:16,padding:18,marginBottom:14,borderWidth:1,borderColor:C.border},
+  form:{backgroundColor:C.white,borderRadius:16,padding:18,marginBottom:14,borderWidth:1,borderColor:C.border,overflow:'hidden'},
   formTitle:{fontSize:17,fontWeight:'700',color:brand.blue,marginBottom:14},label:{fontSize:10,fontWeight:'600',color:C.textDim,letterSpacing:1,marginBottom:5,marginTop:2},
   input:{backgroundColor:C.bg,borderWidth:1,borderColor:C.border,borderRadius:10,padding:11,color:C.text,fontSize:14,marginBottom:10},
   iconBtn:{width:36,height:36,borderRadius:8,borderWidth:1,borderColor:C.border,backgroundColor:C.bg,justifyContent:'center',alignItems:'center'},
