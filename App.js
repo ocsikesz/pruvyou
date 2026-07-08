@@ -1549,7 +1549,9 @@ function HabitForm({habit,onSave,onCancel}){
           borderRadius:8,backgroundColor:cat.color+'20',borderWidth:1,borderColor:cat.color}}>
         <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>📅 {startDate}  ✕ clear</Text>
       </TouchableOpacity>}
-      <MiniCalendar selected={startDate} onSelect={setStartDate} color={cat.color}/>
+      <View style={{overflow:'hidden'}}>
+        <MiniCalendar selected={startDate} onSelect={setStartDate} color={cat.color}/>
+      </View>
       <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
         targetMinutes:parseInt(mins)||15,weeklyTarget:freq==='weekly'?selectedDays.length:7,
         selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId,
