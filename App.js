@@ -1456,6 +1456,45 @@ function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabi
 // ═══════════════════════════════════════════════════════════════════
 // HABIT FORM
 // ═══════════════════════════════════════════════════════════════════
+function MiniCalendar({selected,onSelect,color}){
+  const now=new Date();const year=now.getFullYear();const month=now.getMonth();
+  const dim=new Date(year,month+1,0).getDate();
+  const firstDay=new Date(year,month,1).getDay();
+  const offset=firstDay===0?6:firstDay-1;
+  const days=[];for(let i=0;i<offset;i++)days.push(null);
+  for(let i=1;i<=dim;i++)days.push(i);
+  const todayD=now.getDate();
+  const todayStr=year+'-'+String(month+1).padStart(2,'0')+'-'+String(todayD).padStart(2,'0');
+  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return(<View style={{marginTop:4}}>
+    <Text style={{fontSize:11,fontWeight:'700',color:'#5A7A8A',textAlign:'center',marginBottom:6}}>
+      {MNS[month]} {year}
+    </Text>
+    <View style={{flexDirection:'row',marginBottom:4}}>
+      {['M','T','W','T','F','S','S'].map((d,i)=>(
+        <Text key={i} style={{flex:1,textAlign:'center',fontSize:10,fontWeight:'700',color:'#5A7A8A'}}>{d}</Text>))}
+    </View>
+    <View style={{flexDirection:'row',flexWrap:'wrap'}}>
+      {days.map((d,i)=>{
+        if(!d)return<View key={'e'+i} style={{width:'14.28%',height:34}}/>;
+        const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        const isPast=ds<todayStr;
+        const isSel=ds===selected;
+        const isT=d===todayD;
+        return(<TouchableOpacity key={i} disabled={isPast} onPress={()=>onSelect(isSel?'':ds)}
+          style={{width:'14.28%',height:34,alignItems:'center',justifyContent:'center'}}>
+          <View style={{width:30,height:30,borderRadius:15,alignItems:'center',justifyContent:'center',
+            backgroundColor:isSel?color:isT?color+'25':'transparent',
+            borderWidth:isT&&!isSel?1.5:0,borderColor:color}}>
+            <Text style={{fontSize:12,fontWeight:isSel||isT?'700':'400',
+              color:isSel?'#fff':isPast?'#CCC':'#1A2E45'}}>{d}</Text>
+          </View>
+        </TouchableOpacity>);
+      })}
+    </View>
+  </View>);
+}
+
 function HabitForm({habit,onSave,onCancel}){
   const [name,setName]=useState(habit?.name||'');const [type,setType]=useState(habit?.type||'check');
   const [freq,setFreq]=useState(habit?.frequency||'daily');const [mins,setMins]=useState(String(habit?.targetMinutes||15));
@@ -1499,43 +1538,7 @@ function HabitForm({habit,onSave,onCancel}){
           borderRadius:8,backgroundColor:cat.color+'20',borderWidth:1,borderColor:cat.color}}>
         <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>📅 {startDate}  ✕ clear</Text>
       </TouchableOpacity>}
-      {(()=>{
-        const now=new Date();const year=now.getFullYear();const month=now.getMonth();
-        const dim=new Date(year,month+1,0).getDate();
-        const firstDay=new Date(year,month,1).getDay();
-        const offset=firstDay===0?6:firstDay-1; // Mon=0
-        const days=[];for(let i=0;i<offset;i++)days.push(null);
-        for(let i=1;i<=dim;i++)days.push(i);
-        const todayD=now.getDate();
-        const todayStr2=fmt(now);
-        return(<View>
-          <Text style={{fontSize:11,fontWeight:'700',color:C.textDim,textAlign:'center',marginBottom:6}}>
-            {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month]} {year}
-          </Text>
-          <View style={{flexDirection:'row',marginBottom:4}}>
-            {['M','T','W','T','F','S','S'].map((d,i)=>(
-              <Text key={i} style={{flex:1,textAlign:'center',fontSize:10,fontWeight:'700',color:C.textDim}}>{d}</Text>))}
-          </View>
-          <View style={{flexDirection:'row',flexWrap:'wrap'}}>
-            {days.map((d,i)=>{
-              if(!d)return<View key={'e'+i} style={{width:'14.28%',height:34}}/>;
-              const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-              const isPast=ds<todayStr2;
-              const isSel=ds===startDate;
-              const isToday2=d===todayD;
-              return(<TouchableOpacity key={i} onPress={()=>{if(!isPast)setStartDate(isSel?'':ds);}}
-                style={{width:'14.28%',height:34,alignItems:'center',justifyContent:'center'}}>
-                <View style={{width:28,height:28,borderRadius:14,alignItems:'center',justifyContent:'center',
-                  backgroundColor:isSel?cat.color:isToday2?cat.color+'20':'transparent',
-                  borderWidth:isToday2&&!isSel?1:0,borderColor:cat.color}}>
-                  <Text style={{fontSize:12,fontWeight:isSel||isToday2?'700':'400',
-                    color:isSel?'#fff':isPast?C.textDim:C.text}}>{d}</Text>
-                </View>
-              </TouchableOpacity>);
-            })}
-          </View>
-        </View>);
-      })()}
+      <MiniCalendar selected={startDate} onSelect={setStartDate} color={cat.color}/>
       <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
         targetMinutes:parseInt(mins)||15,weeklyTarget:freq==='weekly'?selectedDays.length:7,
         selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId,
