@@ -238,6 +238,7 @@ export default function App(){
   const [driveStatus,setDriveStatus]=useState('');
   const [adHocTasks,setAdHocTasks]=useState({}); // {dateStr:[{id,text,done}]}
   const [monthlyHabits,setMonthlyHabits]=useState({}); // {YYYY-MM:[habitId,...]}
+  const [habitExceptions,setHabitExceptions]=useState({}); // {dateStr:[habitId,...]}
   const [showMonthPlan,setShowMonthPlan]=useState(false);
   const [planMonth,setPlanMonth]=useState(null);
   const [license,setLicense]=useState(null);
@@ -248,6 +249,7 @@ export default function App(){
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
     setAdHocTasks(await ld('pv-adhoc',{}));
     setMonthlyHabits(await ld('pv-monthly-habits',{}));
+    setHabitExceptions(await ld('pv-habit-exceptions',{}));
     const seen=await ld('pv-onboarding-seen',false);
     if(!seen)setShowOnboarding(true);
     setLoaded(true);})();},[]);
@@ -273,6 +275,7 @@ export default function App(){
   useEffect(()=>{if(loaded)sv('pv-projlog',projLog);},[projLog,loaded]);
   useEffect(()=>{if(loaded)sv('pv-adhoc',adHocTasks);},[adHocTasks,loaded]);
   useEffect(()=>{if(loaded)sv('pv-monthly-habits',monthlyHabits);},[monthlyHabits,loaded]);
+  useEffect(()=>{if(loaded)sv('pv-habit-exceptions',habitExceptions);},[habitExceptions,loaded]);
 
   const toggleDay=useCallback((hid,ds)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     const cur=c[ds][hid];c[ds]={...c[ds],[hid]:{...cur,done:!cur?.done}};return c;});},[]);
@@ -319,6 +322,13 @@ export default function App(){
   const saveMonthPlan=(year,month,activeIds)=>{
     const key=year+'-'+String(month+1).padStart(2,'0');
     setMonthlyHabits(p=>({...p,[key]:activeIds}));
+  };
+
+  const addHabitException=(dateStr,habitId)=>{
+    setHabitExceptions(p=>({...p,[dateStr]:[...new Set([...(p[dateStr]||[]),habitId])]}));
+  };
+  const removeHabitException=(dateStr,habitId)=>{
+    setHabitExceptions(p=>({...p,[dateStr]:(p[dateStr]||[]).filter(id=>id!==habitId)}));
   };
   const weekDates=useMemo(()=>getWeekDates(weekOff),[weekOff]);
   const todayStr=fmt(today());
