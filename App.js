@@ -1040,14 +1040,7 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
     <Text style={s.tagline}>Track. <Text style={{color:brand.green}}>Achieve.</Text> <Text style={{color:brand.gold}}>Triumph.</Text></Text>
 
     {/* Week nav */}
-    {onPlanMonth&&<View style={{paddingHorizontal:16,marginBottom:8}}>
-      <TouchableOpacity onPress={onPlanMonth}
-        style={{flexDirection:'row',alignItems:'center',gap:6,alignSelf:'flex-start',
-          paddingHorizontal:12,paddingVertical:7,borderRadius:10,
-          backgroundColor:brand.blue+'15',borderWidth:1,borderColor:brand.blue+'40'}}>
-        <Text style={{fontSize:12,fontWeight:'700',color:brand.blue}}>📅 Plan Month</Text>
-      </TouchableOpacity>
-    </View>}
+
     <View style={s.weekNav}>
       <TouchableOpacity onPress={()=>{setWeekOff(w=>w-1);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
       <Text style={s.weekLabel}>{weekOff===0?'This week':
@@ -1082,6 +1075,19 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
       <Text style={{fontSize:15,fontWeight:'800',color:doneCount===selHabits.length&&selHabits.length>0?brand.green:C.textMuted}}>
         {doneCount}/{selHabits.length}</Text>
     </View>
+
+    {onPlanMonth&&<TouchableOpacity onPress={onPlanMonth}
+      style={{marginHorizontal:0,marginBottom:12,borderRadius:14,overflow:'hidden',
+        backgroundColor:brand.blue,padding:16,flexDirection:'row',alignItems:'center',gap:14}}>
+      <Text style={{fontSize:32}}>📅</Text>
+      <View style={{flex:1}}>
+        <Text style={{fontSize:15,fontWeight:'800',color:'#fff'}}>Plan This Month</Text>
+        <Text style={{fontSize:12,color:'rgba(255,255,255,0.75)',marginTop:2}}>
+          Choose which habits to track in {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date().getMonth()]} {new Date().getFullYear()}
+        </Text>
+      </View>
+      <Text style={{fontSize:20,color:'rgba(255,255,255,0.6)'}}>▸</Text>
+    </TouchableOpacity>}
 
     {/* Habit cards for selected day — tap to expand */}
     {!selHabits.length&&<Text style={{color:C.textDim,textAlign:'center',paddingVertical:20,fontSize:12}}>No habits scheduled for this day</Text>}
