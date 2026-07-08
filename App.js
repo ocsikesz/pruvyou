@@ -925,6 +925,8 @@ export default function App(){
           <Text style={s.logoSub}>PROVE YOURSELF DAILY</Text>
         </View>
         {tab==='home'&&<HomeTab habits={(()=>{const k=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');return monthlyHabits[k]?habits.filter(h=>monthlyHabits[k].includes(h.id)):habits;})()}
+          allHabits={habits} habitExceptions={habitExceptions}
+          addHabitException={addHabitException} removeHabitException={removeHabitException}
           log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} todayStr={todayStr}
           setNote={setNote} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}
@@ -971,7 +973,7 @@ export default function App(){
 // ═══════════════════════════════════════════════════════════════════
 // HABIT DAY PANEL — inline expand card for habit log
 // ═══════════════════════════════════════════════════════════════════
-function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,color,bg,border}){
+function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,color,bg,border,isException,onAddException,onRemoveException}){
   const entry=log[ds]?.[h.id];
   const done=!!entry?.done;
   const curMins=entry?.minutes||0;
@@ -1022,13 +1024,22 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
           style={{padding:10,borderRadius:8,backgroundColor:color,alignItems:'center',marginBottom:4}}>
           <Text style={{fontSize:12,fontWeight:'700',color:'#fff'}}>Save Note</Text>
         </TouchableOpacity>)}
+    {h.frequency==='weekly'&&onAddException&&(
+      <TouchableOpacity onPress={isException?onRemoveException:onAddException}
+        style={{marginTop:8,paddingVertical:10,borderRadius:8,alignItems:'center',
+          backgroundColor:isException?'#FEE':'#F0FFF4',
+          borderWidth:1,borderColor:isException?'#FCC':'#C8E6C9'}}>
+        <Text style={{fontSize:12,fontWeight:'600',color:isException?'#C44':'#2E7D32'}}>
+          {isException?'✕ Remove from this day':'+ Add for this day only'}
+        </Text>
+      </TouchableOpacity>)}
     </View>);
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // HOME TAB
 // ═══════════════════════════════════════════════════════════════════
-function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay,onPlanMonth}){
+function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay,onPlanMonth,allHabits,habitExceptions,addHabitException,removeHabitException}){
   const [selDay,setSelDay]=useState(todayStr); // which day strip is selected
   const [expandedHabit,setExpandedHabit]=useState(null);
 
@@ -1037,9 +1048,11 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
   const isToday=selDay===todayStr;
 
   // Habits for selected day
-  const selHabits=habits.filter(h=>
+  const dayExceptions=habitExceptions?.[selDay]||[];
+  const selHabits=(allHabits||habits).filter(h=>
     h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(selDayIdx))||
-    (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)
+    (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)||
+    dayExceptions.includes(h.id)
   );
   const doneCount=selHabits.filter(h=>log[selDay]?.[h.id]?.done).length;
 
@@ -1124,7 +1137,10 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
         </View>
         {isExp&&<HabitDayPanel h={h} ds={selDay} log={log} toggleDay={toggleDay}
           addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} setNote={setNote}
-          color={color} bg={cat?.bg} border={cat?.border}/>}
+          color={color} bg={cat?.bg} border={cat?.border}
+          isException={habitExceptions?.[selDay]?.includes(h.id)||false}
+          onAddException={()=>addHabitException(selDay,h.id)}
+          onRemoveException={()=>removeHabitException(selDay,h.id)}/>}
       </View>);
     })}
 
