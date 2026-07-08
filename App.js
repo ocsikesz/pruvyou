@@ -1457,41 +1457,52 @@ function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabi
 // HABIT FORM
 // ═══════════════════════════════════════════════════════════════════
 function MiniCalendar({selected,onSelect,color}){
-  const now=new Date();const year=now.getFullYear();const month=now.getMonth();
-  const dim=new Date(year,month+1,0).getDate();
-  const firstDay=new Date(year,month,1).getDay();
+  const [calYear,setCalYear]=useState(new Date().getFullYear());
+  const [calMonth,setCalMonth]=useState(new Date().getMonth());
+  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const todayStr=fmt(new Date());
+  const dim=new Date(calYear,calMonth+1,0).getDate();
+  const firstDay=new Date(calYear,calMonth,1).getDay();
   const offset=firstDay===0?6:firstDay-1;
   const days=[];for(let i=0;i<offset;i++)days.push(null);
   for(let i=1;i<=dim;i++)days.push(i);
-  const todayD=now.getDate();
-  const todayStr=year+'-'+String(month+1).padStart(2,'0')+'-'+String(todayD).padStart(2,'0');
-  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return(<View style={{marginTop:4}}>
-    <Text style={{fontSize:11,fontWeight:'700',color:'#5A7A8A',textAlign:'center',marginBottom:6}}>
-      {MNS[month]} {year}
-    </Text>
+  // Build grid rows
+  const rows=[];let row=[];days.forEach((d,i)=>{row.push(d);if(row.length===7){rows.push(row);row=[];}});
+  if(row.length)rows.push(row);
+  return(<View style={{marginTop:6}}>
+    {/* Nav */}
+    <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+      <TouchableOpacity onPress={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}} style={s.navBtn}>
+        <Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+      <Text style={{fontSize:14,fontWeight:'700',color:C.text}}>{MNS[calMonth]} {calYear}</Text>
+      <TouchableOpacity onPress={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}} style={s.navBtn}>
+        <Text style={s.navBtnT}>▸</Text></TouchableOpacity>
+    </View>
+    {/* Day headers */}
     <View style={{flexDirection:'row',marginBottom:4}}>
-      {['M','T','W','T','F','S','S'].map((d,i)=>(
-        <Text key={i} style={{flex:1,textAlign:'center',fontSize:10,fontWeight:'700',color:'#5A7A8A'}}>{d}</Text>))}
+      {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}>
+        <Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>{d}</Text>
+      </View>))}
     </View>
-    <View style={{flexDirection:'row',flexWrap:'wrap'}}>
-      {days.map((d,i)=>{
-        if(!d)return<View key={'e'+i} style={{width:'14.28%',height:34}}/>;
-        const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-        const isPast=ds<todayStr;
-        const isSel=ds===selected;
-        const isT=d===todayD;
-        return(<TouchableOpacity key={i} disabled={isPast} onPress={()=>onSelect(isSel?'':ds)}
-          style={{width:'14.28%',height:34,alignItems:'center',justifyContent:'center'}}>
-          <View style={{width:30,height:30,borderRadius:15,alignItems:'center',justifyContent:'center',
-            backgroundColor:isSel?color:isT?color+'25':'transparent',
-            borderWidth:isT&&!isSel?1.5:0,borderColor:color}}>
-            <Text style={{fontSize:12,fontWeight:isSel||isT?'700':'400',
-              color:isSel?'#fff':isPast?'#CCC':'#1A2E45'}}>{d}</Text>
-          </View>
-        </TouchableOpacity>);
-      })}
-    </View>
+    {/* Calendar grid */}
+    {rows.map((row,ri)=>(
+      <View key={ri} style={{flexDirection:'row',gap:3,marginBottom:3}}>
+        {row.map((d,ci)=>{
+          if(!d)return<View key={ci} style={{flex:1,height:34}}/>;
+          const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+          const isPast=ds<todayStr;
+          const isSel=ds===selected;
+          const isToday=ds===todayStr;
+          return(<TouchableOpacity key={ci} disabled={isPast} onPress={()=>onSelect(isSel?'':ds)}
+            style={{flex:1,height:34,borderRadius:8,alignItems:'center',justifyContent:'center',
+              backgroundColor:isSel?color:isToday?color+'20':C.bg,
+              borderWidth:isToday&&!isSel?1.5:1,borderColor:isSel?color:isToday?color:C.border,
+              opacity:isPast?0.35:1}}>
+            <Text style={{fontSize:12,fontWeight:isSel||isToday?'700':'400',
+              color:isSel?'#fff':C.text}}>{d}</Text>
+          </TouchableOpacity>);
+        })}
+      </View>))}
   </View>);
 }
 
