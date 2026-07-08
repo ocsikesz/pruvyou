@@ -1050,11 +1050,12 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
 
   // Habits for selected day
   const dayExceptions=habitExceptions?.[selDay]||[];
-  const selHabits=(allHabits||habits).filter(h=>
-    h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(selDayIdx))||
-    (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)||
-    dayExceptions.includes(h.id)
-  );
+  const selHabits=(allHabits||habits).filter(h=>{
+    if(h.startDate&&h.startDate>selDay)return false; // not started yet
+    return h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(selDayIdx))||
+      (log[selDay]?.[h.id]?.done)||(log[selDay]?.[h.id]?.minutes>0)||
+      dayExceptions.includes(h.id);
+  });
   const doneCount=selHabits.filter(h=>log[selDay]?.[h.id]?.done).length;
 
   if(!habits.length)return<View style={s.empty}><Text style={{fontSize:48,marginBottom:16}}>🌱</Text>
@@ -1446,6 +1447,7 @@ function HabitForm({habit,onSave,onCancel}){
   const [freq,setFreq]=useState(habit?.frequency||'daily');const [mins,setMins]=useState(String(habit?.targetMinutes||15));
   const [selectedDays,setSelectedDays]=useState(habit?.selectedDays||[]);const [icon,setIcon]=useState(habit?.icon||'🎯');
   const [catId,setCatId]=useState(habit?.categoryId||'fitness');const cat=CATS.find(c=>c.id===catId)||CATS[0];
+  const [startDate,setStartDate]=useState(habit?.startDate||'');
   const tds=(i)=>setSelectedDays(p=>p.includes(i)?p.filter(d=>d!==i):[...p,i].sort());
   return(<View style={s.form}><Text style={s.formTitle}>{habit?'Edit':'New habit'}</Text>
     <Text style={s.label}>CATEGORY</Text>
@@ -1477,9 +1479,14 @@ function HabitForm({habit,onSave,onCancel}){
           <Text style={[s.dayChipT,sel&&{color:'#fff'}]}>{d}</Text></TouchableOpacity>);})}</View></>)}
     <View style={{flexDirection:'row',gap:10,marginTop:8}}>
       <TouchableOpacity onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
+      <Text style={s.label}>START DATE (optional — leave empty to start today)</Text>
+      <TextInput value={startDate} onChangeText={setStartDate}
+        placeholder={fmt(today())+' or leave empty'}
+        placeholderTextColor={C.textDim} style={s.input}/>
       <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
         targetMinutes:parseInt(mins)||15,weeklyTarget:freq==='weekly'?selectedDays.length:7,
-        selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId});}}
+        selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId,
+        startDate:startDate.trim()||''});}}
         style={[s.saveBtn,{backgroundColor:cat.color}]}><Text style={s.saveBtnT}>Save</Text></TouchableOpacity></View>
   </View>);
 }
