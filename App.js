@@ -1149,6 +1149,32 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
       </View>);
     })}
 
+    {/* Non-scheduled weekly habits — tap to add for this day */}
+    {(()=>{
+      const nonSched=(allHabits||habits).filter(h=>
+        h.frequency==='weekly'&&
+        !(h.selectedDays||[]).includes(selDayIdx)&&
+        !dayExceptions.includes(h.id)&&
+        !log[selDay]?.[h.id]?.done
+      );
+      if(!nonSched.length)return null;
+      return(<View style={{marginTop:8,marginBottom:4}}>
+        <Text style={{fontSize:10,fontWeight:'700',color:C.textDim,letterSpacing:1,marginBottom:6}}>+ ADD FOR TODAY</Text>
+        <View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>
+          {nonSched.map(h=>{
+            const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.green;
+            return(<TouchableOpacity key={h.id} onPress={()=>addHabitException(selDay,h.id)}
+              style={{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:12,paddingVertical:7,
+                borderRadius:20,backgroundColor:color+'15',borderWidth:1,borderColor:color+'40'}}>
+              <Text style={{fontSize:12}}>{h.icon}</Text>
+              <Text style={{fontSize:12,fontWeight:'600',color:color}}>{h.name}</Text>
+              <Text style={{fontSize:14,fontWeight:'700',color:color}}>+</Text>
+            </TouchableOpacity>);
+          })}
+        </View>
+      </View>);
+    })()}
+
     {/* ── AD HOC TASKS ── */}
     <AdHocPanel ds={selDay} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}/>
   </View>);
