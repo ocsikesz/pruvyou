@@ -935,7 +935,8 @@ export default function App(){
           addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit}
           updateHabit={updateHabit} deleteHabit={deleteHabit}
           toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes}
-          setNote={setNote} todayStr={todayStr} weekDates={weekDates}/>}
+          setNote={setNote} todayStr={todayStr} weekDates={weekDates}
+          onPlanMonth={()=>{const n=new Date();setPlanMonth({year:n.getFullYear(),month:n.getMonth()});setShowMonthPlan(true);}}/>}
         {tab==='projects'&&<ProjectsTab projects={projects} setProjects={setProjects}
           projLog={projLog} addProjMinutes={addProjMinutes} setProjNote={setProjNote} setProjMinutes={setProjMinutes} setProjTasks={setProjTasks}
           todayStr={todayStr}/>}
@@ -1096,24 +1097,27 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
         {!isToday&&<Text style={{fontSize:10,color:selDate>today()?brand.blue:C.textDim}}>
           {selDate>today()?'Upcoming — plan tasks':'Tap today to return'}</Text>}
       </View>
-      <Text style={{fontSize:15,fontWeight:'800',color:doneCount===selHabits.length&&selHabits.length>0?brand.green:C.textMuted}}>
-        {doneCount}/{selHabits.length}</Text>
+      <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+        <Text style={{fontSize:15,fontWeight:'800',color:doneCount===selHabits.length&&selHabits.length>0?brand.green:C.textMuted}}>
+          {doneCount}/{selHabits.length}</Text>
+        {selHabits.length>0&&doneCount<selHabits.length&&(
+          <TouchableOpacity onPress={()=>{
+            selHabits.forEach(h=>{
+              if(!log[selDay]?.[h.id]?.done){
+                if(h.type==='timer'){
+                  setHabitMinutes(h.id,selDay,h.targetMinutes||30,h.targetMinutes||30);
+                }else{
+                  toggleDay(h.id,selDay);
+                }
+              }
+            });
+          }} style={{paddingHorizontal:10,paddingVertical:5,borderRadius:8,backgroundColor:brand.green+'20',borderWidth:1,borderColor:brand.green}}>
+            <Text style={{fontSize:11,fontWeight:'700',color:brand.green}}>✓ All</Text>
+          </TouchableOpacity>)}
+      </View>
     </View>
 
-    {onPlanMonth&&<TouchableOpacity onPress={onPlanMonth}
-      style={{marginHorizontal:0,marginBottom:12,borderRadius:14,overflow:'hidden',
-        backgroundColor:brand.blue,padding:16,flexDirection:'row',alignItems:'center',gap:14}}>
-      <Text style={{fontSize:32}}>📅</Text>
-      <View style={{flex:1}}>
-        <Text style={{fontSize:15,fontWeight:'800',color:'#fff'}}>Plan This Month</Text>
-        <Text style={{fontSize:12,color:'rgba(255,255,255,0.75)',marginTop:2}}>
-          Choose which habits to track in {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date().getMonth()]} {new Date().getFullYear()}
-        </Text>
-      </View>
-      <Text style={{fontSize:20,color:'rgba(255,255,255,0.6)'}}>▸</Text>
-    </TouchableOpacity>}
-
-    {/* Habit cards for selected day — tap to expand */}
+{/* Habit cards for selected day — tap to expand */}
     {!selHabits.length&&<Text style={{color:C.textDim,textAlign:'center',paddingVertical:20,fontSize:12}}>No habits scheduled for this day</Text>}
     {selHabits.map(h=>{const entry=log[selDay]?.[h.id];const done=!!entry?.done;
       const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.green;
@@ -1340,12 +1344,18 @@ function AdHocPanel({ds,adHocTasks,setAdHocTasksForDay}){
 // ═══════════════════════════════════════════════════════════════════
 // HABITS TAB (same as before, abbreviated)
 // ═══════════════════════════════════════════════════════════════════
-function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,updateHabit,deleteHabit,toggleDay,addMinutes,setHabitMinutes,setNote,todayStr,weekDates}){
+function HabitsTab({habits,log,showAdd,setShowAdd,addHabit,editHabit,setEditHabit,updateHabit,deleteHabit,toggleDay,addMinutes,setHabitMinutes,setNote,todayStr,weekDates,onPlanMonth}){
   const [expanded,setExpanded]=useState(null);
   const [expandedDay,setExpandedDay]=useState(null);
   return(<View>
-    <TouchableOpacity onPress={()=>{setShowAdd(true);setEditHabit(null);}} style={s.addBtn}>
-      <Text style={s.addBtnT}>＋ Add new habit</Text></TouchableOpacity>
+    <View style={{flexDirection:'row',gap:8,marginBottom:8}}>
+      <TouchableOpacity onPress={()=>{setShowAdd(true);setEditHabit(null);}} style={[s.addBtn,{flex:1,marginBottom:0}]}>
+        <Text style={s.addBtnT}>＋ Add new habit</Text></TouchableOpacity>
+      {onPlanMonth&&<TouchableOpacity onPress={onPlanMonth}
+        style={{paddingHorizontal:14,paddingVertical:12,borderRadius:10,backgroundColor:brand.blue+'20',borderWidth:1,borderColor:brand.blue,justifyContent:'center',alignItems:'center'}}>
+        <Text style={{fontSize:13,fontWeight:'700',color:brand.blue}}>📅 Plan Month</Text>
+      </TouchableOpacity>}
+    </View>
     {(showAdd||editHabit)&&<HabitForm habit={editHabit} onSave={editHabit?updateHabit:addHabit}
       onCancel={()=>{setShowAdd(false);setEditHabit(null);}}/>}
     {!habits.length&&!showAdd&&<View style={s.empty}><Text style={{fontSize:36,marginBottom:12}}>📋</Text>
