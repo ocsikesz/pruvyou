@@ -1479,10 +1479,49 @@ function HabitForm({habit,onSave,onCancel}){
           <Text style={[s.dayChipT,sel&&{color:'#fff'}]}>{d}</Text></TouchableOpacity>);})}</View></>)}
     <View style={{flexDirection:'row',gap:10,marginTop:8}}>
       <TouchableOpacity onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
-      <Text style={s.label}>START DATE (optional — leave empty to start today)</Text>
-      <TextInput value={startDate} onChangeText={setStartDate}
-        placeholder={fmt(today())+' or leave empty'}
-        placeholderTextColor={C.textDim} style={s.input}/>
+      <Text style={s.label}>START DATE (tap to select — leave empty to start today)</Text>
+      {startDate&&<TouchableOpacity onPress={()=>setStartDate('')}
+        style={{alignSelf:'flex-start',marginBottom:6,paddingHorizontal:10,paddingVertical:4,
+          borderRadius:8,backgroundColor:cat.color+'20',borderWidth:1,borderColor:cat.color}}>
+        <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>📅 {startDate}  ✕ clear</Text>
+      </TouchableOpacity>}
+      {(()=>{
+        const now=new Date();const year=now.getFullYear();const month=now.getMonth();
+        const dim=new Date(year,month+1,0).getDate();
+        const firstDay=new Date(year,month,1).getDay();
+        const offset=firstDay===0?6:firstDay-1; // Mon=0
+        const days=[];for(let i=0;i<offset;i++)days.push(null);
+        for(let i=1;i<=dim;i++)days.push(i);
+        const todayD=now.getDate();
+        const todayStr2=fmt(now);
+        return(<View>
+          <Text style={{fontSize:11,fontWeight:'700',color:C.textDim,textAlign:'center',marginBottom:6}}>
+            {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month]} {year}
+          </Text>
+          <View style={{flexDirection:'row',marginBottom:4}}>
+            {['M','T','W','T','F','S','S'].map((d,i)=>(
+              <Text key={i} style={{flex:1,textAlign:'center',fontSize:10,fontWeight:'700',color:C.textDim}}>{d}</Text>))}
+          </View>
+          <View style={{flexDirection:'row',flexWrap:'wrap'}}>
+            {days.map((d,i)=>{
+              if(!d)return<View key={'e'+i} style={{width:'14.28%',height:34}}/>;
+              const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+              const isPast=ds<todayStr2;
+              const isSel=ds===startDate;
+              const isToday2=d===todayD;
+              return(<TouchableOpacity key={i} onPress={()=>{if(!isPast)setStartDate(isSel?'':ds);}}
+                style={{width:'14.28%',height:34,alignItems:'center',justifyContent:'center'}}>
+                <View style={{width:28,height:28,borderRadius:14,alignItems:'center',justifyContent:'center',
+                  backgroundColor:isSel?cat.color:isToday2?cat.color+'20':'transparent',
+                  borderWidth:isToday2&&!isSel?1:0,borderColor:cat.color}}>
+                  <Text style={{fontSize:12,fontWeight:isSel||isToday2?'700':'400',
+                    color:isSel?'#fff':isPast?C.textDim:C.text}}>{d}</Text>
+                </View>
+              </TouchableOpacity>);
+            })}
+          </View>
+        </View>);
+      })()}
       <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
         targetMinutes:parseInt(mins)||15,weeklyTarget:freq==='weekly'?selectedDays.length:7,
         selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId,
