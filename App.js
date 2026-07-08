@@ -1057,6 +1057,22 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
 function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay,onPlanMonth,allHabits,habitExceptions,addHabitException,removeHabitException}){
   const [selDay,setSelDay]=useState(todayStr); // which day strip is selected
   const [expandedHabit,setExpandedHabit]=useState(null);
+  const [monthView,setMonthView]=useState(false);
+  const [calMonth,setCalMonth]=useState(new Date().getMonth());
+  const [calYear,setCalYear]=useState(new Date().getFullYear());
+
+  // Month calendar grid
+  const calGrid=useMemo(()=>{
+    const dim=new Date(calYear,calMonth+1,0).getDate();
+    const firstDay=new Date(calYear,calMonth,1).getDay();
+    const offset=firstDay===0?6:firstDay-1;
+    const cells=[];for(let i=0;i<offset;i++)cells.push(null);
+    for(let i=1;i<=dim;i++)cells.push(new Date(calYear,calMonth,i));
+    const rows=[];let row=[];
+    cells.forEach(d=>{row.push(d);if(row.length===7){rows.push(row);row=[];}});
+    if(row.length)rows.push(row);
+    return rows;
+  },[calYear,calMonth]);
 
   const selDate=new Date(selDay.split('-')[0],parseInt(selDay.split('-')[1])-1,selDay.split('-')[2]);
   const selDayIdx=selDate.getDay()===0?6:selDate.getDay()-1;
@@ -1078,17 +1094,32 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
   return(<View>
     <Text style={s.tagline}>Track. <Text style={{color:brand.green}}>Achieve.</Text> <Text style={{color:brand.gold}}>Triumph.</Text></Text>
 
-    {/* Week nav */}
+    {/* Week/Month toggle header */}
+    <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+      <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+        {!monthView&&<>
+          <TouchableOpacity onPress={()=>{setWeekOff(w=>w-1);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+          <Text style={s.weekLabel}>{weekOff===0?'This week':
+            `${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}</Text>
+          <TouchableOpacity onPress={()=>setWeekOff(w=>w+1)} style={s.navBtn}><Text style={s.navBtnT}>▸</Text></TouchableOpacity>
+        </>}
+        {monthView&&<>
+          <TouchableOpacity onPress={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
+          <Text style={s.weekLabel}>{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][calMonth]} {calYear}</Text>
+          <TouchableOpacity onPress={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}} style={s.navBtn}><Text style={s.navBtnT}>▸</Text></TouchableOpacity>
+        </>}
+      </View>
+      <TouchableOpacity onPress={()=>setMonthView(v=>!v)}
+        style={{paddingHorizontal:10,paddingVertical:4,borderRadius:8,
+          backgroundColor:monthView?brand.blue+'15':C.bg,borderWidth:1,
+          borderColor:monthView?brand.blue:C.border}}>
+        <Text style={{fontSize:10,fontWeight:'700',color:monthView?brand.blue:C.textDim}}>
+          {monthView?'Week view':'Month view'}</Text>
+      </TouchableOpacity>
+    </View>
 
-    <View style={s.weekNav}>
-      <TouchableOpacity onPress={()=>{setWeekOff(w=>w-1);}} style={s.navBtn}><Text style={s.navBtnT}>◂</Text></TouchableOpacity>
-      <Text style={s.weekLabel}>{weekOff===0?'This week':
-        `${weekDates[0].toLocaleDateString('en-US',{day:'numeric',month:'short'})} – ${weekDates[6].toLocaleDateString('en-US',{day:'numeric',month:'short'})}`}</Text>
-      <TouchableOpacity onPress={()=>setWeekOff(w=>w+1)} style={s.navBtn}>
-        <Text style={s.navBtnT}>▸</Text></TouchableOpacity></View>
-
-    {/* 7 Day Cards — tap to select day */}
-    <View style={s.cardsRow}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
+    {/* Week view */}
+    {!monthView&&<View style={s.cardsRow}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
       const isSel=ds===selDay;
       const dsExceptions=habitExceptions?.[ds]||[];
       const act=(allHabits||habits).filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(i))||dsExceptions.includes(h.id));
@@ -1103,7 +1134,36 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
         <View style={[s.dcLabel,isT&&{backgroundColor:brand.gold+'18'},isSel&&!isT&&{backgroundColor:brand.blue+'12'}]}>
           <Text style={[s.dcDay,isT&&{color:brand.gold},isSel&&!isT&&{color:brand.blue}]}>{DAYS[i]}</Text>
           <Text style={[s.dcNum,isT&&{color:brand.gold},isSel&&!isT&&{color:brand.blue}]}>{d.getDate()}</Text></View>
-      </TouchableOpacity>);})}</View>
+      </TouchableOpacity>);})}</View>}
+
+    {/* Month view */}
+    {monthView&&<View style={{marginBottom:8}}>
+      <View style={{flexDirection:'row',marginBottom:4}}>
+        {DAYS.map(d=>(<View key={d} style={{flex:1,alignItems:'center'}}>
+          <Text style={{fontSize:9,fontWeight:'700',color:C.textDim}}>{d}</Text>
+        </View>))}
+      </View>
+      {calGrid.map((row,ri)=>(
+        <View key={ri} style={{flexDirection:'row',gap:3,marginBottom:3}}>
+          {row.map((d,ci)=>{
+            if(!d)return<View key={ci} style={{flex:1,height:36}}/>;
+            const ds=fmt(d);const isT=ds===todayStr;const isSel=ds===selDay;
+            const dayIdx=d.getDay()===0?6:d.getDay()-1;
+            const act=(allHabits||habits).filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx)));
+            const done2=act.filter(h=>log[ds]?.[h.id]?.done).length;
+            const ratio=act.length>0?done2/act.length:0;
+            const bg=ratio>=1?brand.green+'30':ratio>=0.5?brand.gold+'25':ratio>0?'#E8956B20':C.bg;
+            return(<TouchableOpacity key={ci} onPress={()=>{setSelDay(ds);setMonthView(false);setWeekOff(0);}}
+              style={{flex:1,height:36,borderRadius:6,justifyContent:'center',alignItems:'center',
+                backgroundColor:isSel?brand.blue+'20':bg,
+                borderWidth:isT?2:1,borderColor:isT?brand.gold:isSel?brand.blue:C.borderLight}}>
+              <Text style={{fontSize:10,fontWeight:isT||isSel?'700':'400',
+                color:isT?brand.gold:isSel?brand.blue:C.text}}>{d.getDate()}</Text>
+              {ratio>=1&&<Text style={{fontSize:6}}>✓</Text>}
+            </TouchableOpacity>);
+          })}
+        </View>))}
+    </View>}
 
     {/* Selected day header */}
     <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
