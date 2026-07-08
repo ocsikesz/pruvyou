@@ -1541,17 +1541,18 @@ function HabitForm({habit,onSave,onCancel}){
       <View style={{flexDirection:'row',gap:4,marginBottom:12}}>{DAYS.map((d,i)=>{const sel=selectedDays.includes(i);return(
         <TouchableOpacity key={i} onPress={()=>tds(i)} style={[s.dayChip,sel&&{backgroundColor:cat.color,borderColor:cat.color}]}>
           <Text style={[s.dayChipT,sel&&{color:'#fff'}]}>{d}</Text></TouchableOpacity>);})}</View></>)}
-    <View style={{flexDirection:'row',gap:10,marginTop:8}}>
+    <Text style={s.label}>START DATE</Text>
+    {startDate&&<TouchableOpacity onPress={()=>setStartDate('')}
+      style={{alignSelf:'flex-start',marginBottom:8,paddingHorizontal:10,paddingVertical:5,
+        borderRadius:8,backgroundColor:cat.color+'20',borderWidth:1,borderColor:cat.color}}>
+      <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>📅 {startDate}  ✕</Text>
+    </TouchableOpacity>}
+    <View style={{backgroundColor:cat.bg,borderRadius:12,borderWidth:1,borderColor:cat.color+'40',padding:12,marginBottom:12}}>
+      <MiniCalendar selected={startDate} onSelect={setStartDate} color={cat.color}/>
+    </View>
+
+    <View style={{flexDirection:'row',gap:10,marginTop:4}}>
       <TouchableOpacity onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelBtnT}>Cancel</Text></TouchableOpacity>
-      <Text style={s.label}>START DATE (tap to select — leave empty to start today)</Text>
-      {startDate&&<TouchableOpacity onPress={()=>setStartDate('')}
-        style={{alignSelf:'flex-start',marginBottom:6,paddingHorizontal:10,paddingVertical:4,
-          borderRadius:8,backgroundColor:cat.color+'20',borderWidth:1,borderColor:cat.color}}>
-        <Text style={{fontSize:12,fontWeight:'600',color:cat.color}}>📅 {startDate}  ✕ clear</Text>
-      </TouchableOpacity>}
-      <View style={{overflow:'hidden',borderRadius:12,borderWidth:1,borderColor:C.border,padding:8,marginBottom:8}}>
-        <MiniCalendar selected={startDate} onSelect={setStartDate} color={cat.color}/>
-      </View>
       <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
         targetMinutes:parseInt(mins)||15,weeklyTarget:freq==='weekly'?selectedDays.length:7,
         selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId,
