@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, Modal, Image, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, Modal, Image, KeyboardAvoidingView, Platform, PanResponder } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 
@@ -1058,6 +1058,15 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
   const [selDay,setSelDay]=useState(todayStr); // which day strip is selected
   const [expandedHabit,setExpandedHabit]=useState(null);
   const [monthView,setMonthView]=useState(false);
+
+  // Swipe left/right to change week
+  const swipePan=useMemo(()=>PanResponder.create({
+    onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dx)>20&&Math.abs(g.dx)>Math.abs(g.dy)*1.5,
+    onPanResponderRelease:(_,g)=>{
+      if(g.dx<-40)setWeekOff(w=>w+1);
+      else if(g.dx>40)setWeekOff(w=>w-1);
+    },
+  }),[]);
   const [calMonth,setCalMonth]=useState(new Date().getMonth());
   const [calYear,setCalYear]=useState(new Date().getFullYear());
 
@@ -1118,8 +1127,8 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
       </TouchableOpacity>
     </View>
 
-    {/* Week view */}
-    {!monthView&&<View style={s.cardsRow}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
+    {/* Week view — swipe left/right to change week */}
+    {!monthView&&<View style={s.cardsRow} {...swipePan.panHandlers}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
       const isSel=ds===selDay;
       const dsExceptions=habitExceptions?.[ds]||[];
       const act=(allHabits||habits).filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(i))||dsExceptions.includes(h.id));
