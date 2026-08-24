@@ -1060,13 +1060,15 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
   const [monthView,setMonthView]=useState(false);
 
   // Swipe left/right to change week
-  const swipePan=useMemo(()=>PanResponder.create({
-    onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dx)>20&&Math.abs(g.dx)>Math.abs(g.dy)*1.5,
-    onPanResponderRelease:(_,g)=>{
-      if(g.dx<-40)setWeekOff(w=>w+1);
-      else if(g.dx>40)setWeekOff(w=>w-1);
+  const swipeTouchX=React.useRef(0);
+  const swipeHandlers={
+    onTouchStart:(e)=>{swipeTouchX.current=e.nativeEvent.pageX;},
+    onTouchEnd:(e)=>{
+      const dx=e.nativeEvent.pageX-swipeTouchX.current;
+      if(dx<-50)setWeekOff(w=>w+1);
+      else if(dx>50)setWeekOff(w=>w-1);
     },
-  }),[]);
+  };
   const [calMonth,setCalMonth]=useState(new Date().getMonth());
   const [calYear,setCalYear]=useState(new Date().getFullYear());
 
@@ -1128,7 +1130,7 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
     </View>
 
     {/* Week view — swipe left/right to change week */}
-    {!monthView&&<View style={s.cardsRow} {...swipePan.panHandlers}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
+    {!monthView&&<View style={s.cardsRow} {...swipeHandlers}>{weekDates.map((d,i)=>{const ds=fmt(d);const isT=ds===todayStr;const isFut=d>today();
       const isSel=ds===selDay;
       const dsExceptions=habitExceptions?.[ds]||[];
       const act=(allHabits||habits).filter(h=>h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(i))||dsExceptions.includes(h.id));
