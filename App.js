@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, Modal, Image, KeyboardAvoidingView, Platform, PanResponder } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, Modal, Image, KeyboardAvoidingView, Platform, PanResponder, Share } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 
@@ -357,14 +357,24 @@ export default function App(){
       const scheduled=await Notifications.getAllScheduledNotificationsAsync();
       for(const n of scheduled){if(n.content.data?.type==='daily')await Notifications.cancelScheduledNotificationAsync(n.identifier);}
       const [hr,min]=time.split(':').map(Number);
+      // Build summary body
+      const ds=fmt(today());
+      const todayHabits=habits.filter(h=>{
+        const d=today();const dayIdx=d.getDay()===0?6:d.getDay()-1;
+        return h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
+      });
+      const doneH=todayHabits.filter(h=>log[ds]?.[h.id]?.done).length;
+      const body=todayHabits.length>0
+        ?`${doneH}/${todayHabits.length} habits done today. Keep it up! 💪`
+        :"Don't forget to log your habits today!";
       await Notifications.scheduleNotificationAsync({
-        content:{title:'PruvYou ⏰',body:"Don't forget to log your habits and tasks today!",
+        content:{title:'PruvYou ⏰',body,
           data:{type:'daily'},sound:true,
           ...(Platform.OS==='android'&&{channelId:'pruvyou'})},
         trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour:hr,minute:min},
       });
     }catch(e){}
-  },[]);
+  },[habits,log]);
   const cancelDailyReminder=useCallback(async()=>{
     try{const scheduled=await Notifications.getAllScheduledNotificationsAsync();
       for(const n of scheduled){if(n.content.data?.type==='daily')await Notifications.cancelScheduledNotificationAsync(n.identifier);}
@@ -456,6 +466,34 @@ export default function App(){
   const restorePurchases=useCallback(async()=>{
     Alert.alert('Restore purchase','If you previously purchased PruvYou, reinstall from Google Play Store to restore access.');
   },[]);
+
+  const shareProgress=useCallback(async(dateStr)=>{
+    const ds=dateStr||fmt(today());
+    const d=new Date(ds);
+    const dayHabits=habits.filter(h=>{
+      const dayIdx=d.getDay()===0?6:d.getDay()-1;
+      return h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
+    });
+    const done=dayHabits.filter(h=>log[ds]?.[h.id]?.done);
+    const pct=dayHabits.length>0?Math.round(done.length/dayHabits.length*100):0;
+    const emoji=pct===100?'🏆':pct>=80?'💪':pct>=50?'👍':'🔄';
+    const lines=[
+      `${emoji} PruvYou — ${d.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'})}`,
+      ``,
+      `📊 ${done.length}/${dayHabits.length} habits completed (${pct}%)`,
+      ``,
+      ...done.map(h=>{
+        const streak=calcStreak(h.id,log,h.frequency,h.selectedDays);
+        return`✅ ${h.icon} ${h.name}${streak>1?' 🔥'+streak:''}`;
+      }),
+      ...dayHabits.filter(h=>!log[ds]?.[h.id]?.done).map(h=>`⬜ ${h.icon} ${h.name}`),
+      ``,
+      `Tracked with PruvYou — Prove Yourself Daily`,
+    ];
+    try{
+      await Share.share({message:lines.join('\n'),title:'My daily progress'});
+    }catch(e){}
+  },[habits,log]);
 
   const getFreshToken=useCallback(async()=>{
     try{
@@ -1009,7 +1047,8 @@ export default function App(){
           log={log} weekDates={weekDates} weekOff={weekOff}
           setWeekOff={setWeekOff} toggleDay={toggleDay} addMinutes={addMinutes} setHabitMinutes={setHabitMinutes} todayStr={todayStr}
           setNote={setNote} adHocTasks={adHocTasks} setAdHocTasksForDay={setAdHocTasksForDay}
-          onPlanMonth={()=>{const n=new Date();setPlanMonth({year:n.getFullYear(),month:n.getMonth()});setShowMonthPlan(true);}}/>}
+          onPlanMonth={()=>{const n=new Date();setPlanMonth({year:n.getFullYear(),month:n.getMonth()});setShowMonthPlan(true);}}
+          shareProgress={shareProgress}/>}
         {tab==='habits'&&<HabitsTab habits={habits} log={log} showAdd={showAdd} setShowAdd={setShowAdd}
           addHabit={addHabit} editHabit={editHabit} setEditHabit={setEditHabit}
           updateHabit={updateHabit} deleteHabit={deleteHabit}
@@ -1133,7 +1172,7 @@ function HabitDayPanel({h,ds,log,toggleDay,addMinutes,setHabitMinutes,setNote,co
 // ═══════════════════════════════════════════════════════════════════
 // HOME TAB
 // ═══════════════════════════════════════════════════════════════════
-function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay,onPlanMonth,allHabits,habitExceptions,addHabitException,removeHabitException}){
+function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,setHabitMinutes,todayStr,setNote,adHocTasks,setAdHocTasksForDay,onPlanMonth,allHabits,habitExceptions,addHabitException,removeHabitException,shareProgress}){
   const [selDay,setSelDay]=useState(todayStr); // which day strip is selected
   const [expandedHabit,setExpandedHabit]=useState(null);
   const [monthView,setMonthView]=useState(false);
@@ -1288,6 +1327,10 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
           }} style={{paddingHorizontal:10,paddingVertical:5,borderRadius:8,backgroundColor:brand.green+'20',borderWidth:1,borderColor:brand.green}}>
             <Text style={{fontSize:11,fontWeight:'700',color:brand.green}}>✓ All</Text>
           </TouchableOpacity>)}
+        {shareProgress&&<TouchableOpacity onPress={()=>shareProgress(selDay)}
+          style={{paddingHorizontal:10,paddingVertical:5,borderRadius:8,backgroundColor:brand.blue+'15',borderWidth:1,borderColor:brand.blue}}>
+          <Text style={{fontSize:11,fontWeight:'700',color:brand.blue}}>↑ Share</Text>
+        </TouchableOpacity>}
       </View>
     </View>
 
