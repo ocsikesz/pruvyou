@@ -123,6 +123,26 @@ function Ring({size,sw,pct,color,children}){
         strokeDasharray={`${circ}`} strokeDashoffset={off} strokeLinecap="round"/></Svg>
     {children}</View>);}
 
+
+// Calculate streak for a habit
+function calcStreak(habitId,log,frequency,selectedDays){
+  let streak=0;
+  const d=new Date();
+  // Start from yesterday (today might not be done yet)
+  d.setDate(d.getDate()-1);
+  for(let i=0;i<365;i++){
+    const dayIdx=d.getDay()===0?6:d.getDay()-1;
+    const active=frequency==="daily"||(frequency==="weekly"&&(selectedDays||[]).includes(dayIdx));
+    if(active){
+      const ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+      if(log[ds]?.[habitId]?.done)streak++;
+      else break;
+    }
+    d.setDate(d.getDate()-1);
+  }
+  return streak;
+}
+
 // Tab icons
 const TAB_ICONS={home:require('./assets/Home.png'),habits:require('./assets/Habits.png'),
   projects:require('./assets/Projects.png'),stats:require('./assets/Stats.png'),settings:require('./assets/Setting.png')};
@@ -1217,6 +1237,7 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
     {selHabits.map(h=>{const entry=log[selDay]?.[h.id];const done=!!entry?.done;
       const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.green;
       const isExp=expandedHabit===h.id;
+      const streak=calcStreak(h.id,log,h.frequency,h.selectedDays);
       return(<View key={h.id}>
         <View style={[s.thinCard,{borderLeftWidth:3,borderLeftColor:color},done&&{backgroundColor:cat?.bg||C.greenBg}]}>
           <TouchableOpacity onPress={()=>{if(h.type==='check')toggleDay(h.id,selDay);else addMinutes(h.id,selDay,15,h.targetMinutes);}} activeOpacity={0.6}>
@@ -1225,10 +1246,14 @@ function HomeTab({habits,log,weekDates,weekOff,setWeekOff,toggleDay,addMinutes,s
           </TouchableOpacity>
           <TouchableOpacity onPress={()=>setExpandedHabit(isExp?null:h.id)} activeOpacity={0.7} style={{flex:1}}>
             <Text style={[s.thinName,done&&{textDecorationLine:'line-through',color:C.textDim}]}>{h.icon} {h.name}</Text>
-            {h.type==='timer'&&(<View style={{flexDirection:'row',alignItems:'center',gap:4,marginTop:3}}>
-              <View style={{flex:1,height:3,backgroundColor:C.border,borderRadius:2,overflow:'hidden'}}>
-                <View style={{height:'100%',width:`${Math.min(100,(entry?.minutes||0)/h.targetMinutes*100)}%`,backgroundColor:color,borderRadius:2}}/></View>
-              <Text style={{fontSize:9,fontWeight:'700',color}}>{fmtMins(entry?.minutes||0)}/{fmtMins(h.targetMinutes)}</Text></View>)}
+            <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+              {h.type==='timer'&&(<View style={{flex:1,flexDirection:'row',alignItems:'center',gap:4,marginTop:3}}>
+                <View style={{flex:1,height:3,backgroundColor:C.border,borderRadius:2,overflow:'hidden'}}>
+                  <View style={{height:'100%',width:`${Math.min(100,(entry?.minutes||0)/h.targetMinutes*100)}%`,backgroundColor:color,borderRadius:2}}/></View>
+                <Text style={{fontSize:9,fontWeight:'700',color}}>{fmtMins(entry?.minutes||0)}/{fmtMins(h.targetMinutes)}</Text></View>)}
+              {streak>0&&<Text style={{fontSize:10,fontWeight:'700',color:streak>=7?'#E74C3C':streak>=3?brand.gold:C.textDim}}>
+                🔥{streak}</Text>}
+            </View>
             {entry?.notes&&<Text style={{fontSize:9,color:brand.blue,marginTop:2}} numberOfLines={1}>📝 {entry.notes}</Text>}
           </TouchableOpacity>
           <TouchableOpacity onPress={()=>setExpandedHabit(isExp?null:h.id)} style={{paddingHorizontal:6,paddingVertical:8}}>
