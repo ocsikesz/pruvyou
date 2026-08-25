@@ -246,14 +246,14 @@ function MonthPlanScreen({habits,monthlyHabits,monthlyGoals,year,month,onSave,on
                   <Text style={{fontSize:12,fontWeight:'700',color:'#34C79F'}}>{goalVal}/{mx} days</Text>
                 </View>
                 <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
-                  <TouchableOpacity onPress={(e)=>{e.stopPropagation?.();setGoals(g=>({...g,[goalKey]:Math.max(1,goalVal-1);}));}}
+                  <TouchableOpacity onPress={(e)=>{setGoals(g=>({...g,[goalKey]:Math.max(1,goalVal-1);}));}}
                     style={{width:28,height:28,borderRadius:14,backgroundColor:'#E0E4EA',alignItems:'center',justifyContent:'center'}}>
                     <Text style={{fontSize:16,fontWeight:'700',color:'#5A7A8A'}}>−</Text>
                   </TouchableOpacity>
                   <View style={{flex:1,height:6,backgroundColor:'#E0E4EA',borderRadius:3}}>
                     <View style={{height:'100%',width:`${goalVal/mx*100}%`,backgroundColor:'#34C79F',borderRadius:3}}/>
                   </View>
-                  <TouchableOpacity onPress={(e)=>{e.stopPropagation?.();setGoals(g=>({...g,[goalKey]:Math.min(mx,goalVal+1);}));}}
+                  <TouchableOpacity onPress={(e)=>{setGoals(g=>({...g,[goalKey]:Math.min(mx,goalVal+1);}));}}
                     style={{width:28,height:28,borderRadius:14,backgroundColor:'#E0E4EA',alignItems:'center',justifyContent:'center'}}>
                     <Text style={{fontSize:16,fontWeight:'700',color:'#5A7A8A'}}>+</Text>
                   </TouchableOpacity>
