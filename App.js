@@ -1672,14 +1672,14 @@ function HabitForm({habit,onSave,onCancel}){
         <TouchableOpacity key={i} onPress={()=>tds(i)} style={[s.dayChip,sel&&{backgroundColor:cat.color,borderColor:cat.color}]}>
           <Text style={[s.dayChipT,sel&&{color:'#fff'}]}>{d}</Text></TouchableOpacity>);})}</View></>)}
     <Text style={s.label}>DAILY REMINDER (optional)</Text>
-    <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginBottom:12}}>
-      {['None','06:00','07:00','08:00','09:00','10:00','12:00','18:00','20:00','21:00','22:00'].map(t=>{
-        const active=(t==='None'?'':t)===reminderTime;
-        return(<TouchableOpacity key={t} onPress={()=>setReminderTime(t==='None'?'':t)}
-          style={{paddingHorizontal:12,paddingVertical:7,borderRadius:20,
-            backgroundColor:active?cat.color:C.bg,borderWidth:1,borderColor:active?cat.color:C.border}}>
-          <Text style={{fontSize:12,fontWeight:'600',color:active?'#fff':C.textDim}}>{t}</Text>
-        </TouchableOpacity>);})}
+    <View style={{flexDirection:'row',alignItems:'center',gap:12,marginBottom:12}}>
+      <TimePicker value={reminderTime||'08:00'} onChange={setReminderTime} color={cat.color}/>
+      <TouchableOpacity onPress={()=>setReminderTime(reminderTime?'':'08:00')}
+        style={{paddingHorizontal:14,paddingVertical:8,borderRadius:20,
+          backgroundColor:reminderTime?cat.color:C.bg,borderWidth:1,borderColor:reminderTime?cat.color:C.border}}>
+        <Text style={{fontSize:13,fontWeight:'700',color:reminderTime?'#fff':C.textDim}}>
+          {reminderTime?'🔔 On':'🔕 Off'}</Text>
+      </TouchableOpacity>
     </View>
     <Text style={s.label}>START DATE</Text>
     {startDate&&<TouchableOpacity onPress={()=>setStartDate('')}
