@@ -2137,6 +2137,43 @@ function StatsTab({habits,log,projects,projLog,adHocTasks}){
         </View>)})()}
     </View>)}
 
+    {/* ── MONTHLY HABIT PROGRESS ── */}
+    {habits.length>0&&(()=>{
+      const now=new Date();const year=now.getFullYear();const month=now.getMonth();
+      const dim=new Date(year,month+1,0).getDate();
+      const MNF=['January','February','March','April','May','June','July','August','September','October','November','December'];
+      return(<View style={s.statsCard}>
+        <Text style={s.statsTitle}>📊 {MNF[month]} Progress</Text>
+        <Text style={{fontSize:11,color:C.textDim,marginBottom:12}}>Habit completion this month</Text>
+        {habits.map(h=>{
+          let done=0,total=0,streak=calcStreak(h.id,log,h.frequency,h.selectedDays);
+          for(let day=1;day<=dim;day++){
+            const d=new Date(year,month,day);
+            const dayIdx=d.getDay()===0?6:d.getDay()-1;
+            const active=h.frequency==='daily'||(h.frequency==='weekly'&&(h.selectedDays||[]).includes(dayIdx));
+            if(!active)continue;
+            total++;
+            if(log[fmt(d)]?.[h.id]?.done)done++;
+          }
+          const pct=total>0?Math.round(done/total*100):0;
+          const cat=CATS.find(c=>c.id===h.categoryId);const color=cat?.color||brand.green;
+          return(<View key={h.id} style={{marginBottom:14}}>
+            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+              <Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{h.icon} {h.name}</Text>
+              <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+                {streak>0&&<Text style={{fontSize:11,fontWeight:'700',color:streak>=7?'#E74C3C':streak>=3?brand.gold:C.textDim}}>🔥{streak}</Text>}
+                <Text style={{fontSize:13,fontWeight:'800',color:pct>=80?brand.green:pct>=50?brand.gold:'#E74C3C'}}>{pct}%</Text>
+              </View>
+            </View>
+            <View style={{height:8,backgroundColor:C.border,borderRadius:4,overflow:'hidden'}}>
+              <View style={{height:'100%',width:`${pct}%`,backgroundColor:color,borderRadius:4}}/>
+            </View>
+            <Text style={{fontSize:10,color:C.textDim,marginTop:2}}>{done}/{total} days completed</Text>
+          </View>);
+        })}
+      </View>);
+    })()}
+
     {/* ── PROJECTS ── */}
     {projects.length>0&&(<View style={s.statsCard}>
       <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
