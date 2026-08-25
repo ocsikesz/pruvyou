@@ -193,12 +193,20 @@ function OnboardingScreen({onDone}){
 }
 
 const MNF_FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
-function MonthPlanScreen({habits,monthlyHabits,year,month,onSave,onClose}){
+function MonthPlanScreen({habits,monthlyHabits,monthlyGoals,year,month,onSave,onClose}){
   const key=year+'-'+String(month+1).padStart(2,'0');
   const prevKey=month===0?(year-1)+'-12':year+'-'+String(month).padStart(2,'0');
   const prevActive=monthlyHabits[prevKey]||habits.map(h=>h.id);
   const [activeIds,setActiveIds]=useState(monthlyHabits[key]||prevActive);
+  const [goals,setGoals]=useState(monthlyGoals||{});
   const toggle=(id)=>setActiveIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  // Calculate max possible days per habit in this month
+  const dim=new Date(year,month+1,0).getDate();
+  const maxDays=(h)=>{
+    if(h.frequency==='daily')return dim;
+    let cnt=0;for(let i=1;i<=dim;i++){const d=new Date(year,month,i);const dayIdx=d.getDay()===0?6:d.getDay()-1;if((h.selectedDays||[]).includes(dayIdx))cnt++;}
+    return cnt;
+  };
   return(
     <View style={{flex:1,backgroundColor:'rgba(0,0,0,0.5)',justifyContent:'flex-end'}}>
       <View style={{backgroundColor:'#F5F7FA',borderTopLeftRadius:24,borderTopRightRadius:24,maxHeight:'90%'}}>
@@ -215,25 +223,49 @@ function MonthPlanScreen({habits,monthlyHabits,year,month,onSave,onClose}){
           <Text style={{fontSize:11,fontWeight:'700',color:'#5A7A8A',letterSpacing:1,marginBottom:12}}>SELECT ACTIVE HABITS FOR THIS MONTH</Text>
           {habits.map(h=>{
             const active=activeIds.includes(h.id);
+            const mx=maxDays(h);
+            const goalKey=key+'-'+h.id;
+            const goalVal=goals[goalKey]||mx;
             return(<TouchableOpacity key={h.id} onPress={()=>toggle(h.id)}
-              style={{flexDirection:'row',alignItems:'center',gap:12,padding:14,marginBottom:8,
+              style={{gap:8,padding:14,marginBottom:8,
                 backgroundColor:active?'#fff':'#EEE',borderRadius:12,borderWidth:2,
                 borderColor:active?'#34C79F':'transparent',opacity:active?1:0.6}}>
-              <View style={{width:28,height:28,borderRadius:8,borderWidth:2,borderColor:active?'#34C79F':'#AAA',
-                backgroundColor:active?'#34C79F':'transparent',alignItems:'center',justifyContent:'center'}}>
-                {active&&<Text style={{color:'#fff',fontSize:14,fontWeight:'800'}}>✓</Text>}
+              <View style={{flexDirection:'row',alignItems:'center',gap:12}}>
+                <View style={{width:28,height:28,borderRadius:8,borderWidth:2,borderColor:active?'#34C79F':'#AAA',
+                  backgroundColor:active?'#34C79F':'transparent',alignItems:'center',justifyContent:'center'}}>
+                  {active&&<Text style={{color:'#fff',fontSize:14,fontWeight:'800'}}>✓</Text>}
+                </View>
+                <View style={{flex:1}}>
+                  <Text style={{fontSize:14,fontWeight:'600',color:active?'#1A2E45':'#888'}}>{h.icon} {h.name}</Text>
+                  <Text style={{fontSize:11,color:'#5A7A8A'}}>{h.frequency}{h.type==='timer'?' · '+fmtMins(h.targetMinutes):''}</Text>
+                </View>
               </View>
-              <View style={{flex:1}}>
-                <Text style={{fontSize:14,fontWeight:'600',color:active?'#1A2E45':'#888'}}>{h.icon} {h.name}</Text>
-                <Text style={{fontSize:11,color:'#5A7A8A'}}>{h.frequency}{h.type==='timer'?' · '+fmtMins(h.targetMinutes):''}</Text>
-              </View>
+              {active&&mx>0&&<View>
+                <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                  <Text style={{fontSize:10,color:'#5A7A8A'}}>🎯 Monthly goal</Text>
+                  <Text style={{fontSize:12,fontWeight:'700',color:'#34C79F'}}>{goalVal}/{mx} days</Text>
+                </View>
+                <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+                  <TouchableOpacity onPress={(e)=>{e.stopPropagation?.();setGoals(g=>({...g,[goalKey]:Math.max(1,goalVal-1);}));}}
+                    style={{width:28,height:28,borderRadius:14,backgroundColor:'#E0E4EA',alignItems:'center',justifyContent:'center'}}>
+                    <Text style={{fontSize:16,fontWeight:'700',color:'#5A7A8A'}}>−</Text>
+                  </TouchableOpacity>
+                  <View style={{flex:1,height:6,backgroundColor:'#E0E4EA',borderRadius:3}}>
+                    <View style={{height:'100%',width:`${goalVal/mx*100}%`,backgroundColor:'#34C79F',borderRadius:3}}/>
+                  </View>
+                  <TouchableOpacity onPress={(e)=>{e.stopPropagation?.();setGoals(g=>({...g,[goalKey]:Math.min(mx,goalVal+1);}));}}
+                    style={{width:28,height:28,borderRadius:14,backgroundColor:'#E0E4EA',alignItems:'center',justifyContent:'center'}}>
+                    <Text style={{fontSize:16,fontWeight:'700',color:'#5A7A8A'}}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>}
             </TouchableOpacity>);})}
           {habits.length===0&&<Text style={{textAlign:'center',color:'#888',padding:20}}>No habits yet.</Text>}
           <View style={{height:20}}/>
         </ScrollView>
         <View style={{padding:16,borderTopWidth:1,borderTopColor:'#E0E4EA',gap:8}}>
           <Text style={{fontSize:11,color:'#5A7A8A',textAlign:'center'}}>{activeIds.length} of {habits.length} habits active for {MNF_FULL[month]}</Text>
-          <TouchableOpacity onPress={()=>onSave(activeIds)}
+          <TouchableOpacity onPress={()=>onSave(activeIds,goals)}
             style={{padding:16,borderRadius:12,backgroundColor:'#1A4F8A',alignItems:'center'}}>
             <Text style={{fontSize:15,fontWeight:'700',color:'#fff'}}>💾 Save Plan for {MNF_FULL[month]}</Text>
           </TouchableOpacity>
@@ -259,6 +291,7 @@ export default function App(){
   const [adHocTasks,setAdHocTasks]=useState({}); // {dateStr:[{id,text,done}]}
   const [monthlyHabits,setMonthlyHabits]=useState({}); // {YYYY-MM:[habitId,...]}
   const [habitExceptions,setHabitExceptions]=useState({}); // {dateStr:[habitId,...]}
+  const [monthlyGoals,setMonthlyGoals]=useState({}); // {YYYY-MM-habitId: targetDays}
   const [showMonthPlan,setShowMonthPlan]=useState(false);
   const [planMonth,setPlanMonth]=useState(null);
   const [license,setLicense]=useState(null);
@@ -268,6 +301,7 @@ export default function App(){
     setHabits(await ld('pv-habits',[]));setLog(await ld('pv-log',{}));
     setProjects(await ld('pv-projects',[]));setProjLog(await ld('pv-projlog',{}));
     setAdHocTasks(await ld('pv-adhoc',{}));
+    setMonthlyGoals(await ld('pv-monthly-goals',{}));
     setMonthlyHabits(await ld('pv-monthly-habits',{}));
     setHabitExceptions(await ld('pv-habit-exceptions',{}));
     const seen=await ld('pv-onboarding-seen',false);
@@ -296,6 +330,7 @@ export default function App(){
   useEffect(()=>{if(loaded)sv('pv-adhoc',adHocTasks);},[adHocTasks,loaded]);
   useEffect(()=>{if(loaded)sv('pv-monthly-habits',monthlyHabits);},[monthlyHabits,loaded]);
   useEffect(()=>{if(loaded)sv('pv-habit-exceptions',habitExceptions);},[habitExceptions,loaded]);
+  useEffect(()=>{if(loaded)sv('pv-monthly-goals',monthlyGoals);},[monthlyGoals,loaded]);
 
   const toggleDay=useCallback((hid,ds)=>{setLog(p=>{const c={...p};if(!c[ds])c[ds]={};
     const cur=c[ds][hid];c[ds]={...c[ds],[hid]:{...cur,done:!cur?.done}};return c;});},[]);
@@ -984,7 +1019,7 @@ export default function App(){
         {tab==='projects'&&<ProjectsTab projects={projects} setProjects={setProjects}
           projLog={projLog} addProjMinutes={addProjMinutes} setProjNote={setProjNote} setProjMinutes={setProjMinutes} setProjTasks={setProjTasks}
           todayStr={todayStr}/>}
-        {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks}/>}
+        {tab==='stats'&&<StatsTab habits={habits} log={log} projects={projects} projLog={projLog} adHocTasks={adHocTasks} monthlyGoals={monthlyGoals}/>}
         {tab==='settings'&&<SettingsTab habits={habits} log={log} projects={projects} projLog={projLog}
           setHabits={setHabits} setLog={setLog} setProjects={setProjects} setProjLog={setProjLog} adHocTasks={adHocTasks} setAdHocTasks={setAdHocTasks} scheduleDailyReminder={scheduleDailyReminder} cancelDailyReminder={cancelDailyReminder} driveToken={driveToken} driveUser={driveUser} driveStatus={driveStatus} connectDrive={connectDrive} signOutDrive={signOutDrive} driveBackup={driveBackup} driveRestore={driveRestore} generateMonthlyReport={generateMonthlyReport} generateAnnualReport={generateAnnualReport} generateFullYear={generateFullYear} purchaseApp={purchaseApp} restorePurchases={restorePurchases} isPaid={isPaid} trialDaysLeft={trialDaysLeft}/>}
         </ScrollView>
@@ -1008,9 +1043,9 @@ export default function App(){
       {showMonthPlan&&planMonth&&(
         <View style={{position:'absolute',top:0,left:0,right:0,bottom:0,zIndex:200}}>
           <MonthPlanScreen
-            habits={habits} monthlyHabits={monthlyHabits}
+            habits={habits} monthlyHabits={monthlyHabits} monthlyGoals={monthlyGoals}
             year={planMonth.year} month={planMonth.month}
-            onSave={(ids)=>{saveMonthPlan(planMonth.year,planMonth.month,ids);setShowMonthPlan(false);Alert.alert('✅ Saved','Habit plan saved for '+MNF_FULL[planMonth.month]+'!');}}
+            onSave={(ids,newGoals)=>{saveMonthPlan(planMonth.year,planMonth.month,ids);if(newGoals)setMonthlyGoals(g=>({...g,...newGoals}));setShowMonthPlan(false);Alert.alert('✅ Saved','Habit plan saved for '+MNF_FULL[planMonth.month]+'!');}}
             onClose={()=>setShowMonthPlan(false)}/>
         </View>)}
 
@@ -2010,7 +2045,7 @@ function ProjectsTab({projects,setProjects,projLog,addProjMinutes,setProjNote,se
 // ═══════════════════════════════════════════════════════════════════
 // STATS TAB — week view default, expandable to month
 // ═══════════════════════════════════════════════════════════════════
-function StatsTab({habits,log,projects,projLog,adHocTasks}){
+function StatsTab({habits,log,projects,projLog,adHocTasks,monthlyGoals}){
   const [weekOff,setWeekOff]=useState(0);
   const [expandHabits,setExpandHabits]=useState(false);
   const [expandProjects,setExpandProjects]=useState(false);
@@ -2165,10 +2200,11 @@ function StatsTab({habits,log,projects,projLog,adHocTasks}){
                 <Text style={{fontSize:13,fontWeight:'800',color:pct>=80?brand.green:pct>=50?brand.gold:'#E74C3C'}}>{pct}%</Text>
               </View>
             </View>
-            <View style={{height:8,backgroundColor:C.border,borderRadius:4,overflow:'hidden'}}>
+            <View style={{height:8,backgroundColor:C.border,borderRadius:4,overflow:'hidden',position:'relative'}}>
               <View style={{height:'100%',width:`${pct}%`,backgroundColor:color,borderRadius:4}}/>
+              {(()=>{const gk=(year+'-'+String(month+1).padStart(2,'0'))+'-'+h.id;const gv=monthlyGoals?.[gk];if(!gv||!total)return null;const gPct=Math.min(100,gv/total*100);return<View style={{position:'absolute',top:0,bottom:0,left:`${gPct}%`,width:2,backgroundColor:'#333',borderRadius:1}}/>;})()}
             </View>
-            <Text style={{fontSize:10,color:C.textDim,marginTop:2}}>{done}/{total} days completed</Text>
+            <Text style={{fontSize:10,color:C.textDim,marginTop:2}}>{done}/{total} days · {(()=>{const gk=(year+'-'+String(month+1).padStart(2,'0'))+'-'+h.id;const gv=monthlyGoals?.[gk];return gv?`goal: ${gv}`:'no goal';})()}</Text>
           </View>);
         })}
       </View>);
