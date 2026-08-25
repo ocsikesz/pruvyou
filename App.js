@@ -335,8 +335,32 @@ export default function App(){
       for(const n of scheduled){if(n.content.data?.type==='daily')await Notifications.cancelScheduledNotificationAsync(n.identifier);}
     }catch(e){}
   },[]);
-  const addHabit=(h)=>{const nh={...h,id:Date.now().toString()};setHabits(p=>[...p,nh]);setShowAdd(false);};
-  const updateHabit=(h)=>{setHabits(p=>p.map(x=>x.id===h.id?h:x));setEditHabit(null);};
+  const scheduleHabitReminder=useCallback(async(h)=>{
+    // Cancel old notification if exists
+    if(h.notifId){try{await Notifications.cancelScheduledNotificationAsync(h.notifId);}catch(e){}}
+    if(!h.reminderTime)return null;
+    const [hr,min]=h.reminderTime.split(':').map(Number);
+    try{
+      const id=await Notifications.scheduleNotificationAsync({
+        content:{title:'⏰ '+h.icon+' '+h.name,body:'Time for your habit!',sound:true},
+        trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour:hr,minute:min}
+      });
+      return id;
+    }catch(e){return null;}
+  },[]);
+
+  const addHabit=useCallback(async(h)=>{
+    const nh={...h,id:Date.now().toString()};
+    const notifId=await scheduleHabitReminder(nh);
+    if(notifId)nh.notifId=notifId;
+    setHabits(p=>[...p,nh]);setShowAdd(false);
+  },[scheduleHabitReminder]);
+
+  const updateHabit=useCallback(async(h)=>{
+    const notifId=await scheduleHabitReminder(h);
+    const updated={...h,notifId:notifId||null};
+    setHabits(p=>p.map(x=>x.id===h.id?updated:x));setEditHabit(null);
+  },[scheduleHabitReminder]);
   const deleteHabit=(id)=>{setHabits(p=>p.filter(x=>x.id!==id));};
 
   const saveMonthPlan=(year,month,activeIds)=>{
@@ -1617,6 +1641,7 @@ function HabitForm({habit,onSave,onCancel}){
   const [selectedDays,setSelectedDays]=useState(habit?.selectedDays||[]);const [icon,setIcon]=useState(habit?.icon||'🎯');
   const [catId,setCatId]=useState(habit?.categoryId||'fitness');const cat=CATS.find(c=>c.id===catId)||CATS[0];
   const [startDate,setStartDate]=useState(habit?.startDate||'');
+  const [reminderTime,setReminderTime]=useState(habit?.reminderTime||'');
   const tds=(i)=>setSelectedDays(p=>p.includes(i)?p.filter(d=>d!==i):[...p,i].sort());
   return(<View style={s.form}><Text style={s.formTitle}>{habit?'Edit':'New habit'}</Text>
     <Text style={s.label}>CATEGORY</Text>
@@ -1646,6 +1671,16 @@ function HabitForm({habit,onSave,onCancel}){
       <View style={{flexDirection:'row',gap:4,marginBottom:12}}>{DAYS.map((d,i)=>{const sel=selectedDays.includes(i);return(
         <TouchableOpacity key={i} onPress={()=>tds(i)} style={[s.dayChip,sel&&{backgroundColor:cat.color,borderColor:cat.color}]}>
           <Text style={[s.dayChipT,sel&&{color:'#fff'}]}>{d}</Text></TouchableOpacity>);})}</View></>)}
+    <Text style={s.label}>DAILY REMINDER (optional)</Text>
+    <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginBottom:12}}>
+      {['None','06:00','07:00','08:00','09:00','10:00','12:00','18:00','20:00','21:00','22:00'].map(t=>{
+        const active=(t==='None'?'':t)===reminderTime;
+        return(<TouchableOpacity key={t} onPress={()=>setReminderTime(t==='None'?'':t)}
+          style={{paddingHorizontal:12,paddingVertical:7,borderRadius:20,
+            backgroundColor:active?cat.color:C.bg,borderWidth:1,borderColor:active?cat.color:C.border}}>
+          <Text style={{fontSize:12,fontWeight:'600',color:active?'#fff':C.textDim}}>{t}</Text>
+        </TouchableOpacity>);})}
+    </View>
     <Text style={s.label}>START DATE</Text>
     {startDate&&<TouchableOpacity onPress={()=>setStartDate('')}
       style={{alignSelf:'flex-start',marginBottom:8,paddingHorizontal:10,paddingVertical:5,
@@ -1661,7 +1696,7 @@ function HabitForm({habit,onSave,onCancel}){
       <TouchableOpacity onPress={()=>{if(!name.trim())return;onSave({...(habit||{}),name:name.trim(),type,frequency:freq,
         targetMinutes:parseInt(mins)||15,weeklyTarget:freq==='weekly'?selectedDays.length:7,
         selectedDays:freq==='weekly'?selectedDays:[],icon,color:cat.color,categoryId:catId,
-        startDate:startDate.trim()||''});}}
+        startDate:startDate.trim()||'',reminderTime:reminderTime||''});}}
         style={[s.saveBtn,{backgroundColor:cat.color}]}><Text style={s.saveBtnT}>Save</Text></TouchableOpacity></View>
   </View>);
 }
